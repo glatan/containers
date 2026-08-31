@@ -29,6 +29,10 @@ docker build, podman(buildah) build は利用しません。
 
 対象アーキテクチャの一覧は [architectures.md](./architectures.md) を参照してください。
 
+## ライセンス
+
+イメージ自体のライセンスは未定です。
+
 ## 未定
 
 - glibc + openssl のように複数のツールを含むイメージの命名・管理方法
