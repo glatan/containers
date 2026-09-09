@@ -1,21 +1,25 @@
 # containers
 
-OCI コンテナのビルド設定 / ビルドツールを管理するプロジェクトです。
-成果物は OCI Image で、GitHub Container Registry に公開します。
+パッケージとパッケージイメージのビルド設定 / ビルドツールを管理するプロジェクトです。
+公開単位はパッケージイメージで、GitHub Container Registry に置きます。
+準拠仕様は [docs/oci](./docs/oci/README.md) です。
 
 ## ディレクトリ構造
 
 ```
-|- docs      ドキュメント
-|- tools     コンテナに含めるツール(packages / sources / build はビルド成果物)
-|- builder   コンテナ/ツールのビルドツール(Rust)
-|- images    イメージのビルド結果
+|- docs          ドキュメント
+|- packages      作業ツリー(sources / build / artifacts)
+|- builder       ビルドツール(Rust、バイナリ名 containers-builder)
+|- oci-layouts   パッケージイメージの Image Layout(packages/artifacts からの派生物)
 ```
+
+呼び方は [docs](./docs/README.md) の語彙を参照してください。
 
 ## ドキュメント
 
-詳しいドキュメントは [docs/](./docs/) にあります。
+詳しいドキュメントは [docs/](./docs/README.md) にあります。
 
-- [tool](./docs/tool/README.md): コンテナに含めるツールのビルド設定
-- [image](./docs/image/README.md): OCI イメージの種別・命名規則・ビルド方法
+- [oci](./docs/oci/README.md): 準拠する OCI 仕様と要件
+- [package](./docs/package/README.md): パッケージ定義のビルド方針
+- [image](./docs/image/README.md): パッケージイメージのモデルと公開方針
 - [builder](./docs/builder/README.md): ビルドツールの仕様

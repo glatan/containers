@@ -1,46 +1,54 @@
-# image
+# パッケージイメージ
 
-OCI イメージに関するドキュメントです。
+distroless のように必要なパッケージのみを含め、ベースとなるディストロを持ちません。
+パッケージのファイル集合を、実行エントリのない OCI Image(パッケージイメージ)として配ります。
+生成する Layout がどの OCI 仕様に準拠するかは [oci](../oci/README.md) を参照してください。
 
-distroless のように必要なツールのみをイメージに含め、ベースとなるディストロを持ちません。
+## モデル
 
-## 種別
+パッケージ 1 つを 1 つのパッケージイメージとして配信します。1 パッケージ = 1 レイヤーです。
 
-runtime / builder の2種類に大別します。
+- パッケージイメージにはそのパッケージだけを含めます。
+- 実行時に必要な他パッケージは `dependencies`、ビルド時だけ必要なものは `build-dependencies` です。
+- ビルド用と実行用というパッケージイメージの種別は置きません(ツール名の builder とは無関係です)。
 
-- runtime: アプリケーション/スクリプトの実行に必要なツールだけを含むイメージ
-- builder: ビルドに必要なツールのみを含むイメージ
+## 出力イメージ
 
-## 命名規則
+レジストリへ載せるのは個別のパッケージイメージです。すべての依存のすべてのバージョンの組み合わせを配ることはしません。
 
-```
-{runtime / builder}-{tool}:{version}
-```
+出力イメージは利用側が作ります。指定したパッケージに加え、その `dependencies` を辿って必要なパッケージイメージが入ります。`build-dependencies` は入りません。同じパスに複数パッケージがファイルを持つ場合は失敗です。
 
-- glibc のみを含むイメージ: `runtime-glibc:2.44`
-- Go のコンパイラを含むイメージ: `builder-go:1.27.0`
+ツールは未実装です。パッケージが増えてから詳細を詰めます。
 
-## ビルド方法
+## 関連ドキュメント
 
-docker build, podman(buildah) build は利用しません。
-レイヤーの tarball 生成、メタデータ生成まで独自で実施します。
-
-## アーキテクチャ
-
-対象アーキテクチャの一覧は [architectures.md](./architectures.md) を参照してください。
+- [naming.md](./naming.md) — レジストリパスとタグポリシー
+- [platforms.md](./platforms.md) — architecture / variant の一覧
+- [packages.md](./packages.md) — 公開するパッケージイメージの一覧
+- [packages/](./packages/) — パッケージ毎のビルド設定
+- ビルド方法は docker / podman build を使わず、builder がレイヤー tarball とメタデータを生成します([builder](../builder/README.md))
 
 ## ライセンス
 
-イメージ自体のライセンスは未定です。
+パッケージイメージのライセンスは、含まれるパッケージのライセンスのうち最も制約の強いものを採用します。
+
+- すべて permissive ライセンスのみの構成: Apache-2.0(MIT のみの構成は MIT)
+- LGPL を含む構成: LGPL
+- AGPL / GPL 本体を含むパッケージは提供しません。
+
+同梱パッケージの正確なライセンスは SPDX SBOM です。いまは Layout 内の `sbom.spdx.json` です。digest への attestation(referrers)は未実装です。
+
+利用側が pin する値は層によって違います。
+
+- DiffID: 未圧縮 tar。圧縮レベルが変わっても同じ
+- layer digest: zstd レベルで変わる
+- image digest(index / manifest): `created` を含むためビルド毎に変わり得る
+
+## 検証
+
+`image validate` はパッケージイメージの Layout ではなく、パッケージ(`packages/artifacts/`)の ELF と `dependencies` を静的に見ます。
+実行確認の方法は出力イメージのツールを入れるときに定義します。
 
 ## 未定
 
-- glibc + openssl のように複数のツールを含むイメージの命名・管理方法
-  - openssl だけにして、暗黙に glibc への依存にしたくない
-  - `use glibc, openssl;` のようなことができれば理想
-  - ツール A とツール B のバージョンを指定したイメージを OCI 上でうまく管理する方法が未確定
-
-## イメージ一覧
-
-- [runtime](./runtime/README.md)
-- [builder](./builder/README.md)
+- musl の提供

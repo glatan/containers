@@ -1,5 +1,7 @@
-tools/packages/
-tools/sources/
-tools/build/
+packages/artifacts/
+packages/sources/
+packages/build/
 images/
+oci-layouts/
 builder/target/
+memo.md
