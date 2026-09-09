@@ -7,7 +7,7 @@ use crate::error::{Error, Result};
 use crate::process;
 use crate::util::source_checksums;
 
-pub fn fetch_package(package: &dyn Package) -> Result<()> {
+pub fn fetch_package(package: &dyn Package) -> Result<Vec<String>> {
     let dir = package.source_dir();
     fs::create_dir_all(&dir).map_err(|source| Error::io(&dir, source))?;
     let filename = Path::new(package.source().url)
@@ -16,10 +16,11 @@ pub fn fetch_package(package: &dyn Package) -> Result<()> {
     let tarball = dir.join(filename);
     let extracted = dir.join(package.source().subdir);
     let cached = tarball.exists() && verify(&tarball, package.source()).is_ok();
+    let mut log = Vec::new();
     if cached {
-        println!("{} は取得済みです", tarball.display());
+        log.push(format!("{} は取得済みです", tarball.display()));
     } else {
-        println!("{} を取得します", package.source().url);
+        log.push(format!("{} を取得します", package.source().url));
         process::status(
             Command::new("curl")
                 .args(["-fL", "--retry", "3", "-o"])
@@ -30,8 +31,8 @@ pub fn fetch_package(package: &dyn Package) -> Result<()> {
         verify(&tarball, package.source())?;
     }
     if cached && extracted.is_dir() {
-        println!("{} は展開済みです", extracted.display());
-        return Ok(());
+        log.push(format!("{} は展開済みです", extracted.display()));
+        return Ok(log);
     }
     process::status(
         Command::new("tar")
@@ -41,8 +42,8 @@ pub fn fetch_package(package: &dyn Package) -> Result<()> {
             .arg(&dir),
         "tar",
     )?;
-    println!("{} を展開しました", dir.display());
-    Ok(())
+    log.push(format!("{} を展開しました", dir.display()));
+    Ok(log)
 }
 
 pub(crate) fn verify(path: &Path, source: Source) -> Result<()> {

@@ -63,7 +63,7 @@ OCI 準拠のテストは `tests/oci_spec.rs`、CLI 契約は `tests/cli.rs` に
 ```
 package fetch      ソース取得 + sha3-512 / blake3 検証 + 展開
     ↓                 packages/sources/{package}/
-package build      podman run ビルド環境イメージでビルドスクリプトを実行
+package build      依存をトポロジ順に fetch / ビルドしたあと、podman でビルドスクリプトを実行
     ↓                 packages/artifacts/{package}-{version}-{arch}-{variant}/
 image build        パッケージをレイヤーとして Image Layout を生成 + SBOM
     ↓                 oci-layouts/{package}-{version}/
@@ -72,10 +72,11 @@ image validate     宣言依存とパッケージ内 NEEDED の整合性チェ�
 
 ビルドスクリプトには環境変数で `SOURCE`(ソース)、`BUILD`(ビルドディレクトリ)、`OUT`(パッケージの出力先)、`ARCH` / `VARIANT` / `TRIPLE` / `HOST_TRIPLE` / `CROSS` と、パッケージが要求したビルドフラグが渡されます。
 依存パッケージは `/dep/{パッケージ名}` に読み取り専用でマウントされます(`dependencies` と `build-dependencies`。glibc の sysroot 等に使用)。
+`package build` はこれらの依存を先にビルドします。成果物ディレクトリが空でなければそのターゲットはスキップします。ビルドが失敗した成果物は削除します。
 LTO と PGO は実施するのが基本です。しない場合は各パッケージのビルド設定に理由を書きます。
 
 ビルド専用のパッケージ定義(`build_only`)はパッケージイメージにしません。`build-dependencies` にだけ現れます。
-通常は `--network=none` でビルドしますが、ビルド時にネットワークが必要なパッケージ(`network`)は例外的に許可します。
+通常は `--network=none` でビルドします。`network` が真のパッケージ、またはクロスビルドはネットワークを許可します。
 
 新規パッケージ定義は `package/definition/{name}.rs` に `Package` を実装し、`package/definition/mod.rs` の一覧へ登録します。`flags()` は必須です。要求しない場合は空にします。
 文書は [`docs/image/packages/{name}.md`](../image/packages/README.md) にビルド設定を書きます。

@@ -1,14 +1,20 @@
 use crate::error::{Error, Result};
 use crate::package::Package;
 
+mod ca_certificates;
 mod glibc;
 mod linux_headers;
 mod openssl;
+mod zlib;
+mod zlib_ng;
 
 pub static PACKAGES: &[&dyn Package] = &[
+    &ca_certificates::CaCertificates,
     &glibc::Glibc,
     &linux_headers::LinuxHeaders,
     &openssl::Openssl,
+    &zlib::Zlib,
+    &zlib_ng::ZlibNg,
 ];
 
 pub fn all() -> &'static [&'static dyn Package] {
@@ -61,7 +67,7 @@ mod tests {
         assert_eq!(find("glibc").unwrap().version(), "2.44");
         assert!(find("missing").is_err());
         assert!(find_image("linux-headers").is_err());
-        assert_eq!(images().count(), 2);
+        assert_eq!(images().count(), 5);
     }
 
     #[test]
@@ -122,9 +128,17 @@ mod tests {
             assert!(!package.source().subdir.is_empty());
             assert!(!package.build_script().is_empty());
         }
-        let headers = find("linux-headers").unwrap();
-        assert!(headers.build_only());
+        assert!(find("linux-headers").unwrap().build_only());
         assert!(!find("glibc").unwrap().build_only());
+        assert!(!find("zlib").unwrap().build_only());
+        assert!(!find("zlib-ng").unwrap().build_only());
+        assert!(!find("ca-certificates").unwrap().build_only());
+        assert!(!find("ca-certificates").unwrap().network());
+        assert!(!find("zlib").unwrap().network());
+        assert!(find("zlib-ng").unwrap().network());
+        assert!(!find("openssl").unwrap().depends_on("zlib"));
+        assert!(!find("openssl").unwrap().depends_on("zlib-ng"));
+        assert!(!find("openssl").unwrap().depends_on("ca-certificates"));
         assert!(find("glibc").unwrap().network());
         assert!(find("openssl").unwrap().network());
         assert!(
@@ -139,6 +153,12 @@ mod tests {
                 .build_script()
                 .contains("linux64-riscv64")
         );
+        assert!(
+            find("zlib-ng")
+                .unwrap()
+                .build_script()
+                .contains("BUILD_TESTING=OFF")
+        );
     }
 
     #[test]
@@ -146,12 +166,15 @@ mod tests {
         use crate::flags::Var;
         assert_eq!(find("glibc").unwrap().flags(), &[Var::Cflags]);
         assert_eq!(find("openssl").unwrap().flags(), &[Var::Cflags]);
+        assert_eq!(find("zlib").unwrap().flags(), &[Var::Cflags]);
+        assert_eq!(find("zlib-ng").unwrap().flags(), &[Var::Cflags]);
         assert!(find("linux-headers").unwrap().flags().is_empty());
+        assert!(find("ca-certificates").unwrap().flags().is_empty());
     }
 
     #[test]
     fn c_packages_detect_native_by_triple_not_empty_cross() {
-        for name in ["glibc", "openssl"] {
+        for name in ["glibc", "openssl", "zlib", "zlib-ng"] {
             let script = find(name).unwrap().build_script();
             assert!(
                 script.contains(r#"$TRIPLE" != "$HOST_TRIPLE""#),

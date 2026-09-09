@@ -143,6 +143,9 @@ pub(crate) fn soname_to_package(soname: &str) -> Option<&'static str> {
     if soname.starts_with("libz.so") {
         return Some("zlib");
     }
+    if soname.starts_with("libz-ng.so") {
+        return Some("zlib-ng");
+    }
     None
 }
 
@@ -328,6 +331,7 @@ mod tests {
         assert_eq!(soname_to_package("libm.so.6"), Some("glibc"));
         assert_eq!(soname_to_package("libssl.so.3"), Some("openssl"));
         assert_eq!(soname_to_package("libz.so.1"), Some("zlib"));
+        assert_eq!(soname_to_package("libz-ng.so.2"), Some("zlib-ng"));
         assert_eq!(soname_to_package("libfoo.so.1"), None);
     }
 

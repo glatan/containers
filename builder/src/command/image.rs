@@ -47,7 +47,14 @@ pub fn run(command: ImageCommand) -> Result<()> {
                 return Ok(());
             }
             for defined in packages {
-                let output = image::build(defined, level, with_packages)?;
+                if with_packages {
+                    let targets: Vec<_> = crate::target::Target::all().collect();
+                    package::build_package(defined, &targets, true, |line| println!("{line}"))?;
+                }
+                let (output, skipped) = image::build(defined, level)?;
+                for line in skipped {
+                    println!("{line}");
+                }
                 println!(
                     "{} をビルドしました (zstd {level}): {}",
                     defined.name(),

@@ -39,11 +39,13 @@ pub fn run(command: PackageCommand) -> Result<()> {
             let name = package.ok_or_else(|| Error::message("パッケージ名を指定してください"))?;
             let defined = package::find(&name)?;
             let (targets, skip_unsupported) = select_targets(all_target, architecture, variant)?;
-            package::build_package(defined, &targets, skip_unsupported)
+            package::build_package(defined, &targets, skip_unsupported, |line| {
+                println!("{line}")
+            })
         }
         PackageCommand::Fetch { package, all } => {
             for defined in super::named_packages(package, all)? {
-                package::fetch_package(defined)?;
+                emit(package::fetch_package(defined)?)?;
             }
             Ok(())
         }
@@ -59,6 +61,13 @@ pub fn run(command: PackageCommand) -> Result<()> {
             Ok(())
         }
     }
+}
+
+fn emit(lines: Vec<String>) -> Result<()> {
+    for line in lines {
+        println!("{line}");
+    }
+    Ok(())
 }
 
 fn select_targets(

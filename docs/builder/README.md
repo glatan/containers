@@ -44,6 +44,8 @@
 - `--architecture {architecture}`: 特定の architecture を対象にする(variant の指定が必須)
 - `--variant {variant}`: 特定の variant を対象にする
 
+`package build` は `dependencies` と `build-dependencies` を先にビルドします。循環はエラーです。ソースが無ければ fetch します。成果物ディレクトリが空でなければそのターゲットはスキップします。ビルド失敗時は成果物を削除します(作り直すときはディレクトリを消します)。
+
 #### package fetch のオプション
 
 - `--all`: すべてのパッケージ定義を対象にする
