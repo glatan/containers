@@ -127,5 +127,17 @@ mod tests {
         assert!(!find("glibc").unwrap().build_only());
         assert!(find("glibc").unwrap().network());
         assert!(find("openssl").unwrap().network());
+        assert!(
+            find("linux-headers")
+                .unwrap()
+                .build_script()
+                .contains("riscv64")
+        );
+        assert!(
+            find("openssl")
+                .unwrap()
+                .build_script()
+                .contains("linux64-riscv64")
+        );
     }
 }

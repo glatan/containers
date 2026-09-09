@@ -46,6 +46,24 @@
 | amd64 | v3 | x86_64 | x86-64-v3 | 対応 |
 | amd64 | v4 | x86_64 | x86-64-v4 | 対応 |
 | arm64 | v8 | arm64 | armv8-a | 対応 |
+| arm64 | v8.1 | arm64 | armv8.1-a | 対応 |
+| arm64 | v8.2 | arm64 | armv8.2-a | 対応 |
+| arm64 | v8.3 | arm64 | armv8.3-a | 対応 |
+| arm64 | v8.4 | arm64 | armv8.4-a | 対応 |
+| arm64 | v8.5 | arm64 | armv8.5-a | 対応 |
+| arm64 | v8.6 | arm64 | armv8.6-a | 対応 |
+| arm64 | v8.7 | arm64 | armv8.7-a | 対応 |
+| arm64 | v8.8 | arm64 | armv8.8-a | 対応 |
+| arm64 | v8.9 | arm64 | armv8.9-a | 対応 |
+| arm64 | v9 | arm64 | armv9-a | 対応 |
+| arm64 | v9.1 | arm64 | armv9.1-a | 対応 |
+| arm64 | v9.2 | arm64 | armv9.2-a | 対応 |
+| arm64 | v9.3 | arm64 | armv9.3-a | 対応 |
+| arm64 | v9.4 | arm64 | armv9.4-a | 対応 |
+| arm64 | v9.5 | arm64 | armv9.5-a | 対応 |
+| riscv64 | rva20u64 | riscv | rva20u64 | 対応 |
+| riscv64 | rva22u64 | riscv | rva22u64 | 対応 |
+| riscv64 | rva23u64 | riscv | rva23u64 | 対応 |
 
 ## ビルドフラグ
 

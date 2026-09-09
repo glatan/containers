@@ -45,6 +45,7 @@ impl Package for LinuxHeaders {
 case "$ARCH" in
   amd64) KARCH=x86_64 ;;
   arm64) KARCH=arm64 ;;
+  riscv64) KARCH=riscv ;;
   *) echo "未対応の architecture です: $ARCH"; exit 1 ;;
 esac
 pacman -Sy --noconfirm rsync

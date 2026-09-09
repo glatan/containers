@@ -48,6 +48,24 @@
 | amd64 | v3 | x86-64-v3 | 対応 |
 | amd64 | v4 | x86-64-v4 | 対応 |
 | arm64 | v8 | armv8-a | 対応 |
+| arm64 | v8.1 | armv8.1-a | 対応 |
+| arm64 | v8.2 | armv8.2-a | 対応 |
+| arm64 | v8.3 | armv8.3-a | 対応 |
+| arm64 | v8.4 | armv8.4-a | 対応 |
+| arm64 | v8.5 | armv8.5-a | 対応 |
+| arm64 | v8.6 | armv8.6-a | 対応 |
+| arm64 | v8.7 | armv8.7-a | 対応 |
+| arm64 | v8.8 | armv8.8-a | 対応 |
+| arm64 | v8.9 | armv8.9-a | 対応 |
+| arm64 | v9 | armv9-a | 対応 |
+| arm64 | v9.1 | armv9.1-a | 対応 |
+| arm64 | v9.2 | armv9.2-a | 対応 |
+| arm64 | v9.3 | armv9.3-a | 対応 |
+| arm64 | v9.4 | armv9.4-a | 対応 |
+| arm64 | v9.5 | armv9.5-a | 対応 |
+| riscv64 | rva20u64 | rva20u64 | 対応 |
+| riscv64 | rva22u64 | rva22u64 | 対応 |
+| riscv64 | rva23u64 | rva23u64 | 対応 |
 
 ## ビルドフラグ
 

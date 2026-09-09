@@ -11,7 +11,7 @@ OCI 上の意味は [oci](../oci/README.md) を参照してください。
 - `listed` — 表に載る(または `…` で示される系列の)組み合わせ
 - `defined` — 表に無いが、仕様上は implementation-defined であり不正ではない
 
-いま `package build` できるのは **amd64 v1〜v4 と arm64 v8** だけです。他は `--all-target` 時にスキップします。
+いま `package build` できるのは **amd64 v1〜v4、arm64 の全 variant、riscv64 の全 variant** です。ppc64le と s390x は Arch にクロス gcc が無いため、`--all-target` 時にスキップします。
 
 | architecture | variant | status |
 |-|-|-|

@@ -16,7 +16,7 @@
 - architecture と variant まで CPU を指定します。カタログとビルド可能集合は [platforms.md](../image/platforms.md) です。
 - LTO と PGO は実施するのが基本です。しない場合は [各パッケージのビルド設定](../image/packages/README.md) に理由を書きます。
 - 通常は `--network=none` です。設定でネットワークを許可したパッケージだけ例外です。
-- いまビルドできるのは amd64 v1〜v4 と arm64 v8 です。
+- いまビルドできるのは amd64 v1〜v4、arm64 の全 variant、riscv64 の全 variant です。ppc64le と s390x は Arch にクロス gcc がありません。
 
 実装は [`builder/src/package/definition/`](../../builder/src/package/definition/) が正本です。文書を足すときは `{name}.md` と `{name}.rs`(ハイフンは `_`)を対で追加します。
 

@@ -51,6 +51,7 @@ impl Package for Openssl {
 case "$ARCH" in
   amd64) TGT=linux-x86_64 ;;
   arm64) TGT=linux-aarch64 ;;
+  riscv64) TGT=linux64-riscv64 ;;
   *) echo "未対応の architecture です: $ARCH"; exit 1 ;;
 esac
 if [ -n "$CROSS" ]; then

@@ -96,5 +96,5 @@ LTO と PGO は実施するのが基本です。しない場合は各パッケ�
 
 ## 現状の制約
 
-- ビルドできる architecture / variant は amd64 v1〜v4 と arm64 v8 のみです。他は `--all-target` 時にスキップされます(s390x / ppc64le は Arch にクロス gcc がなく未着手、riscv64 はツールチェーンが存在するが未対応)。
+- ビルドできる architecture / variant は amd64 v1〜v4、arm64 の全 variant、riscv64 の全 variant です。ppc64le / s390x は Arch にクロス gcc が無く、`--all-target` 時にスキップされます。
 - `--with-packages` はパッケージビルドを連鎖実行するのみで、無いターゲットはスキップして警告します。

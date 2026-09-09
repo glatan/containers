@@ -58,26 +58,46 @@ pub const TARGETS: &[Platform] = &[
 
 impl Platform {
     pub fn cflags(self) -> Result<String> {
-        let march = match (self.architecture, self.variant) {
-            ("amd64", "v1") => "x86-64",
-            ("amd64", "v2") => "x86-64-v2",
-            ("amd64", "v3") => "x86-64-v3",
-            ("amd64", "v4") => "x86-64-v4",
-            ("arm64", "v8") => "armv8-a",
-            _ => {
-                return Err(Error::message(format!(
-                    "未対応のターゲットです: {}/{}",
-                    self.architecture, self.variant
-                )));
-            }
-        };
-        Ok(format!("-O2 -march={march}"))
+        Ok(format!("-O2 -march={}", self.march()?))
+    }
+
+    pub fn march(self) -> Result<&'static str> {
+        match (self.architecture, self.variant) {
+            ("amd64", "v1") => Ok("x86-64"),
+            ("amd64", "v2") => Ok("x86-64-v2"),
+            ("amd64", "v3") => Ok("x86-64-v3"),
+            ("amd64", "v4") => Ok("x86-64-v4"),
+            ("arm64", "v8") => Ok("armv8-a"),
+            ("arm64", "v8.1") => Ok("armv8.1-a"),
+            ("arm64", "v8.2") => Ok("armv8.2-a"),
+            ("arm64", "v8.3") => Ok("armv8.3-a"),
+            ("arm64", "v8.4") => Ok("armv8.4-a"),
+            ("arm64", "v8.5") => Ok("armv8.5-a"),
+            ("arm64", "v8.6") => Ok("armv8.6-a"),
+            ("arm64", "v8.7") => Ok("armv8.7-a"),
+            ("arm64", "v8.8") => Ok("armv8.8-a"),
+            ("arm64", "v8.9") => Ok("armv8.9-a"),
+            ("arm64", "v9") => Ok("armv9-a"),
+            ("arm64", "v9.1") => Ok("armv9.1-a"),
+            ("arm64", "v9.2") => Ok("armv9.2-a"),
+            ("arm64", "v9.3") => Ok("armv9.3-a"),
+            ("arm64", "v9.4") => Ok("armv9.4-a"),
+            ("arm64", "v9.5") => Ok("armv9.5-a"),
+            ("riscv64", "rva20u64") => Ok("rva20u64"),
+            ("riscv64", "rva22u64") => Ok("rva22u64"),
+            ("riscv64", "rva23u64") => Ok("rva23u64"),
+            _ => Err(Error::message(format!(
+                "未対応のターゲットです: {}/{}",
+                self.architecture, self.variant
+            ))),
+        }
     }
 
     pub fn triple(self) -> Result<&'static str> {
         match self.architecture {
             "amd64" => Ok("x86_64-pc-linux-gnu"),
             "arm64" => Ok("aarch64-linux-gnu"),
+            "riscv64" => Ok("riscv64-linux-gnu"),
             _ => Err(Error::message(format!(
                 "未対応のターゲットです: {}",
                 self.architecture
@@ -89,6 +109,7 @@ impl Platform {
         match self.architecture {
             "amd64" => Ok(""),
             "arm64" => Ok("aarch64-linux-gnu-"),
+            "riscv64" => Ok("riscv64-linux-gnu-"),
             _ => Err(Error::message(format!(
                 "未対応のターゲットです: {}",
                 self.architecture
@@ -253,4 +274,48 @@ pub(super) struct RootFs {
     #[serde(rename = "type")]
     pub type_: &'static str,
     pub diff_ids: Vec<Digest>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_flags_cover_amd64_arm64_and_riscv64() {
+        for platform in TARGETS {
+            let supported = !matches!(platform.architecture, "ppc64le" | "s390x");
+            assert_eq!(
+                platform.cflags().is_ok(),
+                supported,
+                "{}/{}",
+                platform.architecture,
+                platform.variant
+            );
+            assert_eq!(
+                platform.triple().is_ok(),
+                supported,
+                "{}/{}",
+                platform.architecture,
+                platform.variant
+            );
+            assert_eq!(
+                platform.cross_prefix().is_ok(),
+                supported,
+                "{}/{}",
+                platform.architecture,
+                platform.variant
+            );
+        }
+        let arm64_v81 = platform("arm64", "v8.1");
+        assert_eq!(arm64_v81.march().unwrap(), "armv8.1-a");
+        assert_eq!(arm64_v81.triple().unwrap(), "aarch64-linux-gnu");
+        assert_eq!(arm64_v81.cross_prefix().unwrap(), "aarch64-linux-gnu-");
+        let riscv = platform("riscv64", "rva20u64");
+        assert_eq!(riscv.march().unwrap(), "rva20u64");
+        assert_eq!(riscv.triple().unwrap(), "riscv64-linux-gnu");
+        assert_eq!(riscv.cross_prefix().unwrap(), "riscv64-linux-gnu-");
+        assert_eq!(platform("amd64", "v1").cross_prefix().unwrap(), "");
+        assert!(platform("s390x", "z17").cflags().is_err());
+        assert!(platform("ppc64le", "power8").triple().is_err());
+    }
 }
