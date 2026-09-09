@@ -7,7 +7,7 @@
 | ライセンス | Apache-2.0 |
 | パッケージイメージ | する。[公開一覧](../packages.md) |
 | ネットワーク | 許可(クロス時の pacman) |
-| 定義 | [`builder/src/package/openssl.rs`](../../../builder/src/package/openssl.rs) |
+| 定義 | [`builder/src/package/definition/openssl.rs`](../../../builder/src/package/definition/openssl.rs) |
 
 ## ソース
 

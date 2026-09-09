@@ -7,7 +7,7 @@
 | ライセンス | GPL-2.0-only WITH Linux-syscall-note |
 | パッケージイメージ | しない。ビルド専用 |
 | ネットワーク | 許可(pacman) |
-| 定義 | [`builder/src/package/linux_headers.rs`](../../../builder/src/package/linux_headers.rs) |
+| 定義 | [`builder/src/package/definition/linux_headers.rs`](../../../builder/src/package/definition/linux_headers.rs) |
 
 ## ソース
 

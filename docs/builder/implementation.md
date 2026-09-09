@@ -15,8 +15,8 @@ builder(パッケージとパッケージイメージのビルドツール)の�
 |-|-|
 | `main.rs` | CLI の定義と exit code の処理 |
 | `error.rs` / `process.rs` | 型付きエラーと外部コマンド実行 |
-| `package/mod.rs` | `Package` trait、共通 struct、静的レジストリ |
-| `package/{glibc,linux_headers,openssl}.rs` | パッケージ定義とビルドスクリプト |
+| `package/mod.rs` | `Package` trait、共通 struct、`package` サブコマンド |
+| `package/definition/` | パッケージ定義と一覧 |
 | `package/{fetch,build}.rs` | `package fetch / build` の共通ワークフロー |
 | `package/env.rs` | ビルド環境イメージ(`archlinux:base-devel` の digest ピン) |
 | `image.rs` | `image ls / build / validate` |
@@ -73,7 +73,7 @@ LTO と PGO は実施するのが基本です。しない場合は各パッケ�
 ビルド専用のパッケージ定義(`build_only`)はパッケージイメージにしません。`build-dependencies` にだけ現れます。
 通常は `--network=none` でビルドしますが、ビルド時にネットワークが必要なパッケージ(`network`)は例外的に許可します。
 
-新規パッケージ定義は `package/{name}.rs` に `Package` を実装し、`package/mod.rs` のレジストリへ登録します。
+新規パッケージ定義は `package/definition/{name}.rs` に `Package` を実装し、`package/definition/mod.rs` の一覧へ登録します。
 文書は [`docs/image/packages/{name}.md`](../image/packages/README.md) にビルド設定を書きます。
 モジュール名の `linux_headers.rs` はパッケージ名 `linux-headers` に対応します。
 

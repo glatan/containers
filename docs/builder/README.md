@@ -71,7 +71,7 @@
 
 ## パッケージ定義
 
-- 実装の正本は Rust の `Package` trait です。パッケージ毎のコードは `builder/src/package/{name}.rs`、文書は [image/packages/](../image/packages/README.md) です。
+- 実装の正本は Rust の `Package` trait です。パッケージ毎のコードは `builder/src/package/definition/{name}.rs`、文書は [image/packages/](../image/packages/README.md) です。
 - 共通のビルド環境は [package](../package/README.md) です。
 - 依存はパッケージイメージには含めません。実行時依存は `dependencies`、ビルド時だけ必要なものは `build-dependencies` です。
 - SPDX SBOM を Layout 内の `sbom.spdx.json` に書く。attestation としての公開は未実装です。

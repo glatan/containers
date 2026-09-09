@@ -18,6 +18,6 @@
 - 通常は `--network=none` です。設定でネットワークを許可したパッケージだけ例外です。
 - いまビルドできるのは amd64 v1〜v4 と arm64 v8 です。
 
-実装は [`builder/src/package/`](../../builder/src/package/) が正本です。文書を足すときは `{name}.md` と `{name}.rs`(ハイフンは `_`)を対で追加します。
+実装は [`builder/src/package/definition/`](../../builder/src/package/definition/) が正本です。文書を足すときは `{name}.md` と `{name}.rs`(ハイフンは `_`)を対で追加します。
 
 ソース tarball の検証は SHA3-512 と BLAKE3(出力 512 bit)です。OCI Image Layout の blob / DiffID は仕様どおり sha256 のままです。

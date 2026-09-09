@@ -7,7 +7,7 @@
 | ライセンス | LGPL-2.1-or-later |
 | パッケージイメージ | する。[公開一覧](../packages.md) |
 | ネットワーク | 許可(クロス時の pacman) |
-| 定義 | [`builder/src/package/glibc.rs`](../../../builder/src/package/glibc.rs) |
+| 定義 | [`builder/src/package/definition/glibc.rs`](../../../builder/src/package/definition/glibc.rs) |
 
 ## ソース
 

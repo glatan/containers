@@ -7,7 +7,7 @@
 
 | 呼称 | 指すもの | パス |
 |-|-|-|
-| パッケージ定義 | `Package` trait と各パッケージの実装 | `builder/src/package/` |
+| パッケージ定義 | `Package` trait の実装 | `builder/src/package/definition/` |
 | ソース | 展開した上流ソース | `packages/sources/{name}/` |
 | パッケージ | `package build` が出力する未圧縮のファイル集合 | `packages/artifacts/{name}-{version}-{arch}-{variant}/` |
 | パッケージイメージの Layout | ローカルの OCI Image Layout | `oci-layouts/{name}-{version}/` |
