@@ -1,3 +1,4 @@
+use crate::flags::Var;
 use crate::package::{Dependency, Package, Source};
 
 pub struct Glibc;
@@ -43,15 +44,19 @@ impl Package for Glibc {
         }]
     }
 
+    fn flags(&self) -> &'static [Var] {
+        &[Var::Cflags]
+    }
+
     fn build_script(&self) -> &'static str {
         r#"set -euxo pipefail
-if [ -n "$CROSS" ]; then
+if [ "$TRIPLE" != "$HOST_TRIPLE" ]; then
   pacman -Sy --noconfirm "${CROSS}gcc"
   export CC="$CROSS"gcc AR="$CROSS"ar RANLIB="$CROSS"ranlib
 fi
 mkdir -p "$BUILD"
 cd "$BUILD"
-if [ -n "$CROSS" ]; then
+if [ "$TRIPLE" != "$HOST_TRIPLE" ]; then
   "$SOURCE"/configure --prefix=/usr --disable-werror \
     --with-headers=/dep/linux-headers/usr/include \
     --host="$TRIPLE" --build="$HOST_TRIPLE" \
@@ -62,7 +67,7 @@ else
 fi
 make -j"$(nproc)"
 make install DESTDIR="$OUT"
-if [ -n "$CROSS" ]; then
+if [ "$TRIPLE" != "$HOST_TRIPLE" ]; then
   mkdir -p "$OUT"/usr/"$TRIPLE"
   ln -sfn ../include "$OUT"/usr/"$TRIPLE"/include
   ln -sfn ../lib64 "$OUT"/usr/"$TRIPLE"/lib

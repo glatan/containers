@@ -4,7 +4,7 @@
 カタログとしては、ビルドできない場合を除きすべて必要です。
 OCI 上の意味は [oci](../oci/README.md) を参照してください。
 
-表は `builder` の `TARGETS` と一致させます。ずれはテスト `documented_platforms_match_targets` で検出します。
+表は [`builder/src/target.rs`](../../builder/src/target.rs) の `Target::all()` と一致させます。ずれはテスト `documented_platforms_match_targets` で検出します。
 
 `status` は [Image Spec v1.1.1 の Platform Variants](https://github.com/opencontainers/image-spec/blob/v1.1.1/image-index.md#platform-variants) に対する位置づけです。
 

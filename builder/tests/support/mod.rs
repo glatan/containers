@@ -1,7 +1,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use containers_builder::oci::{self, Platform};
+use containers_builder::oci;
+use containers_builder::target::Target;
 use serde_json::Value;
 
 pub struct Layout {
@@ -25,15 +26,15 @@ impl Drop for Layout {
     }
 }
 
-pub fn build(platforms: &[Platform]) -> Layout {
+pub fn build(platforms: &[Target]) -> Layout {
     build_with_bytes(platforms, b"hello")
 }
 
-pub fn build_with_bytes(platforms: &[Platform], bytes: &[u8]) -> Layout {
+pub fn build_with_bytes(platforms: &[Target], bytes: &[u8]) -> Layout {
     build_with_bytes_level(platforms, bytes, oci::DEFAULT_ZSTD_LEVEL)
 }
 
-pub fn build_with_bytes_level(platforms: &[Platform], bytes: &[u8], zstd_level: u8) -> Layout {
+pub fn build_with_bytes_level(platforms: &[Target], bytes: &[u8], zstd_level: u8) -> Layout {
     let tmp = tempfile::tempdir().unwrap();
     let layer_src = tmp.path().join("layer");
     fs::create_dir_all(&layer_src).unwrap();
@@ -54,11 +55,9 @@ pub fn build_with_bytes_level(platforms: &[Platform], bytes: &[u8], zstd_level: 
     }
 }
 
-pub fn amd64(variant: &'static str) -> Platform {
-    Platform {
-        architecture: "amd64",
-        variant,
-    }
+pub fn amd64(variant: &'static str) -> Target {
+    Target::lookup("amd64", variant)
+        .unwrap_or_else(|| panic!("未知の amd64 variant です: {variant}"))
 }
 
 pub fn index(layout: &Layout) -> Value {

@@ -5,35 +5,15 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::error::{Error, Result};
-use crate::oci::TARGETS;
-use crate::package::{self, Package};
 use crate::process;
+use crate::target::Target;
 
-pub fn run(name: Option<String>, all: bool) -> Result<()> {
-    let targets: Vec<&dyn Package> = match name {
-        Some(name) => vec![package::find_image(&name)?],
-        None if all => package::images().collect(),
-        None => return Err(Error::message("パッケージ名か --all を指定してください")),
-    };
-    if targets.is_empty() {
-        println!("まだ定義されたパッケージイメージはありません。");
-        return Ok(());
-    }
-    for package in targets {
-        validate(package)?;
-        println!(
-            "{} {} の検証に成功しました",
-            package.name(),
-            package.version()
-        );
-    }
-    Ok(())
-}
+use super::Package;
 
-fn validate(package: &dyn Package) -> Result<()> {
+pub fn check(package: &dyn Package) -> Result<()> {
     let mut validated = 0;
-    for platform in TARGETS {
-        let dir = package.artifact_dir(*platform);
+    for target in Target::all() {
+        let dir = package.artifact_dir(target);
         if !dir.is_dir() {
             continue;
         }
@@ -236,6 +216,9 @@ mod tests {
         }
         fn build_script(&self) -> &'static str {
             ""
+        }
+        fn flags(&self) -> &'static [crate::flags::Var] {
+            &[]
         }
     }
 

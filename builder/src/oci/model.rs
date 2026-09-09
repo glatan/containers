@@ -1,122 +1,7 @@
 use serde::Serialize;
 
 use crate::error::{Error, Result};
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Platform {
-    pub architecture: &'static str,
-    pub variant: &'static str,
-}
-
-const fn platform(architecture: &'static str, variant: &'static str) -> Platform {
-    Platform {
-        architecture,
-        variant,
-    }
-}
-
-pub const TARGETS: &[Platform] = &[
-    platform("arm64", "v8"),
-    platform("arm64", "v8.1"),
-    platform("arm64", "v8.2"),
-    platform("arm64", "v8.3"),
-    platform("arm64", "v8.4"),
-    platform("arm64", "v8.5"),
-    platform("arm64", "v8.6"),
-    platform("arm64", "v8.7"),
-    platform("arm64", "v8.8"),
-    platform("arm64", "v8.9"),
-    platform("arm64", "v9"),
-    platform("arm64", "v9.1"),
-    platform("arm64", "v9.2"),
-    platform("arm64", "v9.3"),
-    platform("arm64", "v9.4"),
-    platform("arm64", "v9.5"),
-    platform("ppc64le", "power8"),
-    platform("ppc64le", "power9"),
-    platform("ppc64le", "power10"),
-    platform("ppc64le", "power11"),
-    platform("riscv64", "rva20u64"),
-    platform("riscv64", "rva22u64"),
-    platform("riscv64", "rva23u64"),
-    platform("amd64", "v1"),
-    platform("amd64", "v2"),
-    platform("amd64", "v3"),
-    platform("amd64", "v4"),
-    platform("s390x", "z900"),
-    platform("s390x", "z990"),
-    platform("s390x", "z9-ec"),
-    platform("s390x", "z10"),
-    platform("s390x", "z196"),
-    platform("s390x", "zEC12"),
-    platform("s390x", "z13"),
-    platform("s390x", "z14"),
-    platform("s390x", "z15"),
-    platform("s390x", "z16"),
-    platform("s390x", "z17"),
-];
-
-impl Platform {
-    pub fn cflags(self) -> Result<String> {
-        Ok(format!("-O2 -march={}", self.march()?))
-    }
-
-    pub fn march(self) -> Result<&'static str> {
-        match (self.architecture, self.variant) {
-            ("amd64", "v1") => Ok("x86-64"),
-            ("amd64", "v2") => Ok("x86-64-v2"),
-            ("amd64", "v3") => Ok("x86-64-v3"),
-            ("amd64", "v4") => Ok("x86-64-v4"),
-            ("arm64", "v8") => Ok("armv8-a"),
-            ("arm64", "v8.1") => Ok("armv8.1-a"),
-            ("arm64", "v8.2") => Ok("armv8.2-a"),
-            ("arm64", "v8.3") => Ok("armv8.3-a"),
-            ("arm64", "v8.4") => Ok("armv8.4-a"),
-            ("arm64", "v8.5") => Ok("armv8.5-a"),
-            ("arm64", "v8.6") => Ok("armv8.6-a"),
-            ("arm64", "v8.7") => Ok("armv8.7-a"),
-            ("arm64", "v8.8") => Ok("armv8.8-a"),
-            ("arm64", "v8.9") => Ok("armv8.9-a"),
-            ("arm64", "v9") => Ok("armv9-a"),
-            ("arm64", "v9.1") => Ok("armv9.1-a"),
-            ("arm64", "v9.2") => Ok("armv9.2-a"),
-            ("arm64", "v9.3") => Ok("armv9.3-a"),
-            ("arm64", "v9.4") => Ok("armv9.4-a"),
-            ("arm64", "v9.5") => Ok("armv9.5-a"),
-            ("riscv64", "rva20u64") => Ok("rva20u64"),
-            ("riscv64", "rva22u64") => Ok("rva22u64"),
-            ("riscv64", "rva23u64") => Ok("rva23u64"),
-            _ => Err(Error::message(format!(
-                "未対応のターゲットです: {}/{}",
-                self.architecture, self.variant
-            ))),
-        }
-    }
-
-    pub fn triple(self) -> Result<&'static str> {
-        match self.architecture {
-            "amd64" => Ok("x86_64-pc-linux-gnu"),
-            "arm64" => Ok("aarch64-linux-gnu"),
-            "riscv64" => Ok("riscv64-linux-gnu"),
-            _ => Err(Error::message(format!(
-                "未対応のターゲットです: {}",
-                self.architecture
-            ))),
-        }
-    }
-
-    pub fn cross_prefix(self) -> Result<&'static str> {
-        match self.architecture {
-            "amd64" => Ok(""),
-            "arm64" => Ok("aarch64-linux-gnu-"),
-            "riscv64" => Ok("riscv64-linux-gnu-"),
-            _ => Err(Error::message(format!(
-                "未対応のターゲットです: {}",
-                self.architecture
-            ))),
-        }
-    }
-}
+use crate::target::Target;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ZstdLevel(u8);
@@ -149,20 +34,6 @@ impl ZstdLevel {
 
 pub fn parse_zstd_level(level: u8) -> Result<u8> {
     Ok(ZstdLevel::new(level)?.get())
-}
-
-pub fn resolve_zstd_level(publish: bool, zstd_level: Option<u8>) -> Result<u8> {
-    Ok(match (publish, zstd_level) {
-        (true, None) => ZstdLevel::PUBLISH,
-        (false, None) => ZstdLevel::DEFAULT,
-        (true, Some(level)) if level != PUBLISH_ZSTD_LEVEL => {
-            return Err(Error::message(
-                "--publish の圧縮レベルは 22 です。--zstd-level と同時に指定しないでください",
-            ));
-        }
-        (_, Some(level)) => ZstdLevel::new(level)?,
-    }
-    .get())
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -218,12 +89,12 @@ pub(super) struct PlatformObject {
     pub variant: &'static str,
 }
 
-impl From<Platform> for PlatformObject {
-    fn from(platform: Platform) -> Self {
+impl From<Target> for PlatformObject {
+    fn from(target: Target) -> Self {
         Self {
-            architecture: platform.architecture,
+            architecture: target.architecture(),
             os: "linux",
-            variant: platform.variant,
+            variant: target.variant(),
         }
     }
 }
@@ -274,48 +145,4 @@ pub(super) struct RootFs {
     #[serde(rename = "type")]
     pub type_: &'static str,
     pub diff_ids: Vec<Digest>,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn build_flags_cover_amd64_arm64_and_riscv64() {
-        for platform in TARGETS {
-            let supported = !matches!(platform.architecture, "ppc64le" | "s390x");
-            assert_eq!(
-                platform.cflags().is_ok(),
-                supported,
-                "{}/{}",
-                platform.architecture,
-                platform.variant
-            );
-            assert_eq!(
-                platform.triple().is_ok(),
-                supported,
-                "{}/{}",
-                platform.architecture,
-                platform.variant
-            );
-            assert_eq!(
-                platform.cross_prefix().is_ok(),
-                supported,
-                "{}/{}",
-                platform.architecture,
-                platform.variant
-            );
-        }
-        let arm64_v81 = platform("arm64", "v8.1");
-        assert_eq!(arm64_v81.march().unwrap(), "armv8.1-a");
-        assert_eq!(arm64_v81.triple().unwrap(), "aarch64-linux-gnu");
-        assert_eq!(arm64_v81.cross_prefix().unwrap(), "aarch64-linux-gnu-");
-        let riscv = platform("riscv64", "rva20u64");
-        assert_eq!(riscv.march().unwrap(), "rva20u64");
-        assert_eq!(riscv.triple().unwrap(), "riscv64-linux-gnu");
-        assert_eq!(riscv.cross_prefix().unwrap(), "riscv64-linux-gnu-");
-        assert_eq!(platform("amd64", "v1").cross_prefix().unwrap(), "");
-        assert!(platform("s390x", "z17").cflags().is_err());
-        assert!(platform("ppc64le", "power8").triple().is_err());
-    }
 }

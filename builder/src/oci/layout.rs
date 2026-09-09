@@ -5,8 +5,9 @@ use crate::error::{Error, Result};
 use crate::oci::layer;
 use crate::oci::model::{
     Annotations, Descriptor, Digest, EmptyObject, Image, ImageConfig, ImageIndex, ImageManifest,
-    OciLayout, Platform, PlatformObject, RootFs, ZstdLevel,
+    OciLayout, PlatformObject, RootFs, ZstdLevel,
 };
+use crate::target::Target;
 use crate::util::{self, timestamp};
 
 const MEDIA_INDEX: &str = "application/vnd.oci.image.index.v1+json";
@@ -17,7 +18,7 @@ const MEDIA_LAYER: &str = "application/vnd.oci.image.layer.v1.tar+zstd";
 pub fn build(
     output: &Path,
     image: &Image,
-    layers: &[(Platform, Vec<PathBuf>)],
+    layers: &[(Target, Vec<PathBuf>)],
     zstd_level: u8,
 ) -> Result<()> {
     let zstd_level = ZstdLevel::new(zstd_level)?;
@@ -42,9 +43,9 @@ pub fn build(
     let blobs = staging.path().join("blobs/sha256");
     fs::create_dir_all(&blobs).map_err(|source| Error::io(&blobs, source))?;
     let mut manifests = Vec::new();
-    for (platform, layer_dirs) in layers {
+    for (target, layer_dirs) in layers {
         manifests.push(build_manifest(
-            &blobs, image, *platform, layer_dirs, zstd_level,
+            &blobs, image, *target, layer_dirs, zstd_level,
         )?);
     }
     let index = ImageIndex {
@@ -68,7 +69,7 @@ pub fn build(
 fn build_manifest(
     blobs: &Path,
     image: &Image,
-    platform: Platform,
+    target: Target,
     layer_dirs: &[PathBuf],
     zstd_level: ZstdLevel,
 ) -> Result<Descriptor> {
@@ -86,9 +87,9 @@ fn build_manifest(
     }
     let config = ImageConfig {
         created: timestamp(),
-        architecture: platform.architecture,
+        architecture: target.architecture(),
         os: "linux",
-        variant: platform.variant,
+        variant: target.variant(),
         config: EmptyObject {},
         rootfs: RootFs {
             type_: "layers",
@@ -116,7 +117,7 @@ fn build_manifest(
         media_type: MEDIA_MANIFEST,
         digest,
         size,
-        platform: Some(PlatformObject::from(platform)),
+        platform: Some(PlatformObject::from(target)),
     })
 }
 

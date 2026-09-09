@@ -73,7 +73,7 @@ builder が生成するパッケージイメージは、次の仕様に準拠し
 
 | ID | 方針 | テスト |
 |-|-|-|
-| `policy-targets` | 対象プラットフォーム一覧はドキュメントと `TARGETS` が一致する | `documented_platforms_match_targets` |
+| `policy-targets` | 対象プラットフォーム一覧はドキュメントと `Target::all()` が一致する | `documented_platforms_match_targets` |
 | `policy-rebuild` | 再ビルドで未参照 blob を残さない(仕様の MAY より厳しい) | `rebuild_replaces_stale_blobs` |
 | `policy-escape` | JSON の特殊文字をエスケープする | `json_special_characters_are_escaped` |
 | `policy-reproducible` | 同一入力・同一圧縮レベルなら layer digest と DiffID が一致する | `same_input_same_layer_digest` |

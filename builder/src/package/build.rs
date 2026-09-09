@@ -1,62 +1,29 @@
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 
 use crate::error::{Error, Result};
-use crate::oci::{Platform, TARGETS};
-use crate::package::{Package, find};
+use crate::flags::Flags;
+use crate::package::Package;
 use crate::process;
-
-pub fn run(
-    name: &str,
-    all_target: bool,
-    architecture: Option<String>,
-    variant: Option<String>,
-) -> Result<()> {
-    build_package(find(name)?, all_target, architecture, variant)
-}
+use crate::target::Target;
+use crate::workspace;
 
 pub fn build_package(
     package: &dyn Package,
-    all_target: bool,
-    architecture: Option<String>,
-    variant: Option<String>,
+    targets: &[Target],
+    skip_unsupported: bool,
 ) -> Result<()> {
-    let selected = select_platforms(all_target, architecture.as_deref(), variant.as_deref())?;
-    for platform in selected {
-        match platform.cflags() {
-            Ok(flags) => build_target(package, platform, &flags)?,
-            Err(error) if all_target => eprintln!("スキップ: {error}"),
+    for target in targets {
+        match Flags::resolve(*target) {
+            Ok(flags) => build_target(package, *target, &flags)?,
+            Err(error) if skip_unsupported => eprintln!("スキップ: {error}"),
             Err(error) => return Err(error),
         }
     }
     Ok(())
 }
 
-fn select_platforms(
-    all_target: bool,
-    architecture: Option<&str>,
-    variant: Option<&str>,
-) -> Result<Vec<Platform>> {
-    if all_target {
-        return Ok(TARGETS.to_vec());
-    }
-    match (architecture, variant) {
-        (Some(architecture), Some(variant)) => TARGETS
-            .iter()
-            .copied()
-            .find(|platform| platform.architecture == architecture && platform.variant == variant)
-            .map(|platform| vec![platform])
-            .ok_or_else(|| {
-                Error::message(format!("未対応のターゲットです: {architecture}/{variant}"))
-            }),
-        _ => Err(Error::message(
-            "--architecture と --variant を指定するか、--all-target を指定してください",
-        )),
-    }
-}
-
-fn build_target(package: &dyn Package, platform: Platform, flags: &str) -> Result<()> {
+fn build_target(package: &dyn Package, target: Target, flags: &Flags) -> Result<()> {
     let sources = package.source_dir();
     if !sources.is_dir() {
         return Err(Error::message(format!(
@@ -72,12 +39,10 @@ fn build_target(package: &dyn Package, platform: Platform, flags: &str) -> Resul
             source.display()
         )));
     }
-    let architecture = platform.architecture;
-    let variant = platform.variant;
-    let build_dir = PathBuf::from("packages/build")
-        .join(format!("{architecture}-{variant}"))
-        .join(format!("{}-{}", package.name(), package.version()));
-    let out_dir = package.artifact_dir(platform);
+    let architecture = target.architecture();
+    let variant = target.variant();
+    let build_dir = workspace::build_dir(package.name(), package.version(), target);
+    let out_dir = package.artifact_dir(target);
     if build_dir.exists() {
         fs::remove_dir_all(&build_dir).map_err(|source| Error::io(&build_dir, source))?;
     }
@@ -101,7 +66,7 @@ fn build_target(package: &dyn Package, platform: Platform, flags: &str) -> Resul
         .iter()
         .chain(package.build_dependencies())
     {
-        let dep_dir = dependency.artifact_dir(platform);
+        let dep_dir = dependency.artifact_dir(target);
         if !dep_dir.is_dir() {
             return Err(Error::message(format!(
                 "依存パッケージがありません: {} (package build を実行してください)",
@@ -113,28 +78,30 @@ fn build_target(package: &dyn Package, platform: Platform, flags: &str) -> Resul
             .args(["-v"])
             .arg(format!("{}:/dep/{}:ro", dep_dir.display(), dependency.name));
     }
+    command
+        .args(["-v"])
+        .arg(format!("{}:/build", build_dir.display()))
+        .args(["-v"])
+        .arg(format!("{}:/out", out_dir.display()))
+        .args(["-e"])
+        .arg(format!("SOURCE=/src/{}", package.source().subdir))
+        .args(["-e", "BUILD=/build"])
+        .args(["-e", "OUT=/out"])
+        .args(["-e"])
+        .arg(format!("ARCH={architecture}"))
+        .args(["-e"])
+        .arg(format!("VARIANT={variant}"))
+        .args(["-e"])
+        .arg(format!("TRIPLE={}", target.format_tuple()))
+        .args(["-e"])
+        .arg(format!("HOST_TRIPLE={}", Target::HOST.format_tuple()))
+        .args(["-e"])
+        .arg(format!("CROSS={}", target.cross_prefix()));
+    for (name, value) in flags.env(package.flags()) {
+        command.args(["-e"]).arg(format!("{name}={value}"));
+    }
     process::status(
         command
-            .args(["-v"])
-            .arg(format!("{}:/build", build_dir.display()))
-            .args(["-v"])
-            .arg(format!("{}:/out", out_dir.display()))
-            .args(["-e"])
-            .arg(format!("SOURCE=/src/{}", package.source().subdir))
-            .args(["-e", "BUILD=/build"])
-            .args(["-e", "OUT=/out"])
-            .args(["-e"])
-            .arg(format!("ARCH={architecture}"))
-            .args(["-e"])
-            .arg(format!("VARIANT={variant}"))
-            .args(["-e"])
-            .arg(format!("TRIPLE={}", platform.triple()?))
-            .args(["-e"])
-            .arg("HOST_TRIPLE=x86_64-pc-linux-gnu")
-            .args(["-e"])
-            .arg(format!("CROSS={}", platform.cross_prefix()?))
-            .args(["-e"])
-            .arg(format!("CFLAGS={flags}"))
             .arg(super::env::BUILD_IMAGE.reference())
             .args(["/bin/bash", "-c"])
             .arg(package.build_script()),
@@ -146,4 +113,57 @@ fn build_target(package: &dyn Package, platform: Platform, flags: &str) -> Resul
         package.version()
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::package::{Dependency, Source};
+    use crate::target::{Amd64Variant, Target};
+
+    const ZERO_512: &str = "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+
+    #[test]
+    fn build_package_requires_fetched_source() {
+        struct Missing;
+        impl Package for Missing {
+            fn name(&self) -> &'static str {
+                "__missing_package__"
+            }
+            fn version(&self) -> &'static str {
+                "0"
+            }
+            fn license(&self) -> &'static str {
+                "MIT"
+            }
+            fn build_only(&self) -> bool {
+                false
+            }
+            fn network(&self) -> bool {
+                false
+            }
+            fn source(&self) -> Source {
+                Source {
+                    url: "https://example.invalid/x.tar.gz",
+                    sha3_512: ZERO_512,
+                    blake3: ZERO_512,
+                    subdir: "x",
+                }
+            }
+            fn dependencies(&self) -> &'static [Dependency] {
+                &[]
+            }
+            fn build_dependencies(&self) -> &'static [Dependency] {
+                &[]
+            }
+            fn build_script(&self) -> &'static str {
+                "false"
+            }
+            fn flags(&self) -> &'static [crate::flags::Var] {
+                &[]
+            }
+        }
+        let error = build_package(&Missing, &[Target::Amd64(Amd64Variant::V1)], false).unwrap_err();
+        assert!(error.to_string().contains("ソースが見つかりません"));
+    }
 }

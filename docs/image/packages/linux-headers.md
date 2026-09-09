@@ -37,7 +37,7 @@
 
 ## ターゲット
 
-ヘッダ自体は variant で分岐しませんが、ビルドはツールの `CFLAGS` 解決を通るため、`-march` 未対応の組み合わせはスキップされます。表に無い組み合わせは [platforms.md](../platforms.md) にあり、未対応です。
+ヘッダ自体は variant で分岐しませんが、ビルドはフラグ解決を通るため、`-march` 未対応の組み合わせはスキップされます。表に無い組み合わせは [platforms.md](../platforms.md) にあり、未対応です。
 
 | architecture | variant | カーネル `ARCH` | `-march` | 状態 |
 |-|-|-|-|-|

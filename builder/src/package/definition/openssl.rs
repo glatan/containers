@@ -1,3 +1,4 @@
+use crate::flags::Var;
 use crate::package::{Dependency, Package, Source};
 
 pub struct Openssl;
@@ -46,6 +47,10 @@ impl Package for Openssl {
         }]
     }
 
+    fn flags(&self) -> &'static [Var] {
+        &[Var::Cflags]
+    }
+
     fn build_script(&self) -> &'static str {
         r#"set -euxo pipefail
 case "$ARCH" in
@@ -54,23 +59,26 @@ case "$ARCH" in
   riscv64) TGT=linux64-riscv64 ;;
   *) echo "未対応の architecture です: $ARCH"; exit 1 ;;
 esac
-if [ -n "$CROSS" ]; then
+if [ "$TRIPLE" != "$HOST_TRIPLE" ]; then
   pacman -Sy --noconfirm "${CROSS}gcc"
+  export CC="$CROSS"gcc
+  export AR="${CROSS}gcc-ar"
+  export RANLIB="${CROSS}gcc-ranlib"
+  export NM="${CROSS}gcc-nm"
+  export CC="$CC -B/dep/glibc/usr/lib64 -L/dep/glibc/usr/lib64 -L/dep/glibc/lib64"
+else
+  export CC=gcc
+  export AR=gcc-ar
+  export RANLIB=gcc-ranlib
+  export NM=gcc-nm
 fi
 mkdir -p "$BUILD"
 cd "$BUILD"
-export CC="$CROSS"gcc
-export AR="${CROSS}gcc-ar"
-export RANLIB="${CROSS}gcc-ranlib"
-export NM="${CROSS}gcc-nm"
-if [ -n "$CROSS" ]; then
-  export CC="$CC -B/dep/glibc/usr/lib64 -L/dep/glibc/usr/lib64 -L/dep/glibc/lib64"
-fi
 export CC="$CC --sysroot=/dep/glibc -idirafter /dep/linux-headers/usr/include"
 configure() {
   "$SOURCE"/Configure "$TGT" --prefix=/usr --openssldir=/etc/ssl --libdir=lib64 enable-lto "$@"
 }
-if [ -z "$CROSS" ]; then
+if [ "$TRIPLE" = "$HOST_TRIPLE" ]; then
   configure enable-profile-generate
   make -j"$(nproc)"
   # PGO プロファイル生成(実行できるネイティブビルドのみ)

@@ -1,4 +1,4 @@
-use containers_builder::oci::{self, TARGETS};
+use containers_builder::target::Target;
 use serde_json::Value;
 
 use super::documented_platforms;
@@ -30,10 +30,7 @@ fn index_platform_required_fields() {
 
 #[test]
 fn implementation_defined_variant_is_accepted() {
-    let layout = build(&[oci::Platform {
-        architecture: "s390x",
-        variant: "z17",
-    }]);
+    let layout = build(&[Target::lookup("s390x", "z17").unwrap()]);
     let (entry, _, config) = &manifests(&layout)[0];
     assert_eq!(entry["platform"]["architecture"], "s390x");
     assert_eq!(entry["platform"]["variant"], "z17");
@@ -56,13 +53,17 @@ fn multi_platform_index_lists_each_manifest() {
 #[test]
 fn documented_platforms_match_targets() {
     let documented = documented_platforms();
-    let targets = TARGETS
-        .iter()
-        .map(|target| (target.architecture.to_string(), target.variant.to_string()))
+    let targets = Target::all()
+        .map(|target| {
+            (
+                target.architecture().to_string(),
+                target.variant().to_string(),
+            )
+        })
         .collect::<Vec<_>>();
     assert_eq!(
         documented, targets,
-        "docs/image/platforms.md と oci::TARGETS が一致しません"
+        "docs/image/platforms.md と Target::all() が一致しません"
     );
 }
 

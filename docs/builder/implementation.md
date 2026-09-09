@@ -13,15 +13,19 @@ builder(パッケージとパッケージイメージのビルドツール)の�
 
 | モジュール | 役割 |
 |-|-|
-| `main.rs` | CLI の定義と exit code の処理 |
+| `main.rs` | 起動と exit code |
+| `command/` | サブコマンド(`package` / `image`) |
 | `error.rs` / `process.rs` | 型付きエラーと外部コマンド実行 |
-| `package/mod.rs` | `Package` trait、共通 struct、`package` サブコマンド |
+| `package/mod.rs` | `Package` trait と共通 struct |
 | `package/definition/` | パッケージ定義と一覧 |
-| `package/{fetch,build}.rs` | `package fetch / build` の共通ワークフロー |
+| `package/{fetch,build}.rs` | ソース取得とパッケージビルド |
 | `package/env.rs` | ビルド環境イメージ(`archlinux:base-devel` の digest ピン) |
-| `image.rs` | `image ls / build / validate` |
+| `package/validate.rs` | 宣言依存と NEEDED の整合性検証 |
+| `image.rs` | パッケージから Layout と SBOM を生成 |
+| `workspace.rs` | `packages/` と `oci-layouts/` のパス |
+| `flags.rs` | ビルドフラグの値。渡す変数は各パッケージの `flags()` |
+| `target.rs` | CPU ターゲット(`Target` / variant enum、tuple / `CROSS`) |
 | `oci/` | OCI Image Layout の生成(`model` / `layout` / `layer`) |
-| `validate.rs` | 宣言依存と NEEDED の整合性検証(対象はパッケージ) |
 | `sbom.rs` | SPDX 2.3 JSON の生成 |
 | `util.rs` | OCI 用 sha256、ソース検証用 sha3-512 / blake3(512 bit)、RFC 3339 タイムスタンプ |
 
@@ -66,14 +70,14 @@ image build        パッケージをレイヤーとして Image Layout を生�
 image validate     宣言依存とパッケージ内 NEEDED の整合性チェック
 ```
 
-ビルドスクリプトには環境変数で `SOURCE`(ソース)、`BUILD`(ビルドディレクトリ)、`OUT`(パッケージの出力先)、`ARCH` / `VARIANT` / `CFLAGS` が渡されます。
+ビルドスクリプトには環境変数で `SOURCE`(ソース)、`BUILD`(ビルドディレクトリ)、`OUT`(パッケージの出力先)、`ARCH` / `VARIANT` / `TRIPLE` / `HOST_TRIPLE` / `CROSS` と、パッケージが要求したビルドフラグが渡されます。
 依存パッケージは `/dep/{パッケージ名}` に読み取り専用でマウントされます(`dependencies` と `build-dependencies`。glibc の sysroot 等に使用)。
 LTO と PGO は実施するのが基本です。しない場合は各パッケージのビルド設定に理由を書きます。
 
 ビルド専用のパッケージ定義(`build_only`)はパッケージイメージにしません。`build-dependencies` にだけ現れます。
 通常は `--network=none` でビルドしますが、ビルド時にネットワークが必要なパッケージ(`network`)は例外的に許可します。
 
-新規パッケージ定義は `package/definition/{name}.rs` に `Package` を実装し、`package/definition/mod.rs` の一覧へ登録します。
+新規パッケージ定義は `package/definition/{name}.rs` に `Package` を実装し、`package/definition/mod.rs` の一覧へ登録します。`flags()` は必須です。要求しない場合は空にします。
 文書は [`docs/image/packages/{name}.md`](../image/packages/README.md) にビルド設定を書きます。
 モジュール名の `linux_headers.rs` はパッケージ名 `linux-headers` に対応します。
 
@@ -81,7 +85,7 @@ LTO と PGO は実施するのが基本です。しない場合は各パッケ�
 
 ビルドホストは amd64 で、非 amd64 のターゲットはビルド環境イメージ上にクロスツールチェーンを pacman で導入してビルドします(例: `aarch64-linux-gnu-gcc`)。
 
-- ツールは architecture から target triple(`TRIPLE`)とクロス接頭辞(`CROSS`)を計算し、スクリプトに渡します。
+- ツールは `Target::tuple` を `TRIPLE` に渡し、クロス接頭辞 `CROSS` は常に `{TRIPLE}-` です(amd64 は `x86_64-pc-linux-gnu-`)。ネイティブかクロスかは `TRIPLE` と `HOST_TRIPLE` の一致で判定します。
 - クロスビルドした glibc には、クロス gcc の期待するディレクトリ構造に合わせて `usr/{triple}/{include,lib,lib64}` のシンボリックリンクを作成します。
 - クロス gcc の `-L` には sysroot が適用されないため、`libc.so` のリンカスクリプトを相対パスに書き換え、依存パッケージ側では `-B` / `-L` で自前 glibc のディレクトリを優先させます。
 

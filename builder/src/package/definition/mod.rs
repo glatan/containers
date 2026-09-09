@@ -140,4 +140,37 @@ mod tests {
                 .contains("linux64-riscv64")
         );
     }
+
+    #[test]
+    fn c_packages_request_cflags_only() {
+        use crate::flags::Var;
+        assert_eq!(find("glibc").unwrap().flags(), &[Var::Cflags]);
+        assert_eq!(find("openssl").unwrap().flags(), &[Var::Cflags]);
+        assert!(find("linux-headers").unwrap().flags().is_empty());
+    }
+
+    #[test]
+    fn c_packages_detect_native_by_triple_not_empty_cross() {
+        for name in ["glibc", "openssl"] {
+            let script = find(name).unwrap().build_script();
+            assert!(
+                script.contains(r#"$TRIPLE" != "$HOST_TRIPLE""#),
+                "{name} がクロスを TRIPLE で判定していません"
+            );
+            assert!(
+                !script.contains(r#"-n "$CROSS""#),
+                "{name} が空の CROSS でクロス判定しています"
+            );
+            assert!(
+                !script.contains(r#"-z "$CROSS""#),
+                "{name} が空の CROSS でネイティブ判定しています"
+            );
+        }
+        assert!(
+            find("openssl")
+                .unwrap()
+                .build_script()
+                .contains(r#"$TRIPLE" = "$HOST_TRIPLE""#)
+        );
+    }
 }

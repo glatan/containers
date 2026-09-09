@@ -2,17 +2,10 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use super::{Package, Source, resolve};
+use super::{Package, Source};
 use crate::error::{Error, Result};
 use crate::process;
 use crate::util::source_checksums;
-
-pub fn run(name: Option<String>, all: bool) -> Result<()> {
-    for package in resolve(name, all)? {
-        fetch_package(package)?;
-    }
-    Ok(())
-}
 
 pub fn fetch_package(package: &dyn Package) -> Result<()> {
     let dir = package.source_dir();
@@ -110,6 +103,9 @@ mod tests {
         }
         fn build_script(&self) -> &'static str {
             ""
+        }
+        fn flags(&self) -> &'static [crate::flags::Var] {
+            &[]
         }
         fn source_dir(&self) -> std::path::PathBuf {
             self.dir.clone()

@@ -142,6 +142,9 @@ mod tests {
         fn build_script(&self) -> &'static str {
             ""
         }
+        fn flags(&self) -> &'static [crate::flags::Var] {
+            &[]
+        }
     }
 
     #[test]

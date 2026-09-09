@@ -40,7 +40,7 @@
 
 #### package build のオプション
 
-- `--all-target`: カタログ上のすべての architecture / variant を対象にする(未対応はスキップ)
+- `--all-target`: カタログ上のすべての architecture / variant を対象にする(未対応はスキップ)。`--architecture` / `--variant` と同時には指定しない
 - `--architecture {architecture}`: 特定の architecture を対象にする(variant の指定が必須)
 - `--variant {variant}`: 特定の variant を対象にする
 

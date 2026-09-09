@@ -44,6 +44,24 @@ fn image_build_help_lists_compression_flags() {
 }
 
 #[test]
+fn all_target_conflicts_with_architecture() {
+    bin()
+        .args([
+            "package",
+            "build",
+            "--all-target",
+            "--architecture",
+            "amd64",
+            "--variant",
+            "v1",
+            "glibc",
+        ])
+        .assert()
+        .failure()
+        .stderr(contains("cannot be used with"));
+}
+
+#[test]
 fn publish_conflicts_with_zstd_level() {
     bin()
         .args(["image", "build", "--publish", "--zstd-level", "3", "glibc"])

@@ -80,9 +80,9 @@
 | `enable-profile-generate` / `enable-profile-use` | | ネイティブのみ。下の「PGO のプロファイル生成」 |
 | `make` | `install_sw` | 常時(マニュアルは入れない) |
 | `CFLAGS` | `-O2 -march=...` | ツールが付与 |
-| `AR` / `RANLIB` / `NM` | `${CROSS}gcc-ar` など | LTO 用 |
+| `AR` / `RANLIB` / `NM` | ネイティブは `gcc-ar` など。クロスは `${CROSS}gcc-ar` | LTO 用 |
 
-LTO は常に有効です。PGO は対象バイナリを実行できるネイティブビルドだけです。クロス(`$CROSS` が付く)はプロファイルを取れないため LTO のみです。
+LTO は常に有効です。PGO は対象バイナリを実行できるネイティブビルドだけです。クロス(`$TRIPLE` が `$HOST_TRIPLE` と異なる)はプロファイルを取れないため LTO のみです。
 
 ## PGO のプロファイル生成
 

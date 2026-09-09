@@ -27,13 +27,6 @@ pub const BUILD_IMAGE: BuildImage = BuildImage {
     digest: "sha256:84cd9ef000b3cff245ec028e87965b84724f4bf1cc63fc2741ba927b88515ed6",
 };
 
-pub fn print() {
-    println!("名前: {}", BUILD_IMAGE.name);
-    println!("タグ: {}", BUILD_IMAGE.tag);
-    println!("digest: {}", BUILD_IMAGE.digest);
-    println!("参照: {}", BUILD_IMAGE.reference());
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

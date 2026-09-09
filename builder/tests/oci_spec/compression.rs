@@ -10,11 +10,6 @@ fn zstd_level_must_be_1_to_22() {
     assert_eq!(oci::parse_zstd_level(22).unwrap(), 22);
     assert_eq!(oci::DEFAULT_ZSTD_LEVEL, 3);
     assert_eq!(oci::PUBLISH_ZSTD_LEVEL, 22);
-    assert_eq!(oci::resolve_zstd_level(false, None).unwrap(), 3);
-    assert_eq!(oci::resolve_zstd_level(true, None).unwrap(), 22);
-    assert_eq!(oci::resolve_zstd_level(false, Some(7)).unwrap(), 7);
-    assert_eq!(oci::resolve_zstd_level(true, Some(22)).unwrap(), 22);
-    assert!(oci::resolve_zstd_level(true, Some(3)).is_err());
     assert!(!ZstdLevel::new(19).unwrap().needs_ultra());
     assert!(ZstdLevel::new(20).unwrap().needs_ultra());
 }

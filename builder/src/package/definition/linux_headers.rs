@@ -1,3 +1,4 @@
+use crate::flags::Var;
 use crate::package::{Dependency, Package, Source};
 
 pub struct LinuxHeaders;
@@ -37,6 +38,10 @@ impl Package for LinuxHeaders {
     }
 
     fn build_dependencies(&self) -> &'static [Dependency] {
+        &[]
+    }
+
+    fn flags(&self) -> &'static [Var] {
         &[]
     }
 

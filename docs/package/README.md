@@ -10,7 +10,7 @@
 
 更新は `env.rs` の `digest` だけを差し替えます。確認は `containers-builder package env` です。
 
-渡す環境変数は `SOURCE`、`BUILD`、`OUT`、`ARCH`、`VARIANT`、`CFLAGS`、`TRIPLE`、`HOST_TRIPLE`、`CROSS` です。
+渡す環境変数は `SOURCE`、`BUILD`、`OUT`、`ARCH`、`VARIANT`、`TRIPLE`、`HOST_TRIPLE`、`CROSS` と、パッケージが `flags()` で要求したビルドフラグです。`CROSS` は常に `{TRIPLE}-` です。クロスかどうかは `TRIPLE` と `HOST_TRIPLE` の比較で判定します。フラグの値は [`builder/src/flags.rs`](../../builder/src/flags.rs) です。いま `CFLAGS` を要求するのは glibc と openssl です。linux-headers は要求しません。
 依存パッケージは `/dep/{名前}` に読み取り専用でマウントします(`dependencies` と `build-dependencies` の両方)。
 
 - architecture と variant まで CPU を指定します。カタログとビルド可能集合は [platforms.md](../image/platforms.md) です。
