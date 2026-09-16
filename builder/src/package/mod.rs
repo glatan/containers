@@ -56,8 +56,8 @@ pub trait Bootstrap: Package {
     }
 }
 
-pub use build::{build_bootstrap, build_package};
-pub use definition::{BOOTSTRAP, PACKAGES, all, find, find_bootstrap, find_image, images};
+pub use build::{BuildOptions, build_bootstrap, build_package, build_packages};
+pub use definition::{BOOTSTRAP, PACKAGES, all, find, find_bootstrap, images};
 pub use fetch::fetch_package;
 pub use recipe::{BuildContext, Recipe};
 

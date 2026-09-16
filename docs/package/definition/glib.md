@@ -39,7 +39,7 @@
 
 | 名前 | 用途 |
 |-|-|
-| 共通の[ビルド環境イメージ](../README.md) | `package build` によるコンパイル（実行する meson / ninja / pkgconf / python は HOST 成果物をマウント） |
+| 共通の[ビルド環境イメージ](../README.md) | `build` によるコンパイル（実行する meson / ninja / pkgconf / python は HOST 成果物をマウント） |
 
 ## ビルド設定
 

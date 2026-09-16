@@ -8,7 +8,7 @@
 | パッケージイメージ | 合成出力イメージの基準環境（個別ソースコードはなし） |
 | 定義 | [`builder/src/package/definition/build_env.rs`](../../../builder/src/package/definition/build_env.rs) |
 
-`image compose build-env` コマンドが、実行時依存パッケージをトポロジカル順に並べてレイヤー化し、ベースとなるビルド環境イメージを合成します。本パッケージ固有の単体ソースコードは存在しません。全体の段階は [build-flow.md](../build-flow.md) が正本です。
+`env compose` コマンドが、実行時依存パッケージをトポロジカル順に並べてレイヤー化し、ベースとなるビルド環境イメージを合成します。本パッケージ固有の単体ソースコードは存在しません。全体の段階は [build-flow.md](../build-flow.md) が正本です。
 
 最初の合成に入れるのは x86_64 の gcc / binutils / glibc、PATH 用 POSIX、および mold です。他 triple の `{triple}-glibc` と qemu / python / cmake は載せません。
 

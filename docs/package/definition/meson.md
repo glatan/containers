@@ -32,7 +32,7 @@
 
 | 名前 | 用途 |
 |-|-|
-| 共通の[ビルド環境イメージ](../README.md) | `package build` によるインストール（実行する python / pip は HOST 成果物をマウント） |
+| 共通の[ビルド環境イメージ](../README.md) | `build` によるインストール（実行する python / pip は HOST 成果物をマウント） |
 
 ## ビルド設定
 

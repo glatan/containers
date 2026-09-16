@@ -4,11 +4,11 @@
 
 `PACKAGES` に載るパッケージは [definition/](./definition/) に `{パッケージ名}.md` を 1 ファイル置きます。索引は [definition/README.md](./definition/README.md) です。実装は [`builder/src/package/definition/`](../../builder/src/package/definition/) です。ハイフンはモジュール名ではアンダースコア `_` です。プレフィックス付きツールチェーンの実装は `toolchain.rs` にまとめ、文書はパッケージ名のまま分けます。
 
-パッケージイメージには各パッケージ固有のファイルのみを含めます。実行時に必要となる他のパッケージは `dependencies`、ビルド時のみ必要な依存パッケージは `build-dependencies` として分離して宣言します。`image validate` コマンドは、この実行時依存の宣言と、パッケージ成果物（`packages/artifacts/`）に含まれる ELF バイナリの動的リンク情報を静的に照合します。
+パッケージイメージには各パッケージ固有のファイルのみを含めます。実行時に必要となる他のパッケージは `dependencies`、ビルド時のみ必要な依存パッケージは `build-dependencies` として分離して宣言します。`check` コマンドは、この実行時依存の宣言と、パッケージ成果物（`packages/artifacts/`）に含まれる ELF バイナリの動的リンク情報を静的に照合します。
 
 ## ビルド環境の構成
 
-ビルド環境は特定のディストリビューションそのものではなく、HOST（amd64 / v4）向けパッケージを合成した単一の出力イメージです。その正本は `image compose build-env` によって合成された成果物（`oci-layouts/build-env-amd64`）です。現在のビルド環境の参照先は `containers-builder package env` コマンドで確認できます。合成済みイメージが存在しないブートストラップ初期段階においては、シード環境として [`builder/src/package/env.rs`](../../builder/src/package/env.rs) でダイジェストを固定した Arch Linux `base-devel` イメージを使用します。
+ビルド環境は特定のディストリビューションそのものではなく、HOST（amd64 / v4）向けパッケージを合成した単一の出力イメージです。その正本は `env compose` によって合成された成果物（`oci-layouts/build-env-amd64`）です。現在のビルド環境の参照先は `containers-builder env status` コマンドで確認できます。合成済みイメージが存在しないブートストラップ初期段階においては、シード環境として [`builder/src/package/env.rs`](../../builder/src/package/env.rs) でダイジェストを固定した Arch Linux `base-devel` イメージを使用します。
 
 各パッケージのビルドスクリプトには、環境変数として `SOURCE`、`BUILD`、`OUT`、`ARCH`、`VARIANT`、`TRIPLE`、`HOST_TRIPLE`、`PACKAGE_HOST`、`CROSS`、および `CFLAGS` / `LDFLAGS` が渡されます。`CFLAGS` および `LDFLAGS` は、パッケージ定義が返したフラグトークンから builder が合成します。`TRIPLE` はコード生成側の GNU triple（プレフィックス付き gcc ではパッケージ名の triple、Host tools ではパッケージ Platform の triple）です。`PACKAGE_HOST` は成果物が動く Platform の triple、`HOST_TRIPLE` はビルドマシン（常に `x86_64-linux-gnu`）です。
 
@@ -23,7 +23,7 @@
 - architecture および variant 単位で CPU プラットフォームを指定します。対象プラットフォームの一覧は [platforms.md](../image/platforms.md) です。
 - LTO および PGO の適用方針はパッケージの種別に応じて分かれます。カタログの共有ライブラリでは各ビルド設定で個別に宣言し、Host tools の共通前処理やプレフィックス付き最終 gcc・qemu の例外設定については各設計文書に記載しています。
 - 自前で合成したビルド環境イメージ上では `--network=none` を指定してネットワークを遮断します。シード環境上でのビルド時に限り、pacman による依存解決や、カタログのクロス gcc および cmake 導入のためにネットワークアクセスを許可します。
-- シード環境には ppc64le および s390x 向けのクロス gcc が存在しないため、`--all-target` 指定時はそれらのターゲットをスキップします。自前の合成イメージが存在する場合はスキップせずビルドします。
+- シード環境には ppc64le および s390x 向けのクロス gcc が存在しないため、`--all-targets` 指定時はそれらのターゲットをスキップします。自前の合成イメージが存在する場合はスキップせずビルドします。
 
 ## ブートストラップと定義の管理
 

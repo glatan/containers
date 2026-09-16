@@ -12,7 +12,7 @@ cmake は mold の build-dep として seed 上で先に組み、python は `bui
 
 コンパイラ接頭辞はパッケージ Platform の GNU triple です。`gcc` や `cc` という名前の実行ファイルは置きません。実行時 libc は、そのパッケージ Platform の `{triple}-glibc` です。
 
-ビルド環境イメージの合成、および `image validate` による動的リンク検証には、実行時依存（`Package::dependencies(target)`）を使用します。`Role::Toolchain` のシード閉包だけが `Bootstrap::seed_dependencies(target)` を使います。`BOOTSTRAP` 配列に載る Host tools は POSIX PATH と cmake、mold です。gmp などは配列に無く、グラフ経由で入ります。
+ビルド環境イメージの合成、および `check` による動的リンク検証には、実行時依存（`Package::dependencies(target)`）を使用します。`Role::Toolchain` のシード閉包だけが `Bootstrap::seed_dependencies(target)` を使います。`BOOTSTRAP` 配列に載る Host tools は POSIX PATH と cmake、mold です。gmp などは配列に無く、グラフ経由で入ります。
 
 シード中のリンクは Arch の mold（`-fuse-ld=mold`）です。compose 後は自前 mold を PATH に載せます。builder が `-fuse-ld=mold` を剥がすのは、合成後かつ自前 mold 成果物が無いときに限ります。
 

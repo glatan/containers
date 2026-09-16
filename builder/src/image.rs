@@ -10,8 +10,6 @@ use crate::sbom;
 use crate::target::Target;
 use crate::workspace;
 
-pub const COMPOSE_PLATFORM: Target = Target::BUILD_ENV;
-
 pub fn build(package: &dyn Package, zstd_level: u8) -> Result<(PathBuf, Vec<String>)> {
     let mut layers = Vec::new();
     let mut skipped = Vec::new();
@@ -28,7 +26,7 @@ pub fn build(package: &dyn Package, zstd_level: u8) -> Result<(PathBuf, Vec<Stri
     }
     if layers.is_empty() {
         return Err(Error::message(format!(
-            "パッケージがありません: {} (package build を実行してください)",
+            "パッケージがありません: {} (build を実行してください)",
             package.name()
         )));
     }
@@ -42,11 +40,7 @@ pub fn build(package: &dyn Package, zstd_level: u8) -> Result<(PathBuf, Vec<Stri
     Ok((output, skipped))
 }
 
-pub fn compose(
-    root: &dyn Package,
-    target: Target,
-    zstd_level: u8,
-) -> Result<(PathBuf, String, Vec<String>)> {
+pub fn compose(root: &dyn Package, target: Target, zstd_level: u8) -> Result<(PathBuf, String)> {
     let packages = compose_packages(root, target)?;
     let mut layers = compose_layer_dirs(&packages, target)?;
     let usrmerge =
@@ -86,8 +80,7 @@ pub fn compose(
         .ok_or_else(|| Error::message("合成 Layout のパスが不正です"))?;
     symlink(file_name, &current).map_err(|source| Error::io(&current, source))?;
     drop(usrmerge);
-    let skipped = Vec::new();
-    Ok((output, tag, skipped))
+    Ok((output, tag))
 }
 
 fn write_usrmerge(dir: &Path) -> Result<()> {
@@ -156,7 +149,7 @@ fn compose_layer_dirs(
         let dir = package.artifact_dir(target);
         if !workspace::artifact_ready(&dir) {
             return Err(Error::message(format!(
-                "パッケージがありません: {} (package build を実行してください)",
+                "パッケージがありません: {} (build を実行してください)",
                 dir.display()
             )));
         }
@@ -238,7 +231,7 @@ mod tests {
     #[test]
     fn openssl_runtime_closure_is_glibc_then_openssl() {
         let openssl = crate::package::find("openssl").unwrap();
-        let names: Vec<_> = compose_packages(openssl, COMPOSE_PLATFORM)
+        let names: Vec<_> = compose_packages(openssl, Target::BUILD_ENV)
             .unwrap()
             .iter()
             .map(|package| package.name())
@@ -249,7 +242,7 @@ mod tests {
     #[test]
     fn build_env_compose_skips_empty_root_layer() {
         let env = crate::package::find("build-env").unwrap();
-        let names: Vec<_> = compose_packages(env, COMPOSE_PLATFORM)
+        let names: Vec<_> = compose_packages(env, Target::BUILD_ENV)
             .unwrap()
             .iter()
             .map(|package| package.name())

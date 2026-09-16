@@ -38,7 +38,7 @@
 
 | 名前 | 用途 |
 |-|-|
-| 共通の[ビルド環境イメージ](../README.md) | `package build` によるコンパイル（シード環境では builder が `gcc` `make` を導入） |
+| 共通の[ビルド環境イメージ](../README.md) | `build` によるコンパイル（シード環境では builder が `gcc` `make` を導入） |
 
 ## ビルド設定
 

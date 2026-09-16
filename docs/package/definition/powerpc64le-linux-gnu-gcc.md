@@ -45,7 +45,7 @@ gcc 16.2.0。URL とハッシュは [toolchain.md](../toolchain.md) です。
 
 | 名前 | 用途 |
 |-|-|
-| 共通の[ビルド環境イメージ](../README.md) | `package build` によるコンパイル |
+| 共通の[ビルド環境イメージ](../README.md) | `build` によるコンパイル |
 
 ## ビルド設定
 

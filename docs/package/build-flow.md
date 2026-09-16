@@ -8,13 +8,13 @@
 
 ```mermaid
 flowchart TD
-  subgraph phase1 [Phase1 package bootstrap HOST amd64_v4]
+  subgraph phase1 [Phase1 env bootstrap HOST amd64_v4]
     arch[Arch seed gcc python mold]
     x86["x86_64 seed stages then final gcc glibc"]
     hostPkgs["POSIX cmake mold"]
     arch --> x86 --> hostPkgs
   end
-  subgraph phase2 [Phase2 image compose minimal]
+  subgraph phase2 [Phase2 env compose minimal]
     env1["build-env gcc POSIX mold"]
   end
   subgraph phase3 [Phase3 HOST cross compilers]
@@ -26,22 +26,22 @@ flowchart TD
     tools["Host tools python cmake mold"]
     nativeTc["native triple-gcc binutils and glibc variants"]
   end
-  hostPkgs -->|"image compose build-env"| env1
-  env1 -->|"package build baseline glibc then HOST gcc"| glibcNative
+  hostPkgs -->|"env compose"| env1
+  env1 -->|"build baseline glibc then HOST gcc"| glibcNative
   glibcNative --> others
-  others -->|"image compose build-env"| env2["build-env HOST gcc all triples"]
-  env2 -->|"package build all catalog platforms"| catalog
-  env2 -->|"package build same platforms"| tools
-  env2 -->|"package build matching gnu triple"| nativeTc
+  others -->|"env compose"| env2["build-env HOST gcc all triples"]
+  env2 -->|"build all catalog platforms"| catalog
+  env2 -->|"build same platforms"| tools
+  env2 -->|"build matching gnu triple"| nativeTc
 ```
 
-Phase 1 は `package bootstrap` である。シード上で x86_64 の gcc ステージと glibc、最終 gcc、PATH 用 POSIX、cmake、mold を組む。リンクは Arch の mold を使う。自前 mold ができるまで compose しない。
+Phase 1 は `env bootstrap` である。シード上で x86_64 の gcc ステージと glibc、最終 gcc、PATH 用 POSIX、cmake、mold を組む。リンクは Arch の mold を使う。自前 mold ができるまで compose しない。
 
-Phase 2 の最初の `image compose build-env` は、x86_64 の gcc / binutils / glibc、POSIX PATH（make、bash、coreutils、sed、grep、gawk、findutils、tar、gzip、xz、diffutils、patch、m4）、および自前 mold だけを載せる。bison、python、cmake、qemu、他 triple は載せない。cmake は mold の build-dep として seed 上で組む。
+Phase 2 の最初の `env compose` は、x86_64 の gcc / binutils / glibc、POSIX PATH（make、bash、coreutils、sed、grep、gawk、findutils、tar、gzip、xz、diffutils、patch、m4）、および自前 mold だけを載せる。bison、python、cmake、qemu、他 triple は載せない。cmake は mold の build-dep として seed 上で組む。
 
 後続も同じ amd64 / v4 上である。python や bison、qemu、他 GNU triple の `{triple}-glibc`（その arch の基底 variant）を組んでから、HOST 向け `{triple}-binutils` / `{triple}-gcc` を組む。非 HOST の glibc や他パッケージのビルドが実行する python は HOST 成果物をマウントするため、python はこれらより先に組む必要がある。再合成して PATH に載せる。
 
-Phase 4 は、Phase 3 までに揃えた HOST クロスコンパイラで、カタログと Host tools（qemu 以外）を `Target::all()` 向けに組む。実装順は HOST → 各 architecture の基底 variant → 残り variant である。`--all-target` は `supports` が真の Target だけを組む。GNU Autotools の Host tools は `--build=$HOST_TRIPLE --host=$PACKAGE_HOST` を付ける。cmake / python / meson / ninja / mold も同じ集合向け成果物を出す。qemu と中間 gcc ステージと `build-env` は HOST のみである。
+Phase 4 は、Phase 3 までに揃えた HOST クロスコンパイラで、カタログと Host tools（qemu 以外）を `Target::all()` 向けに組む。実装順は HOST → 各 architecture の基底 variant → 残り variant である。`--all-targets` は `supports` が真の Target だけを組む。GNU Autotools の Host tools は `--build=$HOST_TRIPLE --host=$PACKAGE_HOST` を付ける。cmake / python / meson / ninja / mold も同じ集合向け成果物を出す。qemu と中間 gcc ステージと `build-env` は HOST のみである。
 
 最終 `{triple}-gcc` / `{triple}-binutils` もビルドマシンは amd64 / v4 のままである。製品キューは [toolchain.md](./toolchain.md) である。Canadian cross のビルド設定は残すが、製品としては組まない。`{triple}-glibc` はもともと自 arch の variant だけである。
 

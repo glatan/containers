@@ -78,7 +78,7 @@ builder が生成するパッケージイメージおよび Image Layout は、�
 | `policy-reproducible` | 同一の入力ファイルかつ同一の圧縮レベルであれば、生成される layer digest と DiffID が完全に一致すること | `same_input_same_layer_digest` |
 | `policy-preserve` | Image Layout の生成に失敗した場合、既存の layout ディレクトリを破損させずに保護すること | `missing_layer_dir_is_rejected_before_replace`, `failed_layer_after_staging_preserves_existing_layout` |
 | `policy-zstd-publish` | 通常ビルド（レベル 3）と公開ビルド（レベル 22）で DiffID は同一を保ち、layer digest のみが変化すること | `publish_level_changes_blob_but_not_diff_id` |
-| `policy-zstd-level` | zstd 圧縮レベルは 1〜22 の範囲とし、通常ビルドは 3、公開ビルドは 22 とすること（`--publish` と `--zstd-level` は同時指定不可） | `zstd_level_must_be_1_to_22` |
+| `policy-zstd-level` | zstd 圧縮レベルは 1〜22 の範囲とし、通常ビルドは 3、公開ビルドは 22 とすること（`--profile release` と `--zstd-level` は同時指定不可） | `zstd_level_must_be_1_to_22` |
 
 ## レイヤー圧縮
 
@@ -88,15 +88,15 @@ OCI Image Specification が規定しているのは、レイヤーのエンコ�
 
 zstd の圧縮レベル設定は仕様外の実装方針です。ビルドの再現性を確保するため、マルチスレッド圧縮は行わず `--single-thread` を指定します。
 
-- 通常の `image build` ではレベル 3（処理速度優先）を使用します。
-- 公開用の `image build --publish` ではレベル 22（公開用高圧縮率、`--ultra`）を使用します。
-- `--zstd-level` オプションで直接レベルを指定することも可能ですが、`--publish` との同時指定はできません。
+- 通常の `pack` ではレベル 3（処理速度優先）を使用します。
+- 公開用の `pack --profile release` ではレベル 22（公開用高圧縮率、`--ultra`）を使用します。
+- `--zstd-level` オプションで直接レベルを指定することも可能ですが、`--profile release` との同時指定はできません。
 
 ## 圧縮レベルの違いと成果物の正本
 
 圧縮レベルを変更すると layer blob のダイジェストは変化しますが、未圧縮 tar のハッシュ値である DiffID は同一のまま保持されます。したがって、レジストリ上においてレベル 3 とレベル 22 の blob を共有することはできません。
 
-成果物の正本は、未圧縮のパッケージ成果物（`packages/artifacts/`）です。`oci-layouts/` はそこから都度生成する派生物であり、レベル 3 とレベル 22 の成果物を併存させることはしません。ローカルでの動作確認にはレベル 3 を使用し、GitHub Container Registry（GHCR）への公開時には `--publish` オプションでレベル 22 として上書き生成したうえでプッシュします。
+成果物の正本は、未圧縮のパッケージ成果物（`packages/artifacts/`）です。`oci-layouts/` はそこから都度生成する派生物であり、レベル 3 とレベル 22 の成果物を併存させることはしません。ローカルでの動作確認にはレベル 3 を使用し、GitHub Container Registry（GHCR）への公開時には `--profile release` オプションでレベル 22 として上書き生成したうえでプッシュします。
 
 ## プラットフォームと variant の扱い
 

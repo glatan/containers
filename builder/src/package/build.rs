@@ -10,37 +10,158 @@ use crate::package::{self, Dependency, Package, Role, Stage};
 use crate::target::Target;
 use crate::workspace;
 
+/// `build` の実行制御フラグ。
+#[derive(Default)]
+pub struct BuildOptions {
+    /// ルートパッケージの成果物が存在しても再ビルドする。
+    pub force: bool,
+    /// 失敗しても後続の独立ノードをビルドし、最後に失敗を集約する。
+    pub keep_going: bool,
+    /// 依存をビルドせずルートのみビルドする。
+    pub no_deps: bool,
+    /// ビルドせず計画のみ表示する。
+    pub dry_run: bool,
+}
+
 pub fn build_package(
     package: &dyn Package,
     targets: &[Target],
     skip_unsupported: bool,
+    report: impl FnMut(String),
+) -> Result<()> {
+    let root = package::find(package.name())?;
+    build_packages(
+        &[root],
+        targets,
+        skip_unsupported,
+        &BuildOptions::default(),
+        report,
+    )
+}
+
+/// 複数ルートを `(name, target)` キーで重複排除しながら単一トポロジカル順に
+/// ビルドする。`skip_unsupported` は supports 偽のルートをエラーにせずスキップする
+/// （`--all` / `--all-targets` 時）。
+pub fn build_packages(
+    roots: &[&'static dyn Package],
+    targets: &[Target],
+    skip_unsupported: bool,
+    options: &BuildOptions,
     mut report: impl FnMut(String),
 ) -> Result<()> {
     let lookup = |name: &str| package::find(name);
-    let root = package::find(package.name())?;
+    let mut failed = Vec::new();
     for target in targets {
-        if !root.supports(*target) {
-            if skip_unsupported {
-                report(format!(
-                    "スキップ: 非対応のターゲットです: {} {} {}/{}",
+        let mut order = Vec::new();
+        let mut visiting = BTreeSet::new();
+        let mut visited = BTreeSet::new();
+        let mut root_names = BTreeSet::new();
+        for root in roots {
+            if !root.supports(*target) {
+                if skip_unsupported {
+                    if options.dry_run {
+                        report(format!(
+                            "{} {} ({}/{}) [skip:unsupported]",
+                            root.name(),
+                            root.version(),
+                            target.architecture(),
+                            target.variant()
+                        ));
+                    } else {
+                        report(format!(
+                            "スキップ: 非対応のターゲットです: {} {} {}/{}",
+                            root.name(),
+                            root.version(),
+                            target.architecture(),
+                            target.variant()
+                        ));
+                    }
+                    continue;
+                }
+                return Err(Error::message(format!(
+                    "{} はこの platform を提供しません: {}/{}",
                     root.name(),
-                    root.version(),
                     target.architecture(),
                     target.variant()
-                ));
-                continue;
+                )));
             }
-            return Err(Error::message(format!(
-                "{} はこの platform を提供しません: {}/{}",
-                root.name(),
-                target.architecture(),
-                target.variant()
-            )));
+            root_names.insert(root.name());
+            visit(
+                *root,
+                &lookup,
+                *target,
+                &mut visiting,
+                &mut visited,
+                &mut order,
+            )?;
         }
-        let order = packages_in_graph_order(root, &lookup, *target)?;
-        run_order(&order, skip_unsupported, false, None, &mut report)?;
+        if options.no_deps {
+            order.retain(|(defined, _)| root_names.contains(defined.name()));
+        }
+        if options.dry_run {
+            report_plan(
+                &order,
+                skip_unsupported,
+                &root_names,
+                options.force,
+                &mut report,
+            );
+            continue;
+        }
+        let forced = if options.force {
+            root_names.clone()
+        } else {
+            BTreeSet::new()
+        };
+        failed.extend(run_order(
+            &order,
+            skip_unsupported,
+            options.keep_going,
+            &forced,
+            None,
+            &mut report,
+        )?);
     }
-    Ok(())
+    if failed.is_empty() {
+        Ok(())
+    } else {
+        Err(Error::message(format!(
+            "ビルドが {} 件失敗しました: {}",
+            failed.len(),
+            failed.join(", ")
+        )))
+    }
+}
+
+fn report_plan(
+    order: &[(&dyn Package, Target)],
+    skip_unsupported: bool,
+    roots: &BTreeSet<&'static str>,
+    force: bool,
+    report: &mut dyn FnMut(String),
+) {
+    let own = build_env_ready();
+    for (defined, target) in order {
+        let marker = if skip_unsupported
+            && !own
+            && matches!(target, Target::Ppc64le(_) | Target::S390x(_))
+        {
+            "[skip:no-cross]"
+        } else if workspace::artifact_ready(&defined.artifact_dir(*target))
+            && !(force && roots.contains(defined.name()))
+        {
+            "[cached]"
+        } else {
+            "[will-build]"
+        };
+        report(format!(
+            "{} {} ({}/{}) {marker}",
+            defined.name(),
+            defined.version(),
+            target.architecture(),
+            target.variant()
+        ));
+    }
 }
 
 pub fn build_bootstrap(mut report: impl FnMut(String)) -> Result<()> {
@@ -58,7 +179,14 @@ pub fn build_bootstrap(mut report: impl FnMut(String)) -> Result<()> {
     };
     let lookup = |name: &str| package::find(name);
     let order = bootstrap_closure(&lookup, Target::BUILD_ENV)?;
-    let failed = run_order(&order, false, true, Some(combined.clone()), &mut report)?;
+    let failed = run_order(
+        &order,
+        false,
+        true,
+        &BTreeSet::new(),
+        Some(combined.clone()),
+        &mut report,
+    )?;
     report(summarize_bootstrap(&failed, &log_path));
     if failed.is_empty() {
         Ok(())
@@ -107,6 +235,7 @@ fn run_order(
     order: &[(&dyn Package, Target)],
     skip_unsupported: bool,
     continue_on_error: bool,
+    force_roots: &BTreeSet<&'static str>,
     combined: Option<Arc<Mutex<File>>>,
     report: &mut dyn FnMut(String),
 ) -> Result<Vec<String>> {
@@ -115,6 +244,7 @@ fn run_order(
         order,
         skip_unsupported,
         continue_on_error,
+        force_roots,
         true,
         report,
         &mut |defined, target| {
@@ -157,7 +287,14 @@ fn build_package_with<'a>(
             )));
         }
         let order = packages_in_graph_order(package, lookup, *target)?;
-        run_order(&order, skip_unsupported, false, None, report)?;
+        run_order(
+            &order,
+            skip_unsupported,
+            false,
+            &BTreeSet::new(),
+            None,
+            report,
+        )?;
     }
     Ok(())
 }
@@ -194,6 +331,36 @@ pub(crate) fn packages_in_graph_order<'a>(
         &mut order,
     )?;
     Ok(order)
+}
+
+/// `fetch --deps` 用: ルートが supports する全ターゲットで `graph_deps` 閉包を
+/// 取り、パッケージ名で重複排除した最初出現順の集合を返す（ルート自身を含む）。
+pub(crate) fn fetch_closure(roots: &[&'static dyn Package]) -> Result<Vec<&'static dyn Package>> {
+    let lookup = |name: &str| package::find(name);
+    let mut order = Vec::new();
+    let mut visiting = BTreeSet::new();
+    let mut visited = BTreeSet::new();
+    for root in roots {
+        for target in Target::all() {
+            if !root.supports(target) {
+                continue;
+            }
+            visit(
+                *root,
+                &lookup,
+                target,
+                &mut visiting,
+                &mut visited,
+                &mut order,
+            )?;
+        }
+    }
+    let mut seen = BTreeSet::new();
+    Ok(order
+        .into_iter()
+        .filter(|(defined, _)| seen.insert(defined.name()))
+        .map(|(defined, _)| defined)
+        .collect())
 }
 
 /// 実行時依存とビルド依存のペアを返す。
@@ -306,6 +473,7 @@ fn walk_nodes(
     order: &[(&dyn Package, Target)],
     skip_unsupported: bool,
     continue_on_error: bool,
+    force_roots: &BTreeSet<&'static str>,
     fetch: bool,
     report: &mut dyn FnMut(String),
     compile: &mut dyn FnMut(&dyn Package, Target) -> Result<()>,
@@ -324,7 +492,9 @@ fn walk_nodes(
             ));
             continue;
         }
-        if workspace::artifact_ready(&defined.artifact_dir(target)) {
+        if !force_roots.contains(defined.name())
+            && workspace::artifact_ready(&defined.artifact_dir(target))
+        {
             report(format!(
                 "{} {} ({}/{}) はビルド済みです",
                 defined.name(),
@@ -945,6 +1115,7 @@ libdir=/usr/lib
             &order,
             false,
             true,
+            &BTreeSet::new(),
             false,
             &mut |line| log.push(line),
             &mut |package, _target| {
@@ -1146,5 +1317,19 @@ includedir=/usr/include
             "{pc}"
         );
         assert!(pc.contains("includedir=/dep/zlib/usr/include"), "{pc}");
+    }
+    #[test]
+    fn fetch_closure_deduplicates_names_across_targets() {
+        let zlib = crate::package::find("zlib").unwrap();
+        let closure = super::fetch_closure(&[zlib]).unwrap();
+        let names: Vec<_> = closure.iter().map(|defined| defined.name()).collect();
+        // 全ターゲットの閉包を合流しても名前は一意（linux-headers は各ターゲット
+        // の閉包に出るが 1 回だけ）
+        let unique: std::collections::BTreeSet<_> = names.iter().collect();
+        assert_eq!(names.len(), unique.len());
+        assert!(names.contains(&"zlib"));
+        assert!(names.contains(&"x86_64-linux-gnu-glibc"));
+        assert!(names.contains(&"aarch64-linux-gnu-glibc"));
+        assert!(names.contains(&"linux-headers"));
     }
 }

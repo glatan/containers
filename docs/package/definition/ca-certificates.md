@@ -34,11 +34,11 @@ Mozilla のルート CA 証明書バンドルとして、[certifi](https://githu
 
 | 名前 | 用途 |
 |-|-|
-| 共通の[ビルド環境イメージ](../README.md) | `package build` によるファイル配置 |
+| 共通の[ビルド環境イメージ](../README.md) | `build` によるファイル配置 |
 
 ## ターゲット
 
-成果物に含まれるファイル集合は architecture / variant に依存しないため、`flags()` は空のフラグを返します。`--all-target` は `Target::all()` を組みます。
+成果物に含まれるファイル集合は architecture / variant に依存しないため、`flags()` は空のフラグを返します。`--all-targets` は `Target::all()` を組みます。
 
 ## ビルドフラグ
 

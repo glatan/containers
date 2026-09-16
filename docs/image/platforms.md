@@ -11,7 +11,7 @@ qemu、中間 gcc ステージ、`build-env` は HOST（amd64 / v4）のみで�
 - `listed`: 仕様書の表に明記されている（または `…` で省略表記された系列に含まれる）組み合わせです。
 - `defined`: 仕様書の表には掲載されていませんが、仕様上 implementation-defined（実装定義）として許容されており、OCI 準拠として不正ではない組み合わせです。
 
-`--all-target` は各パッケージについて `supports` が真の Platform を組みます。製品キューより広い `supports` を持つパッケージでは、運用上の製品範囲は [toolchain.md](../package/toolchain.md) に従います。
+`--all-targets` は各パッケージについて `supports` が真の Platform を組みます。製品キューより広い `supports` を持つパッケージでは、運用上の製品範囲は [toolchain.md](../package/toolchain.md) に従います。
 
 | architecture | variant | status |
 |-|-|-|

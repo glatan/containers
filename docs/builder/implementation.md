@@ -6,7 +6,7 @@
 ## 概要
 
 - 実装言語には Rust 1.98.1（edition 2024）を採用します。使用するツールチェーンはリポジトリルートの `rust-toolchain.toml` で固定します。
-- 単一のバイナリ（`containers-builder`）で、`package` および `image` の 2 系統のサブコマンドを提供します。ソースコードは `builder/` ディレクトリで管理します。
+- 単一のバイナリ（`containers-builder`）で、フラットなサブコマンド（照会: `ls` / `info` / `tree` / `targets`、作業: `fetch` / `build` / `check` / `pack` / `compose` / `clean`、環境: `env`）を提供します。ソースコードは `builder/` ディレクトリで管理します。
 - コマンド実行はリポジトリのルートディレクトリで行い、作業ディレクトリ（`packages/` および `oci-layouts/`）を相対パスで参照します。
 
 ## モジュール構成
@@ -14,7 +14,7 @@
 | モジュール | 役割 |
 |-|-|
 | `main.rs` | コマンドライン引数の解析、プロセスの起動、および終了ステータスの管理 |
-| `command/` | サブコマンド（`package` / `image`）の実行ロジック |
+| `command/` | サブコマンドの実行ロジック（`mod` = 引数解析と選択、`query` = 照会、`work` = 作業、`env` = ビルド環境） |
 | `error.rs` / `process.rs` | 型付きエラー定義と外部コマンドプロセスの実行制御 |
 | `package/mod.rs` | `Package` および `Bootstrap` トレイトと共通データ構造の定義 |
 | `package/definition/` | 個別パッケージの定義実装、`PACKAGES`、および `BOOTSTRAP` の登録一覧 |
@@ -51,35 +51,34 @@ OCI 仕様準拠のテスト群は `tests/oci_spec.rs`、CLI 仕様のテスト�
 
 | コマンド | 用途 |
 |-|-|
-| `curl` | 上流ソースコードの取得（`package fetch`） |
+| `curl` | 上流ソースコードの取得（`fetch`） |
 | `tar` | ソースコードの展開、およびレイヤー tarball の生成（`--sort=name` などを指定してビルドの再現性を確保） |
 | `zstd` | レイヤー tarball の圧縮（`--single-thread`。通常ビルドはレベル 3、公開用ビルドはレベル 22 であり、20〜22 は `--ultra` を付与） |
 | `podman` | 隔離されたビルド環境コンテナ上でのパッケージコンパイル |
 | `/bin/bash` | パッケージごとのビルドスクリプトの実行 |
-| `readelf` | ELF バイナリの動的リンク依存（`DT_NEEDED`）の解析（`image validate`） |
+| `readelf` | ELF バイナリの動的リンク依存（`DT_NEEDED`）の解析（`check`） |
 
 ## データフロー
 
 ```
-package fetch      ソース取得 + SHA3-512 / BLAKE3 検証 + 展開
+fetch            ソース取得 + SHA3-512 / BLAKE3 検証 + 展開（--deps で依存閉包）
     ↓                 packages/sources/{package}/
-package bootstrap  BOOTSTRAP 閉包を HOST 上で一度歩き、失敗しても後続を続ける
+env bootstrap    BOOTSTRAP 閉包を HOST 上で一度歩き、失敗しても後続を続ける
     ↓                 packages/artifacts/ および packages/logs/bootstrap.log
-package build      依存関係をトポロジカル順に取得・ビルドしたのち、podman 上でビルドスクリプトを実行
+build            依存関係をトポロジカル順に取得・ビルドしたのち、podman 上でビルドスクリプトを実行
     ↓                 packages/artifacts/{package}-{version}-{arch}-{variant}/
                       packages/logs/{package}-{version}-{arch}-{variant}.log
-image build        パッケージ成果物をレイヤー化して Image Layout を生成 + SPDX SBOM 出力
+check            宣言された依存関係とパッケージ内 ELF の NEEDED を静的照合
+pack             パッケージ成果物をレイヤー化して Image Layout を生成 + SPDX SBOM 出力
     ↓                 oci-layouts/{package}-{version}/
-image compose     dependencies の推移閉包を単一の出力イメージへ合成
+compose          dependencies の推移閉包を単一の出力イメージへ合成
     ↓                 oci-layouts/{name}-{arch}-{date}-{revision}/
-image validate     宣言された依存関係とパッケージ内 ELF の NEEDED を静的照合
-package clean      成果物・ビルド作業ツリー・個別ログを削除（再ビルド前の掃除）
-package tree       依存ツリーを表示
-package bootstrap-path  シード相で組む最小集合（build-env 依存閉包）を出力
+clean            成果物・ビルド作業ツリー・個別ログを削除（再ビルド前の掃除、--images で oci-layouts/ も対象）
+ls / info / tree / targets / env plan  照会系（tree --reverse は逆依存、env plan はシード相の最小集合）
 ```
 
 ビルドスクリプトへ渡す環境変数と `/dep` へのマウントは [package/README.md](../package/README.md) です。
-`package build` は依存パッケージを先にビルドします。ルートが `BOOTSTRAP` に載っている場合、合成済みビルド環境の有無にかかわらずグラフには `Bootstrap` の依存を使います。`own`（合成済みイメージの使用、`pacman` 前置きの有無、ネットワーク遮断）だけを `build_env_ready()` で決めます。成果物ディレクトリが既に存在し空でない場合はそのターゲットのコンパイルをスキップし、ビルド途中で失敗した成果物は不整合を防ぐため自動的に削除します。`podman` の出力は `packages/logs/` の個別ファイルへ tee し、失敗してもログは残します。
+`build` は依存パッケージを先にビルドします。ルートが `BOOTSTRAP` に載っている場合、合成済みビルド環境の有無にかかわらずグラフには `Bootstrap` の依存を使います。`own`（合成済みイメージの使用、`pacman` 前置きの有無、ネットワーク遮断）だけを `build_env_ready()` で決めます。成果物ディレクトリが既に存在し空でない場合はそのターゲットのコンパイルをスキップし、ビルド途中で失敗した成果物は不整合を防ぐため自動的に削除します。`podman` の出力は `packages/logs/` の個別ファイルへ tee し、失敗してもログは残します。
 LTO や PGO の適用方針はパッケージの種別ごとに異なります。個別の指定内容は [各パッケージのビルド設定](../package/definition/) を参照してください。
 
 ビルド専用のパッケージ定義（`build_only`）は、中間成果物としてのみ扱い、パッケージイメージ化は行いません。これらは他のパッケージの `build-dependencies` にのみ現れます。
@@ -105,12 +104,13 @@ LTO や PGO の適用方針はパッケージの種別ごとに異なります�
 
 - 1 パッケージを 1 レイヤーとして扱います。`packages/artifacts/` の未圧縮成果物を tar 形式でまとめ、zstd で圧縮して blob を生成します。
 - 未圧縮 tar のダイジェストである DiffID をレイヤー内容の恒久的な識別子として使用します。zstd の圧縮レベルは layer digest にのみ影響し、DiffID には影響しません。
-- 通常の開発ビルドではレベル 3（速度優先）、公開用ビルド（`--publish`）ではレベル 22（圧縮率優先）を使用します。`oci-layouts/` はパッケージ成果物からの派生物であるため、圧縮レベルの異なる layout を同一ディレクトリに併存させず、目的に応じて上書き生成します。
+- 通常の開発ビルドではレベル 3（速度優先）、公開用ビルド（`--profile release`）ではレベル 22（圧縮率優先）を使用します。`oci-layouts/` はパッケージ成果物からの派生物であるため、圧縮レベルの異なる layout を同一ディレクトリに併存させず、目的に応じて上書き生成します。
 - Layout の生成時は、一時的な staging ディレクトリで構造を構築したのち、不可分（アトミック）に配置を置き換えます。これにより、生成途中で処理が失敗した場合でも既存の `oci-layouts/` が保護されます。
 - レイヤーのハッシュ計算はストリーミング方式で行い、アーカイブ全体をメモリ上に展開しません。
 - SPDX SBOM は Layout ディレクトリ内の `sbom.spdx.json` に配置します。OCI Image Specification ではレイアウト内の未知の追加ファイルを許容しているため、この配置は仕様に適合します。なお、referrers による attestation としての公開は現時点では未実装です。
 
 ## 現状の制約事項
 
-- 対象とする architecture / variant の一覧は [platforms.md](../image/platforms.md) を参照してください。シード環境ではクロス gcc が提供されていないため、`--all-target` 指定時は ppc64le および s390x をスキップします。合成済み `build-env` が利用可能な状態ではスキップせずにビルドを実行します。
-- `--with-packages` オプションはパッケージビルドを連鎖的に実行する機能ですが、定義の存在しないターゲットについてはビルドをスキップして警告を出力します。
+- 対象とする architecture / variant の一覧は [platforms.md](../image/platforms.md) および `targets` コマンドを参照してください。シード環境ではクロス gcc が提供されていないため、`--all-targets` 指定時は ppc64le および s390x をスキップします。合成済み `build-env` が利用可能な状態ではスキップせずにビルドを実行します。
+- `pack --with-build` は `Target::all()` 上でパッケージビルドを連鎖的に実行し、定義の存在しないターゲットはビルドをスキップして警告を出力します。`compose --with-build` は `-t` で指定したターゲットのみを対象とし、非対応の場合はスキップではなくエラーになります。
+- `compose` の `-t` は任意ターゲットを受理しますが、実行時依存の `{triple}-gcc` 成果物は `artifact_target` により常に BUILD_ENV（amd64 / v4）へ配置される一方、`compose_layer_dirs` はこの正規化を適用しません。そのため C++ ランタイム依存を持つパッケージは BUILD_ENV 以外では構造的に合成できません（既知の制約）。

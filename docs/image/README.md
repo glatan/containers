@@ -16,7 +16,7 @@
 
 レジストリで公開するのは個別のパッケージイメージのみであり、すべての依存関係やバージョンの組み合わせを事前に結合したイメージを網羅的に配信することはしません。
 
-実際の実行環境となる出力イメージは、`containers-builder image compose` コマンドにより必要に応じて合成します。指定したパッケージを起点として `dependencies` を再帰的に探索し、依存するすべてのパッケージイメージを束ねた出力イメージを生成します。このとき `build-dependencies` は出力イメージに含めません。複数のパッケージ間で同一パスのファイルが存在する場合は、ファイル競合エラーとして処理を中断します。合成時のプラットフォームは amd64 / v4、タグ形式は `{name}-{arch}:{yyyymmdd-revision}` です。なお、イメージの利用側ツールも本バイナリと同一の合成ロジックを使用します。
+実際の実行環境となる出力イメージは、`containers-builder compose` コマンドにより必要に応じて合成します。指定したパッケージを起点として `dependencies` を再帰的に探索し、依存するすべてのパッケージイメージを束ねた出力イメージを生成します。このとき `build-dependencies` は出力イメージに含めません。複数のパッケージ間で同一パスのファイルが存在する場合は、ファイル競合エラーとして処理を中断します。合成時のプラットフォームは `-t` で指定します（現状、実行時依存の `{triple}-gcc` 成果物が BUILD_ENV にしか配置されない構造上の制約から、機能するのは amd64 / v4 です）。タグ形式は `{name}-{arch}:{yyyymmdd-revision}` です。なお、イメージの利用側ツールも本バイナリと同一の合成ロジックを使用します。
 
 個別のパッケージイメージの Image Config には実行時設定を含めず空としていますが、合成された出力イメージに限り `PATH` 環境変数および `/bin/bash` を設定します。
 
@@ -47,7 +47,7 @@
 
 ## 整合性の検証
 
-`image validate` コマンドは、生成後の Image Layout ではなく、未圧縮のパッケージ成果物（`packages/artifacts/`）に含まれる ELF バイナリと、宣言された `dependencies` の整合性を静的に検証します。libc の SONAME（`libc.so.6` など）については、`{triple}-glibc` の依存宣言によって充足されているかを確認します。それ以外の SONAME は提供パッケージへマッピングして照合します。`libstdc++.so` / `libgcc_s.so` / `libatomic.so` / `libgomp.so` / `libgfortran.so` / `libquadmath.so` は `{triple}-gcc`、`libcrypt.so` / `libowcrypt.so` / `libxcrypt.so` は `libxcrypt`、`liblzma.so` は `xz`、`libbz2.so` は `bzip2`、`libexpat.so` は `expat`、`libsqlite3.so` は `sqlite` に対応します。`libcrypt.so` は glibc に含まれず `libxcrypt` が提供します。マッピングの無い SONAME は検証エラーになります。
+`check` コマンドは、生成後の Image Layout ではなく、未圧縮のパッケージ成果物（`packages/artifacts/`）に含まれる ELF バイナリと、宣言された `dependencies` の整合性を静的に検証します。libc の SONAME（`libc.so.6` など）については、`{triple}-glibc` の依存宣言によって充足されているかを確認します。それ以外の SONAME は提供パッケージへマッピングして照合します。`libstdc++.so` / `libgcc_s.so` / `libatomic.so` / `libgomp.so` / `libgfortran.so` / `libquadmath.so` は `{triple}-gcc`、`libcrypt.so` / `libowcrypt.so` / `libxcrypt.so` は `libxcrypt`、`liblzma.so` は `xz`、`libbz2.so` は `bzip2`、`libexpat.so` は `expat`、`libsqlite3.so` は `sqlite` に対応します。`libcrypt.so` は glibc に含まれず `libxcrypt` が提供します。マッピングの無い SONAME は検証エラーになります。
 
 ## 今後の検討課題
 

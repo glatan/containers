@@ -38,7 +38,7 @@ openssl からは依存されません。
 
 | 名前 | 用途 |
 |-|-|
-| 共通の[ビルド環境イメージ](../README.md) | `package build` によるコンパイル（`CC` は builder が渡す） |
+| 共通の[ビルド環境イメージ](../README.md) | `build` によるコンパイル（`CC` は builder が渡す） |
 
 ## ターゲット
 

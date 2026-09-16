@@ -11,7 +11,7 @@
 |-|-|-|
 | パッケージ定義 | `Package` トレイトの実装コード | `builder/src/package/definition/` |
 | ソース | 展開済みの上流ソースツリー | `packages/sources/{name}/` |
-| パッケージ | `package build` が出力する未圧縮の成果物ファイル集合 | `packages/artifacts/{name}-{version}-{arch}-{variant}/` |
+| パッケージ | `build` が出力する未圧縮の成果物ファイル集合 | `packages/artifacts/{name}-{version}-{arch}-{variant}/` |
 | パッケージイメージの Layout | ローカルに生成された OCI Image Layout | `oci-layouts/{name}-{version}/` |
 | パッケージイメージ | 成果物の公開単位（エントリポイントを持たない OCI Image） | `ghcr.io/{org}/packages/{name}:{version}` |
 | builder | パッケージおよびイメージのビルドツール（バイナリ名は `containers-builder`） | `builder/` |
@@ -20,10 +20,10 @@
 | カタログ | 公開する `openssl`、`zlib`、`zlib-ng`、`ca-certificates` の 4 本。対象は `Target::all()`。実行時 libc は `{triple}-glibc` | [image/packages.md](./image/packages.md) |
 | Host tools | gcc が引くライブラリ、PATH コマンド、ビルド時に HOST 成果物をマウントして実行する処理系。qemu 以外は `Target::all()` 向け成果物も出す。qemu は amd64 / v4 のみ | [package/host-tools.md](./package/host-tools.md) |
 | プレフィックス付きツールチェーン | `{triple}-binutils`、`{triple}-glibc`、`{triple}-gcc`、およびその中間ステージ。無印の `glibc` は無い | [package/toolchain.md](./package/toolchain.md) |
-| ビルド環境イメージ | パッケージをコンパイルするための基準環境。正本は `image compose build-env` の合成結果であり、合成前はシードを使用 | [package/README.md](./package/README.md) |
+| ビルド環境イメージ | パッケージをコンパイルするための基準環境。正本は `env compose` の合成結果であり、合成前はシードを使用 | [package/README.md](./package/README.md) |
 | シード | ビルド環境イメージの合成前に使用する Arch Linux `base-devel`（ダイジェスト固定） | [`builder/src/package/env.rs`](../builder/src/package/env.rs) |
 | architecture / variant | 対象とする CPU プラットフォーム（OCI platform） | [image/platforms.md](./image/platforms.md) |
-| 出力イメージ | `image compose` により `dependencies` の推移閉包を束ねて合成したイメージ | [image/README.md](./image/README.md) |
+| 出力イメージ | `compose` により `dependencies` の推移閉包を束ねて合成したイメージ | [image/README.md](./image/README.md) |
 
 レジストリパスに含まれる `packages` はパッケージイメージを配置するための名前空間であり、ローカル作業ディレクトリの `packages/artifacts/` を指すものではありません。
 

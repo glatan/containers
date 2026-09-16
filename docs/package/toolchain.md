@@ -2,11 +2,11 @@
 
 クロス開発およびブートストラップに使用するプレフィックス付きツールチェーンのビルド方針です。全体の段階は [build-flow.md](./build-flow.md) です。パッケージごとの依存と triple 固有の configure は [definition/](./definition/) の `{パッケージ名}.md` です。1 パッケージ 1 ファイルです。
 
-5 つの GNU triple それぞれについて、binutils から最終 gcc までを 7 段階で組みます。Phase 1 の `package bootstrap` が組むのは x86_64 だけです。他 triple は HOST 上で、基底 variant の `{triple}-glibc` のあとに `{triple}-binutils` / `{triple}-gcc` を組みます。これが他 arch パッケージを HOST でクロスコンパイルする実行コンパイラです。依存としてマウントする gcc / binutils は常に HOST（amd64 / v4）の成果物です。
+5 つの GNU triple それぞれについて、binutils から最終 gcc までを 7 段階で組みます。Phase 1 の `env bootstrap` が組むのは x86_64 だけです。他 triple は HOST 上で、基底 variant の `{triple}-glibc` のあとに `{triple}-binutils` / `{triple}-gcc` を組みます。これが他 arch パッケージを HOST でクロスコンパイルする実行コンパイラです。依存としてマウントする gcc / binutils は常に HOST（amd64 / v4）の成果物です。
 
 ## 製品キューと `supports`
 
-`package build --all-target` は `supports` が真の Platform を対象にします。運用で組む製品キューはそれより狭いことがあります。ビルド設定（configure の `--build` / `--host` / `--target`、Canadian 経路）は残します。
+`build --all-targets` は `supports` が真の Platform を対象にします。運用で組む製品キューはそれより狭いことがあります。ビルド設定（configure の `--build` / `--host` / `--target`、Canadian 経路）は残します。
 
 | パッケージ | `supports` | 製品キュー |
 |-|-|-|

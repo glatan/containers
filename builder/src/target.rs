@@ -200,6 +200,12 @@ impl Target {
             .find(|target| target.architecture() == architecture && target.variant() == variant)
     }
 
+    /// `amd64/v4` のような `<arch>/<variant>` 文字列をパースする。
+    pub fn parse(text: &str) -> Option<Self> {
+        let (architecture, variant) = text.split_once('/')?;
+        Self::lookup(architecture, variant)
+    }
+
     pub const fn tuple(self) -> (&'static str, &'static str, &'static str) {
         match self {
             Self::Amd64(_) => ("x86_64", "", "linux-gnu"),

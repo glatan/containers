@@ -2,12 +2,18 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use super::{Package, Source};
+use super::{Package, Role, Source};
 use crate::error::{Error, Result};
 use crate::process;
 use crate::util::source_checksums;
 
 pub fn fetch_package(package: &dyn Package) -> Result<Vec<String>> {
+    if matches!(package.role(), Role::BuildEnv) {
+        return Ok(vec![format!(
+            "{} はソースを持たないためスキップします",
+            package.name()
+        )]);
+    }
     let dir = package.source_dir();
     fs::create_dir_all(&dir).map_err(|source| Error::io(&dir, source))?;
     let filename = Path::new(package.source().url)

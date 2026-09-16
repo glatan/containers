@@ -38,7 +38,7 @@ openssl からは依存されません。標準 zlib の `libz.so` とは配置�
 
 | 名前 | 用途 |
 |-|-|
-| 共通の[ビルド環境イメージ](../README.md) | `package build` によるコンパイル（シード環境では builder が cmake を導入） |
+| 共通の[ビルド環境イメージ](../README.md) | `build` によるコンパイル（シード環境では builder が cmake を導入） |
 
 ## ターゲット
 

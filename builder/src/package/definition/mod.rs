@@ -181,17 +181,6 @@ pub fn find(name: &str) -> Result<&'static dyn Package> {
         .ok_or_else(|| Error::message(format!("パッケージが見つかりません: {name}")))
 }
 
-pub fn find_image(name: &str) -> Result<&'static dyn Package> {
-    let package = find(name)?;
-    if package.build_only() {
-        return Err(Error::message(format!(
-            "{} はビルド専用のパッケージです",
-            package.name()
-        )));
-    }
-    Ok(package)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -212,7 +201,7 @@ mod tests {
         assert_eq!(find("x86_64-linux-gnu-glibc").unwrap().version(), "2.44");
         assert!(find("glibc").is_err());
         assert!(find("missing").is_err());
-        assert!(find_image("linux-headers").is_err());
+        assert!(find("linux-headers").unwrap().build_only());
         assert!(images().any(|package| package.name() == "x86_64-linux-gnu-glibc"));
         assert!(images().any(|package| package.name() == "build-env"));
         assert!(!images().any(|package| package.name() == "linux-headers"));

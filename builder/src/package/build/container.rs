@@ -24,7 +24,7 @@ pub(super) fn build_target(
     let sources = package.source_dir();
     if !sources.is_dir() {
         return Err(Error::message(format!(
-            "ソースが見つかりません: {} (package fetch を実行してください)",
+            "ソースが見つかりません: {} (fetch を実行してください)",
             sources.display()
         )));
     }
@@ -32,7 +32,7 @@ pub(super) fn build_target(
     let source = sources.join(package.source().subdir);
     if !source.is_dir() {
         return Err(Error::message(format!(
-            "ソースが見つかりません: {} (package fetch を実行してください)",
+            "ソースが見つかりません: {} (fetch を実行してください)",
             source.display()
         )));
     }
@@ -72,7 +72,7 @@ pub(super) fn build_target(
         let dep_dir = found.artifact_dir(mounted);
         if !dep_dir.is_dir() {
             return Err(Error::message(format!(
-                "依存パッケージがありません: {} (package build を実行してください)",
+                "依存パッケージがありません: {} (build を実行してください)",
                 dep_dir.display()
             )));
         }
@@ -123,7 +123,7 @@ pub(super) fn build_target(
         let dir = found.artifact_dir(mounted_target);
         if !workspace::artifact_ready(&dir) {
             return Err(Error::message(format!(
-                "依存パッケージがありません: {} (package build を実行してください)",
+                "依存パッケージがありません: {} (build を実行してください)",
                 dir.display()
             )));
         }
