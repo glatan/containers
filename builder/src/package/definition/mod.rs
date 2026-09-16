@@ -489,23 +489,19 @@ mod tests {
 
     #[test]
     fn c_packages_detect_native_by_triple_not_empty_cross() {
-        for name in ["zlib"] {
-            let script = find(name)
-                .unwrap()
-                .rendered_script(crate::target::Target::BUILD_ENV);
-            assert!(
-                script.contains(r#"$TRIPLE" != "$HOST_TRIPLE""#),
-                "{name} がクロスを TRIPLE で判定していません"
-            );
-            assert!(
-                !script.contains(r#"-n "$CROSS""#),
-                "{name} が空の CROSS でクロス判定しています"
-            );
-            assert!(
-                !script.contains(r#"-z "$CROSS""#),
-                "{name} が空の CROSS でネイティブ判定しています"
-            );
-        }
+        // zlib の CHOST/PGO 分岐は ctx.cross() で静的に解決される
+        let native = find("zlib")
+            .unwrap()
+            .rendered_script(crate::target::Target::BUILD_ENV);
+        assert!(native.contains("-fprofile-generate"), "{native}");
+        assert!(!native.contains("CHOST="), "{native}");
+        let cross = find("zlib")
+            .unwrap()
+            .rendered_script(crate::target::Target::Arm64(
+                crate::target::Arm64Variant::V8,
+            ));
+        assert!(cross.contains("CHOST="), "{cross}");
+        assert!(!cross.contains("-fprofile-generate"), "{cross}");
         for name in [
             "x86_64-linux-gnu-glibc",
             "openssl",
@@ -521,11 +517,22 @@ mod tests {
                 "{name} のスクリプトに pacman があります"
             );
         }
+        // openssl の PGO 分岐は ctx.cross() で静的に解決される
+        let openssl_native = find("openssl")
+            .unwrap()
+            .rendered_script(crate::target::Target::BUILD_ENV);
         assert!(
-            find("openssl")
-                .unwrap()
-                .rendered_script(crate::target::Target::BUILD_ENV)
-                .contains(r#"$TRIPLE" = "$HOST_TRIPLE""#)
+            openssl_native.contains("-fprofile-generate"),
+            "{openssl_native}"
+        );
+        let openssl_cross = find("openssl")
+            .unwrap()
+            .rendered_script(crate::target::Target::Arm64(
+                crate::target::Arm64Variant::V8,
+            ));
+        assert!(
+            !openssl_cross.contains("-fprofile-generate"),
+            "{openssl_cross}"
         );
         assert!(
             !find("openssl")
@@ -533,7 +540,7 @@ mod tests {
                 .rendered_script(crate::target::Target::BUILD_ENV)
                 .contains("enable-lto")
         );
-        for name in ["openssl", "zlib", "zlib-ng", "mold", "bash"] {
+        for name in ["openssl", "zlib", "zlib-ng", "mold"] {
             let script = find(name)
                 .unwrap()
                 .rendered_script(crate::target::Target::BUILD_ENV);
@@ -545,6 +552,12 @@ mod tests {
                 !script.contains("-B/dep/${TRIPLE}-glibc/usr/lib64"),
                 "{name} が glibc の lib64 を決め打ちしています"
             );
+        }
+        // Steps レシピの sysroot は wrap_script がマウント情報から静的に解決する
+        let ctx = crate::package::recipe::BuildContext::of(None, crate::target::Target::BUILD_ENV);
+        match find("bash").unwrap().recipe(&ctx) {
+            crate::package::recipe::Recipe::Steps(steps) => assert!(steps.sysroot),
+            other => panic!("bash が Steps ではありません: {other:?}"),
         }
     }
 
@@ -656,7 +669,7 @@ mod tests {
         assert!(
             find("diffutils")
                 .unwrap()
-                .rendered_script(host)
+                .rendered_script(arm)
                 .contains("gl_cv_func_strcasecmp_works=yes")
         );
         assert!(

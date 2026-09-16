@@ -23,11 +23,11 @@ impl ZstdLevel {
         }
     }
 
-    pub fn get(self) -> u8 {
+    pub const fn get(self) -> u8 {
         self.0
     }
 
-    pub fn needs_ultra(self) -> bool {
+    pub const fn needs_ultra(self) -> bool {
         self.0 >= 20
     }
 }
@@ -42,7 +42,7 @@ pub struct Digest {
 }
 
 impl Digest {
-    pub fn from_hex(hex: String) -> Self {
+    pub const fn from_hex(hex: String) -> Self {
         Self { hex }
     }
 

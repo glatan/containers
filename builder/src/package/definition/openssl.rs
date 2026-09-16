@@ -1,4 +1,5 @@
 use crate::flags::{Cflag, Flag, Ldflag};
+use crate::package::recipe::{BuildContext, Recipe};
 use crate::package::{Dependency, Package, Role, Source};
 use crate::target::Target;
 
@@ -73,11 +74,27 @@ impl Package for Openssl {
         )
     }
 
-    fn build_script(&self) -> &'static str {
-        concat!(
-            "set -euxo pipefail\n",
-            include_str!("sysroot_env.sh"),
-            r#"
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Native
+    }
+
+    fn recipe(&self, ctx: &BuildContext) -> Recipe {
+        let mut script = String::from(HEAD);
+        // PGO: ネイティブビルドでのみプロファイルを実行できる
+        if ctx.cross() {
+            script.push_str("make -j\"$(nproc)\"\n");
+        } else {
+            script.push_str(PGO);
+        }
+        script.push_str("make install_sw DESTDIR=\"$OUT\"\n");
+        Recipe::Shell(script.into())
+    }
+}
+
+const HEAD: &str = concat!(
+    "set -euxo pipefail\n",
+    include_str!("sysroot_env.sh"),
+    r#"
 case "$ARCH" in
   amd64) TGT=linux-x86_64 ;;
   arm64) TGT=linux-aarch64 ;;
@@ -95,19 +112,14 @@ configure() {
   "$SOURCE"/Configure "$TGT" --prefix=/usr --openssldir=/etc/ssl --libdir=lib64
 }
 configure
-if [ "$TRIPLE" = "$HOST_TRIPLE" ]; then
-  make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-generate" LDFLAGS="$LDFLAGS -fprofile-generate"
-  export LD_LIBRARY_PATH="$PWD${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-  ./apps/openssl speed -seconds 1 \
-    rsa2048 ecdsap256 \
-    aes-128-cbc aes-256-cbc \
-    sha256 sha512
-  make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-use -fprofile-correction -Wno-missing-profile" LDFLAGS="$LDFLAGS -fprofile-use"
-else
-  make -j"$(nproc)"
-fi
-make install_sw DESTDIR="$OUT"
 "#,
-        )
-    }
-}
+);
+
+const PGO: &str = r#"make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-generate" LDFLAGS="$LDFLAGS -fprofile-generate"
+export LD_LIBRARY_PATH="$PWD${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+./apps/openssl speed -seconds 1 \
+  rsa2048 ecdsap256 \
+  aes-128-cbc aes-256-cbc \
+  sha256 sha512
+make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-use -fprofile-correction -Wno-missing-profile" LDFLAGS="$LDFLAGS -fprofile-use"
+"#;

@@ -46,3 +46,4 @@
 | フラグ | 設定値 | 条件 |
 |-|-|-|
 | `--prefix` | `/usr` | 常時 |
+| `-std` | `gnu11` | gnulib の `lib/malloc.c` が K&R 宣言のため gnu17 で壊れる |

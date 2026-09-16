@@ -36,6 +36,8 @@
 | `package tree {package}` | パッケージの依存ツリーを表示する |
 | `package bootstrap-path {?package}` | 他パッケージを組める最小のシード相ビルド集合を出力する |
 | `package info {?package}` | パッケージ定義のメタデータおよび設定内容を表示する |
+
+`package info` は `--architecture` + `--variant` で対象 Platform を指定でき、ターゲットに応じたロール・依存・CFLAGS / LDFLAGS・PGO・recipe（env / `-std` / sysroot / workdir / configure 引数）を表示します。未指定時は `Target::BUILD_ENV`（amd64 / v4 ネイティブ）として表示します。
 | `package env` | 合成済みビルド環境イメージの参照先を表示する（未合成時はシードのダイジェスト固定値を表示） |
 
 #### package build のオプション

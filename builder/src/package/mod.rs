@@ -70,7 +70,7 @@ pub const GLIBC_VERSION: &str = "2.44";
 
 pub const GCC_VERSION: &str = "16.2.0";
 
-pub fn glibc_dep(target: Target) -> Dependency {
+pub const fn glibc_dep(target: Target) -> Dependency {
     Dependency {
         name: target.glibc_package(),
         version: GLIBC_VERSION,
@@ -78,7 +78,7 @@ pub fn glibc_dep(target: Target) -> Dependency {
 }
 
 /// libstdc++ / libgcc_s / libatomic など、C++ ランタイムライブラリの提供元。
-pub fn gcc_dep(target: Target) -> Dependency {
+pub const fn gcc_dep(target: Target) -> Dependency {
     Dependency {
         name: target.gcc_package(),
         version: GCC_VERSION,
@@ -111,15 +111,19 @@ pub trait Package: Sync {
     /// ビルド手順。`ctx` で target・クロス判定を静的に解決する。
     fn recipe(&self, ctx: &recipe::BuildContext) -> recipe::Recipe {
         let _ = ctx;
-        recipe::Recipe::Shell(self.build_script())
+        recipe::Recipe::Shell(self.build_script().into())
     }
     /// `target` 向けにレンダリングしたシェルスクリプト。
     fn rendered_script(&self, target: Target) -> String {
-        self.recipe(&recipe::BuildContext::of(self.gnu_triple(), target))
-            .render()
+        let ctx = recipe::BuildContext::of(self.gnu_triple(), target);
+        self.recipe(&ctx).render(&ctx)
     }
 
     fn flags(&self, target: Target) -> Flag;
+    /// PGO ポリシー。
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::None
+    }
     fn build_only(&self) -> bool {
         false
     }

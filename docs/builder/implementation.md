@@ -91,7 +91,7 @@ LTO や PGO の適用方針はパッケージの種別ごとに異なります�
 
 ## クロスビルドの構成
 
-ビルド環境イメージは amd64 / v4 上で動作します。非 amd64 プラットフォーム向けパッケージは、イメージ内に配置した `{triple}-gcc` を用いてクロスコンパイルし、PGO のプロファイル実行には QEMU を利用します。なお、自前イメージ合成前のシード期間に限り、Arch Linux 上で pacman を用いてクロス gcc を導入します。
+ビルド環境イメージは amd64 / v4 上で動作します。非 amd64 プラットフォーム向けパッケージは、イメージ内に配置した `{triple}-gcc` を用いてクロスコンパイルします。PGO は生成バイナリを実行可能なネイティブビルドにのみ適用するため、クロスビルドではプロファイル実行（QEMU 利用を含む）を行いません。なお、自前イメージ合成前のシード期間に限り、Arch Linux 上で pacman を用いてクロス gcc を導入します。
 
 - カタログパッケージのビルド時は、対象 architecture の GNU triple を `TRIPLE` に渡し、クロス接頭辞 `CROSS` は常に `{TRIPLE}-` とします（amd64 の場合は `x86_64-linux-gnu-`）。ネイティブビルドかクロスビルドかの判定は、`TRIPLE` と `HOST_TRIPLE` の一致によって行います。
 - Host tools のコード生成側 GNU triple はパッケージ Platform の triple です（vendor 名の `pc` は含めません）。他パッケージがビルド時に実行する python / cmake / meson / ninja / perl は HOST 成果物をマウントします。

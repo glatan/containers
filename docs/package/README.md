@@ -14,7 +14,7 @@
 
 `CC`、`CXX`、`AR`、`RANLIB`、`NM` などのツールチェーン環境変数は builder が制御します。シード上で HOST 向けに組むあいだは `CC=gcc` です。自前 gcc のあと、および合成イメージ上では、対象 Platform の `CROSS` 接頭辞を付けます。amd64 では `x86_64-linux-gnu-gcc`、arm64 では `aarch64-linux-gnu-gcc` です。
 
-フラグトークンの正本は [`builder/src/flags.rs`](../../builder/src/flags.rs) です。builder は `CFLAGS` に指定された `-flto` を `LDFLAGS` へ暗黙に複製せず、両者で独立してフラグを管理します。基本最適化レベルには `-O2` を指定し、CPU 最適化オプションは対象 variant から一意に決定します（ppc64le は `-mcpu=`、それ以外は `-march=` を使用し、ホスト環境に依存する `native` は指定しません）。`FormatSecurity` トークンは `-Wformat` と `-Wformat-security` の 2 つのコンパイラフラグへ展開されます。PGO のプロファイル採取および適用手順は各パッケージのビルドスクリプト内で定義します。`-O3`、`-g`、`-Wall`、`-fexceptions` はカタログ用コンパイラフラグとしては付与しません。
+フラグトークンの正本は [`builder/src/flags.rs`](../../builder/src/flags.rs) です。builder は `CFLAGS` に指定された `-flto` を `LDFLAGS` へ暗黙に複製せず、両者で独立してフラグを管理します。基本最適化レベルには `-O2` を指定し、CPU 最適化オプションは対象 variant から一意に決定します（ppc64le は `-mcpu=`、それ以外は `-march=` を使用し、ホスト環境に依存する `native` は指定しません）。`FormatSecurity` トークンは `-Wformat` と `-Wformat-security` の 2 つのコンパイラフラグへ展開されます。PGO の適用方針は `Package::pgo()`（`Pgo::None` / `Pgo::Native`）で宣言し、プロファイル採取および適用手順は `recipe(ctx)` が `ctx.cross()` で分岐して静的に組み込みます。`-O3`、`-g`、`-Wall`、`-fexceptions` はカタログ用コンパイラフラグとしては付与しません。
 
 種別ごとの例外は、glibc と最終 gcc は [toolchain.md](./toolchain.md)、Host tools は [host-tools.md](./host-tools.md)、カタログと qemu は各 `{パッケージ名}.md` です。
 

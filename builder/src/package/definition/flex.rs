@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Env, Recipe, Step, Steps, Workdir};
+use crate::package::recipe::{BuildContext, Env, Recipe, Std, Step, Steps, Workdir};
 use crate::package::{Package, Source};
 
 pub struct Flex;
@@ -41,11 +41,11 @@ impl Package for Flex {
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
         Recipe::Steps(
             Steps::new(Env::Autotools)
+                // gnulib の lib/malloc.c は K&R 宣言のため gnu17 で壊れる
+                .std(Std::Gnu11)
                 .workdir(Workdir::InSource)
                 .step(Step::Shell(
-                    r#"# gnulib の lib/malloc.c は K&R 宣言のため -std=gnu17 で壊れる。
-export CFLAGS="$(printf '%s' "$CFLAGS" | sed 's/-std=gnu17/-std=gnu11/g')"
-if [ -f lib/malloc.c ]; then
+                    r#"if [ -f lib/malloc.c ]; then
   cat > lib/malloc.c <<'EOF'
 #include <stdlib.h>
 void *rpl_malloc(size_t n) { if (n == 0) n = 1; return malloc(n); }

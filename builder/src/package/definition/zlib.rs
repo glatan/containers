@@ -1,4 +1,5 @@
 use crate::flags::{Cflag, Flag, Ldflag};
+use crate::package::recipe::{BuildContext, Recipe};
 use crate::package::{Dependency, Package, Role, Source};
 use crate::target::Target;
 
@@ -67,11 +68,29 @@ impl Package for Zlib {
         )
     }
 
-    fn build_script(&self) -> &'static str {
-        concat!(
-            "set -euxo pipefail\n",
-            include_str!("sysroot_env.sh"),
-            r#"
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Native
+    }
+
+    fn recipe(&self, ctx: &BuildContext) -> Recipe {
+        let mut script = String::from(HEAD);
+        if ctx.cross() {
+            // クロスではプロファイルを実行できない
+            script.push_str(
+                "CHOST=\"$TRIPLE\" ./configure --prefix=/usr --libdir=/usr/lib64 --shared\nmake -j\"$(nproc)\"\n",
+            );
+        } else {
+            script.push_str(PGO);
+        }
+        script.push_str("make install DESTDIR=\"$OUT\"\n");
+        Recipe::Shell(script.into())
+    }
+}
+
+const HEAD: &str = concat!(
+    "set -euxo pipefail\n",
+    include_str!("sysroot_env.sh"),
+    r#"
 if [ -n "${SYSROOT:-}" ]; then
   export CC="$CC --sysroot=$SYSROOT"
 fi
@@ -80,23 +99,14 @@ rm -rf "$PGO"
 mkdir -p "$PGO"
 cp -a "$SOURCE"/. "$BUILD"/
 cd "$BUILD"
-if [ "$TRIPLE" != "$HOST_TRIPLE" ]; then
-  CHOST="$TRIPLE" ./configure --prefix=/usr --libdir=/usr/lib64 --shared
-else
-  ./configure --prefix=/usr --libdir=/usr/lib64 --shared
-fi
-if [ "$TRIPLE" = "$HOST_TRIPLE" ]; then
-  make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-generate -fprofile-dir=$PGO" LDFLAGS="$LDFLAGS -fprofile-generate"
-  echo 'pgo' | ./minigzip | ./minigzip -d >/dev/null
-  ./example >/dev/null
-  make distclean
-  ./configure --prefix=/usr --libdir=/usr/lib64 --shared
-  make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-use -fprofile-dir=$PGO -fprofile-correction -Wno-missing-profile" LDFLAGS="$LDFLAGS -fprofile-use"
-else
-  make -j"$(nproc)"
-fi
-make install DESTDIR="$OUT"
 "#,
-        )
-    }
-}
+);
+
+const PGO: &str = r#"./configure --prefix=/usr --libdir=/usr/lib64 --shared
+make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-generate -fprofile-dir=$PGO" LDFLAGS="$LDFLAGS -fprofile-generate"
+echo 'pgo' | ./minigzip | ./minigzip -d >/dev/null
+./example >/dev/null
+make distclean
+./configure --prefix=/usr --libdir=/usr/lib64 --shared
+make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-use -fprofile-dir=$PGO -fprofile-correction -Wno-missing-profile" LDFLAGS="$LDFLAGS -fprofile-use"
+"#;

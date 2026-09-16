@@ -193,13 +193,13 @@ fn collect_rel_paths(
         if child_rel == Path::new("usr/share/info/dir") {
             continue;
         }
-        if let Some(existing) = owners.insert(child_rel.clone(), owner.to_string()) {
-            if existing != owner {
-                return Err(Error::message(format!(
-                    "パスが衝突しています: {} ({existing} と {owner})",
-                    child_rel.display()
-                )));
-            }
+        if let Some(existing) = owners.insert(child_rel.clone(), owner.to_string())
+            && existing != owner
+        {
+            return Err(Error::message(format!(
+                "パスが衝突しています: {} ({existing} と {owner})",
+                child_rel.display()
+            )));
         }
     }
     Ok(())

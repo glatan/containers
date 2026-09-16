@@ -423,11 +423,14 @@ fn blocked_reason(
 
 #[cfg(test)]
 mod tests {
-    use super::container::{allow_network, compiler_cc, extra_host_tool_names, wrap_script};
+    use super::container::{
+        Mount, Prep, allow_network, compiler_cc, dep_paths, extra_host_tool_names, stage_generated,
+        wrap_script,
+    };
     use super::*;
     use crate::package::{Dependency, Role, Source};
     use crate::target::{Amd64Variant, Arm64Variant, Target};
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     const ZERO_512: &str = "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
 
@@ -484,7 +487,7 @@ mod tests {
         }
     }
 
-    fn fake<'a>(
+    fn fake(
         name: &'static str,
         dependencies: &'static [Dependency],
         build_dependencies: &'static [Dependency],
@@ -730,53 +733,183 @@ mod tests {
 
     #[test]
     fn seed_cmake_installs_arch_mold_and_exposes_prefixed_gcc() {
+        use std::os::unix::fs::PermissionsExt;
         let cmake = crate::package::find("cmake").unwrap();
-        let script = wrap_script(cmake, true, Target::BUILD_ENV);
+        let script = wrap_script(cmake, true, Target::BUILD_ENV, &[], &Prep::default());
         assert!(script.contains("pacman -Sy --noconfirm mold"), "{script}");
-        assert!(script.contains("/tmp/gcc-b"), "{script}");
-        assert!(script.contains("/tmp/meson-bin"), "{script}");
-        assert!(script.contains("/tmp/host-strip"), "{script}");
-        assert!(script.contains("/tmp/unprefixed-binutils"), "{script}");
-        assert!(script.contains("/tmp/host-cc"), "{script}");
         assert!(script.contains("/tmp/la-overlay"), "{script}");
         assert!(script.contains("/tmp/pc-overlay"), "{script}");
-        assert!(script.contains("-Wl,-rpath-link="), "{script}");
+        // /dep/pkgconf が無い場合は command -v フォールバックが残る
         assert!(script.contains("/tmp/pkg-config-bin"), "{script}");
-        assert!(script.contains("-L"), "{script}");
-        assert!(script.contains("liblto_plugin.so"), "{script}");
-        let gcc = crate::package::find("x86_64-linux-gnu-gcc").unwrap();
-        let gcc_script = wrap_script(gcc, false, Target::Arm64(Arm64Variant::V8));
-        assert!(
-            gcc_script.contains("INJECT_TRIPLE_GCC_SPECS=no"),
-            "{gcc_script}"
-        );
-        let glibc = crate::package::find("x86_64-linux-gnu-glibc").unwrap();
-        let glibc_script = wrap_script(glibc, false, Target::Amd64(Amd64Variant::V1));
-        assert!(
-            glibc_script.contains("INJECT_TRIPLE_GCC_SPECS=no"),
-            "{glibc_script}"
-        );
-        assert!(
-            glibc_script.contains("LD=\"${TRIPLE}-ld\""),
-            "{glibc_script}"
-        );
+
+        // ツールチェーン一式をマウントした場合の Prep と生成スクリプト
+        let tmp = tempfile::tempdir().unwrap();
+        let mk = |name: &str| {
+            let dir = tmp.path().join(name);
+            fs::create_dir_all(&dir).unwrap();
+            dir
+        };
+        let touch_x = |path: &Path| {
+            fs::write(path, "#!/bin/sh\n").unwrap();
+            fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+        };
+        let cc_gcc = mk("aarch64-linux-gnu-gcc");
+        fs::create_dir_all(cc_gcc.join("usr/bin")).unwrap();
+        fs::create_dir_all(cc_gcc.join("usr/lib/gcc/aarch64-linux-gnu/16.0.0")).unwrap();
+        fs::create_dir_all(cc_gcc.join("usr/libexec/gcc/aarch64-linux-gnu/16.0.0")).unwrap();
+        touch_x(&cc_gcc.join("usr/bin/aarch64-linux-gnu-gcc"));
+        touch_x(&cc_gcc.join("usr/bin/aarch64-linux-gnu-g++"));
+        fs::write(
+            cc_gcc.join("usr/libexec/gcc/aarch64-linux-gnu/16.0.0/liblto_plugin.so"),
+            "",
+        )
+        .unwrap();
+        let cc_bu = mk("aarch64-linux-gnu-binutils");
+        fs::create_dir_all(cc_bu.join("usr/bin")).unwrap();
+        for tool in ["ar", "ranlib", "nm", "strip", "objcopy", "objdump"] {
+            touch_x(&cc_bu.join(format!("usr/bin/aarch64-linux-gnu-{tool}")));
+        }
+        let t_bu = mk("x86_64-linux-gnu-binutils");
+        fs::create_dir_all(t_bu.join("usr/bin")).unwrap();
+        let h_gcc = mk("x86_64-linux-gnu-gcc");
+        fs::create_dir_all(h_gcc.join("usr/bin")).unwrap();
+        touch_x(&h_gcc.join("usr/bin/x86_64-linux-gnu-gcc"));
+        touch_x(&h_gcc.join("usr/bin/x86_64-linux-gnu-g++"));
+        let pkgconf = mk("pkgconf");
+        fs::create_dir_all(pkgconf.join("usr/bin")).unwrap();
+        touch_x(&pkgconf.join("usr/bin/pkgconf"));
+        let meson = mk("meson");
+        fs::create_dir_all(meson.join("usr/bin")).unwrap();
+        fs::write(
+            meson.join("usr/bin/meson"),
+            "#!/usr/bin/python3\nimport sys\n",
+        )
+        .unwrap();
+        let python = mk("python");
+        fs::create_dir_all(python.join("usr/bin")).unwrap();
+        touch_x(&python.join("usr/bin/python3"));
+        let mold = mk("mold");
+        fs::create_dir_all(mold.join("usr/bin")).unwrap();
+        touch_x(&mold.join("usr/bin/mold"));
+        let zlib = mk("zlib");
+        fs::create_dir_all(zlib.join("usr/bin")).unwrap();
+        fs::create_dir_all(zlib.join("usr/lib/pkgconfig")).unwrap();
+        fs::create_dir_all(zlib.join("usr/include")).unwrap();
+        fs::write(
+            zlib.join("usr/lib/pkgconfig/zlib.pc"),
+            "prefix=/usr
+libdir=/usr/lib
+",
+        )
+        .unwrap();
+        let cc_glibc = mk("aarch64-linux-gnu-glibc");
+        fs::create_dir_all(cc_glibc.join("usr/aarch64-linux-gnu/lib")).unwrap();
+        let mounts: Vec<Mount> = [
+            ("aarch64-linux-gnu-gcc", &cc_gcc),
+            ("aarch64-linux-gnu-binutils", &cc_bu),
+            ("x86_64-linux-gnu-binutils", &t_bu),
+            ("x86_64-linux-gnu-gcc", &h_gcc),
+            ("pkgconf", &pkgconf),
+            ("meson", &meson),
+            ("python", &python),
+            ("mold", &mold),
+            ("zlib", &zlib),
+            ("aarch64-linux-gnu-glibc", &cc_glibc),
+        ]
+        .into_iter()
+        .map(|(name, dir)| Mount {
+            name: name.to_owned(),
+            dir: dir.clone(),
+        })
+        .collect();
+
         let binutils = crate::package::find("x86_64-linux-gnu-binutils").unwrap();
-        let bu_script = wrap_script(binutils, false, Target::Arm64(Arm64Variant::V8));
+        let gen_dir = tmp.path().join("gen");
+        let prep =
+            stage_generated(binutils, &mounts, &gen_dir, Target::Arm64(Arm64Variant::V8)).unwrap();
+        assert!(prep.pkg_config);
+        assert_eq!(prep.meson.as_deref(), Some("/dep/python/usr/bin/python3"));
+        assert!(prep.cc_binutils && prep.host_strip && prep.triple_binutils);
+        assert_eq!(
+            prep.gcc_lib.as_deref(),
+            Some("/dep/aarch64-linux-gnu-gcc/usr/lib/gcc/aarch64-linux-gnu/16.0.0")
+        );
+        assert!(prep.lto_binutils && prep.triple_gcc && prep.unprefixed && prep.host_cc);
+        assert!(prep.pc);
+        assert!(prep.mold);
+        // meson の shebang が dep python に書き換わる
+        let meson_out = fs::read_to_string(gen_dir.join("meson-bin/meson")).unwrap();
+        assert!(
+            meson_out.starts_with("#!/dep/python/usr/bin/python3\n"),
+            "{meson_out}"
+        );
+
+        let bu_script = wrap_script(
+            binutils,
+            false,
+            Target::Arm64(Arm64Variant::V8),
+            &mounts,
+            &prep,
+        );
         assert!(
             bu_script.contains("_cc_triple=\"${PACKAGE_HOST:-$TRIPLE}\""),
             "{bu_script}"
         );
-        assert!(
-            bu_script.contains("/dep/${_cc_triple}-gcc/usr/lib/gcc/${_cc_triple}"),
-            "{bu_script}"
+        for needle in [
+            "/tmp/gcc-b",
+            "/tmp/lto-binutils",
+            "/tmp/host-strip",
+            "/tmp/unprefixed-binutils",
+            "/tmp/host-cc",
+            "/tmp/meson-bin",
+            "/dep/mold/usr/bin",
+            "-B/dep/aarch64-linux-gnu-gcc/usr/lib/gcc/aarch64-linux-gnu/16.0.0",
+            "-L/dep/zlib/usr/lib -Wl,-rpath-link=/dep/zlib/usr/lib",
+            "-I/dep/zlib/usr/include",
+            "-L/dep/aarch64-linux-gnu-glibc/usr/aarch64-linux-gnu/lib -Wl,-rpath-link=",
+            "/dep/zlib/usr/lib/pkgconfig",
+        ] {
+            assert!(bu_script.contains(needle), "{needle} not in {bu_script}");
+        }
+        // 実際のラッパファイルが生成される
+        let strip = fs::read_link(gen_dir.join("host-strip/strip")).unwrap();
+        assert_eq!(
+            strip,
+            Path::new("/dep/aarch64-linux-gnu-binutils/usr/bin/aarch64-linux-gnu-strip")
+        );
+        let ar = fs::read_to_string(gen_dir.join("lto-binutils/aarch64-linux-gnu-ar")).unwrap();
+        assert!(ar.contains("--plugin"), "{ar}");
+
+        // gcc/glibc は triple gcc specs 注入対象外（gcc-b/lto-binutils を生成しない）
+        let gcc = crate::package::find("x86_64-linux-gnu-gcc").unwrap();
+        let gcc_prep = stage_generated(
+            gcc,
+            &mounts,
+            &tmp.path().join("gen2"),
+            Target::Arm64(Arm64Variant::V8),
+        )
+        .unwrap();
+        assert!(gcc_prep.gcc_lib.is_none() && !gcc_prep.lto_binutils);
+        let gcc_script = wrap_script(
+            gcc,
+            false,
+            Target::Arm64(Arm64Variant::V8),
+            &mounts,
+            &gcc_prep,
+        );
+        assert!(!gcc_script.contains("/tmp/gcc-b"), "{gcc_script}");
+
+        let glibc = crate::package::find("x86_64-linux-gnu-glibc").unwrap();
+        let glibc_script = wrap_script(
+            glibc,
+            false,
+            Target::Amd64(Amd64Variant::V1),
+            &[],
+            &Prep::default(),
         );
         assert!(
-            !bu_script.contains("export LD=\"${_cc_triple}-gcc\""),
-            "{bu_script}"
-        );
-        assert!(
-            bu_script.contains("*/\"${HOST_TRIPLE}-gcc\"/*"),
-            "{bu_script}"
+            glibc_script.contains("LD=\"${TRIPLE}-ld\""),
+            "{glibc_script}"
         );
         assert!(allow_network(cmake, Target::BUILD_ENV, false));
         assert!(!allow_network(cmake, Target::BUILD_ENV, true));
@@ -898,10 +1031,120 @@ mod tests {
         assert!(!perl_script.contains("/tmp/perl-qemu-run"), "{perl_script}");
         assert!(!perl_script.contains("-Dtargethost="), "{perl_script}");
         let mpfr = crate::package::find("mpfr").unwrap();
-        let mpfr_wrap = wrap_script(mpfr, false, Target::Arm64(Arm64Variant::V8));
+        let mpfr_wrap = wrap_script(
+            mpfr,
+            false,
+            Target::Arm64(Arm64Variant::V8),
+            &[],
+            &Prep::default(),
+        );
         assert!(mpfr_wrap.contains("/tmp/mold-ld-cc"), "{mpfr_wrap}");
         let glibc = crate::package::find("aarch64-linux-gnu-glibc").unwrap();
-        let glibc_wrap = wrap_script(glibc, false, Target::Arm64(Arm64Variant::V8));
+        let glibc_wrap = wrap_script(
+            glibc,
+            false,
+            Target::Arm64(Arm64Variant::V8),
+            &[],
+            &Prep::default(),
+        );
         assert!(!glibc_wrap.contains("/tmp/mold-ld-cc"), "{glibc_wrap}");
+    }
+    #[test]
+    fn dep_paths_expands_mounts_in_byte_order() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().to_path_buf();
+        fs::create_dir_all(dir.join("usr/lib/pkgconfig")).unwrap();
+        fs::create_dir_all(dir.join("usr/lib64/pkgconfig")).unwrap();
+        fs::write(dir.join("usr/lib/libb.la"), "").unwrap();
+        fs::write(dir.join("usr/lib/liba.la"), "").unwrap();
+        fs::write(dir.join("usr/lib/.hidden.la"), "").unwrap();
+        fs::write(dir.join("usr/lib/x.txt"), "").unwrap();
+        let mounts = [Mount {
+            name: "zlib".to_owned(),
+            dir,
+        }];
+        // bash の /dep/*/usr/lib/*.la と同じくバイト順・dotfile 除外
+        assert_eq!(
+            dep_paths(&mounts, "usr/lib/*.la"),
+            vec![
+                "/dep/zlib/usr/lib/liba.la".to_owned(),
+                "/dep/zlib/usr/lib/libb.la".to_owned()
+            ]
+        );
+        // 未マッチの glob は空（ループ非出力）でスキップ相当
+        assert!(dep_paths(&mounts, "usr/include").is_empty());
+        assert_eq!(
+            dep_paths(&mounts, "usr/lib64/pkgconfig"),
+            vec!["/dep/zlib/usr/lib64/pkgconfig".to_owned()]
+        );
+    }
+    #[test]
+    fn stage_overlays_rewrites_la_pc_and_prefixes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let gmp = tmp.path().join("gmp");
+        fs::create_dir_all(gmp.join("usr/lib")).unwrap();
+        fs::create_dir_all(gmp.join("usr/include")).unwrap();
+        fs::write(gmp.join("usr/include/gmp.h"), "").unwrap();
+        fs::write(gmp.join("usr/lib/libgmp.so"), "").unwrap();
+        fs::write(
+            gmp.join("usr/lib/libgmp.la"),
+            "libdir='/usr/lib'
+installed=yes
+dependency_libs=' -L/usr/lib /dep/mpfr/usr/lib/libmpfr.la'
+",
+        )
+        .unwrap();
+        let zlib = tmp.path().join("zlib");
+        fs::create_dir_all(zlib.join("usr/lib/pkgconfig")).unwrap();
+        fs::write(
+            zlib.join("usr/lib/pkgconfig/zlib.pc"),
+            "prefix=/usr
+libdir=/usr/lib
+includedir=/usr/include
+",
+        )
+        .unwrap();
+        let mounts = [
+            Mount {
+                name: "gmp".to_owned(),
+                dir: gmp,
+            },
+            Mount {
+                name: "zlib".to_owned(),
+                dir: zlib,
+            },
+        ];
+        let gen_dir = tmp.path().join("gen");
+        let gmp_pkg = crate::package::find("gmp").unwrap();
+        let overlays = stage_generated(gmp_pkg, &mounts, &gen_dir, Target::BUILD_ENV).unwrap();
+        assert!(overlays.la && overlays.pc);
+        let la = fs::read_to_string(gen_dir.join("la-overlay/libgmp.la")).unwrap();
+        assert!(la.contains("libdir='/tmp/la-overlay'"), "{la}");
+        assert!(la.contains("installed=no"), "{la}");
+        assert!(la.contains("-L/tmp/la-overlay"), "{la}");
+        assert!(la.contains("/tmp/la-overlay/libmpfr.la"), "{la}");
+        // シンボリックリンクはコンテナ内パスを指す
+        let link = fs::read_link(gen_dir.join("la-overlay/libgmp.so")).unwrap();
+        assert_eq!(link, Path::new("/dep/gmp/usr/lib/libgmp.so"));
+        let inc = fs::read_link(gen_dir.join("gmp-prefix/include/gmp.h")).unwrap();
+        assert_eq!(inc, Path::new("/dep/gmp/usr/include/gmp.h"));
+        let lib = fs::read_link(gen_dir.join("gmp-prefix/lib/libgmp.so")).unwrap();
+        assert_eq!(lib, Path::new("/tmp/la-overlay/libgmp.so"));
+        let pc = fs::read_to_string(gen_dir.join("pc-overlay/zlib.pc")).unwrap();
+        assert!(
+            pc.contains(
+                "prefix=/dep/zlib/usr
+"
+            ),
+            "{pc}"
+        );
+        assert!(
+            pc.contains(
+                "libdir=/dep/zlib/usr/lib
+"
+            ),
+            "{pc}"
+        );
+        assert!(pc.contains("includedir=/dep/zlib/usr/include"), "{pc}");
     }
 }

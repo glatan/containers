@@ -48,6 +48,10 @@ pub enum PackageCommand {
     },
     Info {
         package: Option<String>,
+        #[arg(long, requires = "variant")]
+        architecture: Option<String>,
+        #[arg(long, requires = "architecture")]
+        variant: Option<String>,
     },
     Env,
     Bootstrap,
@@ -110,8 +114,23 @@ pub fn run(command: PackageCommand) -> Result<()> {
             tree(&package, target)
         }
         PackageCommand::BootstrapPath { package } => bootstrap_path(package.as_deref()),
-        PackageCommand::Info { package } => match package {
-            Some(name) => info(&name),
+        PackageCommand::Info {
+            package,
+            architecture,
+            variant,
+        } => match package {
+            Some(name) => {
+                let target = match (architecture, variant) {
+                    (Some(architecture), Some(variant)) => Target::lookup(&architecture, &variant)
+                        .ok_or_else(|| {
+                            Error::message(format!(
+                                "未対応のターゲットです: {architecture}/{variant}"
+                            ))
+                        })?,
+                    _ => Target::BUILD_ENV,
+                };
+                info(&name, target)
+            }
             None => ls(),
         },
         PackageCommand::Env => env(),
@@ -373,21 +392,100 @@ fn env() -> Result<()> {
     Ok(())
 }
 
-fn info(name: &str) -> Result<()> {
+fn info(name: &str, target: Target) -> Result<()> {
     let defined = package::find(name)?;
     println!("名前: {}", defined.name());
     println!("バージョン: {}", defined.version());
     println!("ライセンス: {}", defined.license());
+    println!("ターゲット: {}/{}", target.architecture(), target.variant());
+    println!("ロール: {}", describe_role(defined.role()));
     println!("ソース: {}", defined.source().url);
     println!("sha3-512: {}", defined.source().sha3_512);
     println!("blake3: {}", defined.source().blake3);
-    println!(
-        "依存: {}",
-        list_deps(&defined.dependencies(Target::BUILD_ENV))
-    );
+    println!("依存: {}", list_deps(&defined.dependencies(target)));
     println!(
         "ビルド依存: {}",
-        list_deps(&defined.build_dependencies(Target::BUILD_ENV))
+        list_deps(&defined.build_dependencies(target))
     );
+    let host_tools = defined.host_tools(target);
+    if !host_tools.is_empty() {
+        println!("ホストツール: {}", host_tools.join(" "));
+    }
+    // ビルド設定（型付きフラグ/recipe の構造出力）
+    let flags = defined.flags(target);
+    let cflags = flags
+        .cflags()
+        .iter()
+        .copied()
+        .flat_map(Vec::<String>::from)
+        .collect::<Vec<_>>()
+        .join(" ");
+    let ldflags = flags
+        .ldflags()
+        .iter()
+        .copied()
+        .flat_map(Vec::<String>::from)
+        .collect::<Vec<_>>()
+        .join(" ");
+    if !cflags.is_empty() {
+        println!("CFLAGS: {cflags}");
+    }
+    if !ldflags.is_empty() {
+        println!("LDFLAGS: {ldflags}");
+    }
+    match defined.pgo() {
+        crate::flags::Pgo::Native => println!("PGO: native"),
+        crate::flags::Pgo::None => {}
+    }
+    let ctx = crate::package::recipe::BuildContext::of(defined.gnu_triple(), target);
+    println!("recipe: {}", describe_recipe(&defined.recipe(&ctx)));
     Ok(())
+}
+
+fn describe_role(role: package::Role) -> String {
+    match role {
+        package::Role::Catalog => "catalog".to_owned(),
+        package::Role::Package => "package".to_owned(),
+        package::Role::LinuxHeaders => "linux-headers".to_owned(),
+        package::Role::BuildEnv => "build-env".to_owned(),
+        package::Role::Toolchain { triple, stage } => format!("toolchain({triple}, {stage:?})"),
+    }
+}
+
+fn describe_recipe(recipe: &crate::package::recipe::Recipe) -> String {
+    use crate::package::recipe::{Env, Recipe, Step, Workdir};
+    match recipe {
+        Recipe::Shell(_) => "shell".to_owned(),
+        Recipe::Noop => "noop".to_owned(),
+        Recipe::Steps(steps) => {
+            let env = match steps.env {
+                Env::Autotools => "autotools",
+                Env::Lto => "lto",
+                Env::None => "none",
+            };
+            let workdir = match steps.workdir {
+                Workdir::Build => "build",
+                Workdir::InSource => "in-source",
+                Workdir::None => "none",
+            };
+            let kinds: Vec<String> = steps
+                .steps
+                .iter()
+                .map(|step| match step {
+                    Step::Configure(args) => format!("configure({})", args.join(" ")),
+                    Step::Make { .. } => "make".to_owned(),
+                    Step::MakeInstall { .. } => "make-install".to_owned(),
+                    Step::Install { .. } => "install".to_owned(),
+                    Step::Symlink { .. } => "symlink".to_owned(),
+                    Step::Shell(_) => "shell".to_owned(),
+                })
+                .collect();
+            format!(
+                "steps(env={env} std={} sysroot={} workdir={workdir}): {}",
+                steps.std.as_str(),
+                steps.sysroot,
+                kinds.join(" ")
+            )
+        }
+    }
 }

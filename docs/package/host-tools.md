@@ -20,7 +20,7 @@ cmake は mold の build-dep として seed 上で先に組み、python は `bui
 
 コンパイラへ渡す既定のフラグは `tool_flags`（`-O2`、CPU プラットフォーム指定、バイナリ強化フラグ、`-flto`、および LTO 品質保証用の `-Werror=*`）です。トークンの展開は [`builder/src/flags.rs`](../../builder/src/flags.rs) です。
 
-GNU Autotools（configure）を使用するツールの多くでは、configure 実行の直前にフラグから `-flto` および `-Werror=*` を除外し、`-std=gnu17` を追加します。シード環境の GCC 16 では、この組み合わせにおいて GMP のコンパイラ検査（compiler probe）および gnulib の検出処理が失敗するためです。保守的な措置として同様の前処理を configure 系の Host tools 全体に一括して適用していますが、GMP 以外のすべてのツールで同一の失敗が必ず発生することを確認したわけではありません。
+GNU Autotools（configure）を使用するツールの多くでは、フラグから `-flto` および `-Werror=*` を除外し、`-std=gnu17` を追加します（flex は `gnu11`）。除外は host 側の `Flag::sanitized()`（`Recipe::Steps` の `Env::Autotools` のみに適用）、`-std` 追加は recipe プリリュードの `Steps::std` で行います。シード環境の GCC 16 では、この組み合わせにおいて GMP のコンパイラ検査（compiler probe）および gnulib の検出処理が失敗するためです。保守的な措置として同様の前処理を configure 系の Host tools 全体に一括して適用していますが、GMP 以外のすべてのツールで同一の失敗が必ず発生することを確認したわけではありません。
 
 この前処理を適用しないパッケージは、ncurses、bash、および glib です。これらには `tool_flags` に含まれる LTO フラグ（`-flto`）がそのまま維持されます。meson は Python パッケージのインストール処理のみを行うため、C コンパイラの LTO は使用しません。Host tools パッケージには PGO の適用手順を設けていません。
 

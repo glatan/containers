@@ -55,12 +55,30 @@ impl BuildContext {
 /// ビルド手順。
 #[derive(Debug)]
 pub enum Recipe {
-    /// 生シェルスクリプト（`build_script()` の逃げ道）。
-    Shell(&'static str),
+    /// 生シェルスクリプト（`build_script()` の逃げ道。ctx 分岐のため
+    /// 動的構築も可能）。
+    Shell(std::borrow::Cow<'static, str>),
     /// ビルド不要（build-env）。
     Noop,
     /// 型付きステップ列。
     Steps(Steps),
+}
+
+/// C の -std 指定（`Env::Autotools` のプリリュードが付与）。
+#[derive(Clone, Copy, Debug)]
+pub enum Std {
+    Gnu17,
+    /// flex の gnulib 生成物のように K&R 宣言を含むもの。
+    Gnu11,
+}
+
+impl Std {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Std::Gnu17 => "gnu17",
+            Std::Gnu11 => "gnu11",
+        }
+    }
 }
 
 /// 型付きステップ列 + プリリュード。
@@ -68,7 +86,10 @@ pub enum Recipe {
 pub struct Steps {
     /// フラグ/env プリリュード。
     pub env: Env,
-    /// `sysroot_env.sh`（`--sysroot` / `-idirafter` 検出）を付与するか。
+    /// `CFLAGS` に付与する `-std`（`Env::Autotools` のみ有効）。
+    pub std: Std,
+    /// `--sysroot` / `-idirafter` を付与するか。実際のパス検出は
+    /// マウント情報を持つ `wrap_script` 側で行う。
     pub sysroot: bool,
     /// ビルドディレクトリの立て方。
     pub workdir: Workdir,
@@ -76,21 +97,27 @@ pub struct Steps {
 }
 
 impl Steps {
-    pub fn new(env: Env) -> Self {
+    pub const fn new(env: Env) -> Self {
         Self {
             env,
+            std: Std::Gnu17,
             sysroot: true,
             workdir: Workdir::Build,
             steps: Vec::new(),
         }
     }
 
-    pub fn sysroot(mut self, on: bool) -> Self {
+    pub const fn std(mut self, std: Std) -> Self {
+        self.std = std;
+        self
+    }
+
+    pub const fn sysroot(mut self, on: bool) -> Self {
         self.sysroot = on;
         self
     }
 
-    pub fn workdir(mut self, workdir: Workdir) -> Self {
+    pub const fn workdir(mut self, workdir: Workdir) -> Self {
         self.workdir = workdir;
         self
     }
@@ -104,10 +131,11 @@ impl Steps {
 /// env プリリュード。
 #[derive(Clone, Copy, Debug)]
 pub enum Env {
-    /// `autotools_env.sh` — `sanitize_flags`（LTO剥がし）+ `-std=gnu17`
-    /// + gnulib cache 変数 + `autotools_configure`（config.log tail 付き）。
+    /// `-std` 付与 + クロス時の gnulib cache 変数 +
+    /// `autotools_configure`（config.log tail 付き）。LTO/Werror 剥がしは
+    /// host 側の `Flag::sanitized` で行う。
     Autotools,
-    /// `lto_env.sh` — LTO を保持する最小 env + `autotools_configure`。
+    /// LTO を保持する最小 env + `autotools_configure`。
     Lto,
     /// `set -euxo pipefail` のみ。
     None,
@@ -202,25 +230,90 @@ impl Recipe {
     }
 
     /// レンダリングしたシェルスクリプト。
-    pub fn render(&self) -> String {
+    pub fn render(&self, ctx: &BuildContext) -> String {
         match self {
-            Recipe::Shell(script) => (*script).to_owned(),
+            Recipe::Shell(script) => script.to_string(),
             Recipe::Noop => "true".to_owned(),
-            Recipe::Steps(steps) => steps.render(),
+            Recipe::Steps(steps) => steps.render(ctx),
         }
     }
 }
 
+/// クロスビルド時の `CC_FOR_BUILD` 系（autotools_env.sh/lto_env.sh 共通）。
+const CROSS_BUILD_CC: &str = r#"export CC_FOR_BUILD="${HOST_TRIPLE}-gcc"
+export CXX_FOR_BUILD="${HOST_TRIPLE}-g++"
+export BUILD_CC="$CC_FOR_BUILD"
+"#;
+
+/// クロスビルド時の gnulib/autoconf 推測値キャッシュ（autotools_env.sh 由来）。
+/// Autoconf 2.72 は AC_RUN_IFELSE の cross 分岐が空だとエラーにする。
+const CROSS_CACHE: &str = r#"export gl_cv_func_strcasecmp_works=yes
+export gl_cv_func_strncasecmp_works=yes
+export gl_cv_func_memchr_works=yes
+export gl_cv_func_working_mktime=yes
+export gl_cv_func_working_utimes=yes
+export gl_cv_func_getcwd_null=yes
+export gl_cv_func_getcwd_path_max=yes
+export gl_cv_func_getcwd_abort_bug=no
+export gl_cv_func_chown_follows_symlink=yes
+export gl_cv_func_fchownat_nofollow_works=yes
+export gl_cv_func_lstat_dereferences_slashed_symlink=yes
+export gl_cv_func_stat_file_slash=yes
+export gl_cv_func_strerror_r_works=yes
+export gl_cv_func_strerror_0_works=yes
+export gl_cv_func_strtod_works=yes
+export gl_cv_func_nanosleep=yes
+export gl_cv_func_printf_positions=yes
+export gl_cv_func_printf_infinite=yes
+export gl_cv_func_printf_enomem=yes
+export gl_cv_func_malloc_0_nonnull=yes
+export gl_cv_func_malloc_posix=yes
+export ac_cv_func_malloc_0_nonnull=yes
+export ac_cv_func_realloc_0_nonnull=yes
+export ac_cv_func_memcmp_working=yes
+"#;
+
 impl Steps {
-    fn render(&self) -> String {
+    fn render(&self, ctx: &BuildContext) -> String {
         let mut out = String::new();
         match self.env {
-            Env::Autotools => out.push_str(include_str!("definition/autotools_env.sh")),
-            Env::Lto => out.push_str(include_str!("definition/lto_env.sh")),
+            Env::Autotools => {
+                out.push_str("set -euxo pipefail\nexport FORCE_UNSAFE_CONFIGURE=1\n");
+                let _ = writeln!(
+                    out,
+                    "export CFLAGS=\"${{CFLAGS:-}} -std={}\"",
+                    self.std.as_str()
+                );
+                if ctx.cross() {
+                    out.push_str(CROSS_BUILD_CC);
+                    out.push_str(CROSS_CACHE);
+                }
+                out.push_str(
+                    r#"autotools_configure() {
+  if ! "$SOURCE"/configure --build="$HOST_TRIPLE" --host="${PACKAGE_HOST:-$TRIPLE}" "$@"; then
+    if [ -f config.log ]; then
+      echo "===== config.log (last 80 lines) ====="
+      tail -n 80 config.log
+    fi
+    return 1
+  fi
+}
+"#,
+                );
+            }
+            Env::Lto => {
+                out.push_str("set -euxo pipefail\nexport FORCE_UNSAFE_CONFIGURE=1\n");
+                if ctx.cross() {
+                    out.push_str(CROSS_BUILD_CC);
+                }
+                out.push_str(
+                    r#"autotools_configure() {
+  "$SOURCE"/configure --build="$HOST_TRIPLE" --host="${PACKAGE_HOST:-$TRIPLE}" "$@"
+}
+"#,
+                );
+            }
             Env::None => out.push_str("set -euxo pipefail\n"),
-        }
-        if self.sysroot {
-            out.push_str(include_str!("definition/sysroot_env.sh"));
         }
         match self.workdir {
             Workdir::Build => out.push_str("mkdir -p \"$BUILD\"\ncd \"$BUILD\"\n"),
@@ -290,12 +383,19 @@ impl Step {
 mod tests {
     use super::*;
 
+    fn ctx() -> BuildContext {
+        BuildContext::of(None, crate::target::Target::BUILD_ENV)
+    }
+
     #[test]
     fn autotools_renders_prelude_configure_make_install() {
         let recipe = Recipe::autotools(&["--prefix=/usr", "--disable-acl"]);
-        let script = recipe.render();
-        assert!(script.contains("sanitize_flags"), "{script}");
-        assert!(script.contains("--sysroot=$SYSROOT"), "{script}");
+        let script = recipe.render(&ctx());
+        // LTO/Werror 剥がしは host 側の Flag::sanitized が担う
+        assert!(!script.contains("sanitize_flags"), "{script}");
+        assert!(script.contains("-std=gnu17"), "{script}");
+        // sysroot 検出は wrap_script 側（マウント情報が必要なため）
+        assert!(!script.contains("--sysroot=$SYSROOT"), "{script}");
         assert!(
             script.contains("autotools_configure --prefix=/usr --disable-acl"),
             "{script}"
@@ -307,7 +407,7 @@ mod tests {
     #[test]
     fn lto_env_keeps_lto_flags() {
         let recipe = Recipe::autotools_env(Env::Lto, &["--prefix=/usr"]);
-        let script = recipe.render();
+        let script = recipe.render(&ctx());
         assert!(!script.contains("sanitize_flags"), "{script}");
         assert!(script.contains("autotools_configure"), "{script}");
     }
@@ -320,7 +420,7 @@ mod tests {
                 .step(Step::make(&["PREFIX=/usr"]))
                 .step(Step::make_install(&["PREFIX=/usr"])),
         );
-        let script = recipe.render();
+        let script = recipe.render(&ctx());
         assert!(
             script.contains("cp -a \"$SOURCE\"/. \"$BUILD\"/"),
             "{script}"
@@ -348,7 +448,7 @@ mod tests {
                     force: false,
                 }),
         );
-        let script = recipe.render();
+        let script = recipe.render(&ctx());
         assert_eq!(
             script,
             "set -euxo pipefail\n\

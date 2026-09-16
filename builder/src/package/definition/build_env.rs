@@ -3,7 +3,7 @@ use crate::package::recipe::{BuildContext, Recipe};
 use crate::package::{Dependency, Package, Role, Source};
 use crate::target::Target;
 
-fn dep(name: &'static str, version: &'static str) -> Dependency {
+const fn dep(name: &'static str, version: &'static str) -> Dependency {
     Dependency { name, version }
 }
 

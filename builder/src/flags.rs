@@ -29,6 +29,15 @@ pub enum Ldflag {
     WerrorStrictAliasing,
 }
 
+/// PGO（プロファイルガイド最適化）ポリシー。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pgo {
+    /// PGO なし。
+    None,
+    /// ネイティブビルド時のみ PGO（クロスではプロファイル実行できない）。
+    Native,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Flag {
     cflags: Vec<Cflag>,
@@ -71,7 +80,7 @@ pub fn tool_flags(target: Target) -> Flag {
 }
 
 impl Flag {
-    pub fn new(cflags: Vec<Cflag>, ldflags: Vec<Ldflag>) -> Self {
+    pub const fn new(cflags: Vec<Cflag>, ldflags: Vec<Ldflag>) -> Self {
         Self { cflags, ldflags }
     }
 
@@ -81,6 +90,34 @@ impl Flag {
 
     pub fn ldflags(&self) -> &[Ldflag] {
         &self.ldflags
+    }
+
+    /// `sanitize_flags` 相当: `-flto*` と `-Werror=*` に相当する
+    /// Lto/Werror* バリアントを落とす（`-fuse-ld=mold` は保持）。
+    /// autotools 系パッケージが LTO で壊れるため host 側で剥がす。
+    pub fn sanitized(&self) -> Self {
+        const fn keep_c(flag: &Cflag) -> bool {
+            !matches!(
+                flag,
+                Cflag::Lto
+                    | Cflag::WerrorOdr
+                    | Cflag::WerrorLtoTypeMismatch
+                    | Cflag::WerrorStrictAliasing
+            )
+        }
+        const fn keep_l(flag: &Ldflag) -> bool {
+            !matches!(
+                flag,
+                Ldflag::Lto
+                    | Ldflag::WerrorOdr
+                    | Ldflag::WerrorLtoTypeMismatch
+                    | Ldflag::WerrorStrictAliasing
+            )
+        }
+        Self::new(
+            self.cflags.iter().copied().filter(keep_c).collect(),
+            self.ldflags.iter().copied().filter(keep_l).collect(),
+        )
     }
 
     pub fn env(&self) -> Vec<(&'static str, String)> {

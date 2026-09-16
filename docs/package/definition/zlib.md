@@ -54,4 +54,6 @@ openssl からは依存されません。
 | `flags()` の Cflag | openssl と同等だが `FormatSecurity` は付与しない | 書式付き出力処理がほぼ存在しないため |
 | `flags()` の Ldflag | openssl と同等 | 依存関係グラフの末端ライブラリであるため |
 | LTO | 適用する | builder のフラグ指定による |
-| PGO | 適用しない | プロファイル手順を設けていないため |
+| PGO | ネイティブビルドのみ適用 | `make` の `CFLAGS` / `LDFLAGS` に `-fprofile-generate` / `-fprofile-use` を付与 |
+
+PGO は生成バイナリを実行可能なネイティブビルド時のみ適用します（`Pgo::Native`）。クロスビルドではプロファイル採取を実行できないため、`recipe(ctx)` が `ctx.cross()` で分岐して素の `make`（`CHOST=$TRIPLE` 付き `configure`）に切り替えます。ネイティブでは `-fprofile-generate` でビルド後、`minigzip`（`echo 'pgo' | ./minigzip | ./minigzip -d`）と `example` をワークロードとして実行し、`make distclean` のうえ `-fprofile-use` で再ビルドします。

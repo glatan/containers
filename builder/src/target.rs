@@ -87,11 +87,11 @@ impl Target {
     pub const BUILD_ENV: Self = Self::Amd64(Amd64Variant::V4);
     pub const HOST_GNU_TRIPLE: &'static str = "x86_64-linux-gnu";
 
-    pub fn host_gnu_cross() -> &'static str {
+    pub const fn host_gnu_cross() -> &'static str {
         "x86_64-linux-gnu-"
     }
 
-    pub fn gnu_triple(self) -> &'static str {
+    pub const fn gnu_triple(self) -> &'static str {
         match self {
             Self::Amd64(_) => "x86_64-linux-gnu",
             Self::Arm64(_) => "aarch64-linux-gnu",
@@ -101,7 +101,7 @@ impl Target {
         }
     }
 
-    pub fn glibc_package(self) -> &'static str {
+    pub const fn glibc_package(self) -> &'static str {
         match self {
             Self::Amd64(_) => "x86_64-linux-gnu-glibc",
             Self::Arm64(_) => "aarch64-linux-gnu-glibc",
@@ -111,7 +111,7 @@ impl Target {
         }
     }
 
-    pub fn gcc_package(self) -> &'static str {
+    pub const fn gcc_package(self) -> &'static str {
         match self {
             Self::Amd64(_) => "x86_64-linux-gnu-gcc",
             Self::Arm64(_) => "aarch64-linux-gnu-gcc",
@@ -121,7 +121,7 @@ impl Target {
         }
     }
 
-    pub fn baseline(self) -> Self {
+    pub const fn baseline(self) -> Self {
         match self {
             Self::Amd64(_) => Self::Amd64(Amd64Variant::V1),
             Self::Arm64(_) => Self::Arm64(Arm64Variant::V8),
@@ -132,7 +132,7 @@ impl Target {
     }
 
     /// 実装順の切り出し（HOST → 各 arch の基底 → 残り）。`Package::supports` とは独立。
-    pub fn is_phase4(self) -> bool {
+    pub const fn is_phase4(self) -> bool {
         matches!(
             self,
             Self::Amd64(Amd64Variant::V1)
@@ -142,7 +142,7 @@ impl Target {
         )
     }
 
-    pub fn architecture(self) -> &'static str {
+    pub const fn architecture(self) -> &'static str {
         match self {
             Self::Amd64(_) => "amd64",
             Self::Arm64(_) => "arm64",
@@ -152,7 +152,7 @@ impl Target {
         }
     }
 
-    pub fn variant(self) -> &'static str {
+    pub const fn variant(self) -> &'static str {
         match self {
             Self::Amd64(Amd64Variant::V1) => "v1",
             Self::Amd64(Amd64Variant::V2) => "v2",
@@ -200,7 +200,7 @@ impl Target {
             .find(|target| target.architecture() == architecture && target.variant() == variant)
     }
 
-    pub fn tuple(self) -> (&'static str, &'static str, &'static str) {
+    pub const fn tuple(self) -> (&'static str, &'static str, &'static str) {
         match self {
             Self::Amd64(_) => ("x86_64", "", "linux-gnu"),
             Self::Arm64(_) => ("aarch64", "", "linux-gnu"),
@@ -223,7 +223,7 @@ impl Target {
         format!("{}-", self.format_tuple())
     }
 
-    pub fn march(self) -> &'static str {
+    pub const fn march(self) -> &'static str {
         match self {
             Self::Amd64(Amd64Variant::V1) => "x86-64",
             Self::Amd64(Amd64Variant::V2) => "x86-64-v2",
