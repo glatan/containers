@@ -7,14 +7,14 @@ use crate::util::timestamp;
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Document {
-    pub(crate) spdx_version: &'static str,
-    pub(crate) data_license: &'static str,
+    spdx_version: &'static str,
+    data_license: &'static str,
     #[serde(rename = "SPDXID")]
-    pub(crate) spdx_id: &'static str,
-    pub(crate) name: String,
-    pub(crate) document_namespace: String,
-    pub(crate) creation_info: CreationInfo,
-    pub(crate) packages: Vec<SpdxPackage>,
+    spdx_id: &'static str,
+    name: String,
+    document_namespace: String,
+    creation_info: CreationInfo,
+    packages: Vec<SpdxPackage>,
 }
 
 #[derive(Serialize)]
