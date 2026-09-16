@@ -23,6 +23,17 @@ pub enum ImageCommand {
         )]
         zstd_level: Option<u8>,
     },
+    Compose {
+        package: String,
+        #[arg(long, conflicts_with = "zstd_level")]
+        publish: bool,
+        #[arg(
+            long,
+            value_parser = clap::value_parser!(u8).range(1..=22),
+            conflicts_with = "publish"
+        )]
+        zstd_level: Option<u8>,
+    },
     Validate {
         package: Option<String>,
         #[arg(long)]
@@ -61,6 +72,20 @@ pub fn run(command: ImageCommand) -> Result<()> {
                     output.display()
                 );
             }
+            Ok(())
+        }
+        ImageCommand::Compose {
+            package,
+            publish,
+            zstd_level,
+        } => {
+            let level = resolve_zstd_level(publish, zstd_level)?;
+            let defined = package::find_image(&package)?;
+            let (output, tag, skipped) = image::compose(defined, image::COMPOSE_PLATFORM, level)?;
+            for line in skipped {
+                println!("{line}");
+            }
+            println!("{tag} を合成しました (zstd {level}): {}", output.display());
             Ok(())
         }
         ImageCommand::Validate { package, all } => {

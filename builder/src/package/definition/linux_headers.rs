@@ -1,5 +1,6 @@
-use crate::flags::Var;
-use crate::package::{Dependency, Package, Source};
+use crate::flags::Flag;
+use crate::package::{Dependency, Package, Role, Source};
+use crate::target::Target;
 
 pub struct LinuxHeaders;
 
@@ -9,7 +10,7 @@ impl Package for LinuxHeaders {
     }
 
     fn version(&self) -> &'static str {
-        "6.12.109"
+        "6.18.33"
     }
 
     fn license(&self) -> &'static str {
@@ -20,42 +21,47 @@ impl Package for LinuxHeaders {
         true
     }
 
-    fn network(&self) -> bool {
-        true
+    fn role(&self) -> Role {
+        Role::LinuxHeaders
     }
 
     fn source(&self) -> Source {
         Source {
-            url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.109.tar.xz",
-            sha3_512: "e8a40f7302e8c93710001876941c49744e8120fbb5094c7fa1b08cfc360e2fa61c73b3d1b144b0fb4933ae5286d5b833377535567547a6167dac56a081c474f2",
-            blake3: "9abb3b5ba08f97c241bb995571e927fc13e6b2c946081f23c9a28e231aef576bf9d0d2e770b963129b59efc9ac4ce950f2909a44f718f43e3fa033b3adafa069",
-            subdir: "linux-6.12.109",
+            url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.33.tar.xz",
+            sha3_512: "ad87ec123afe83db49e304a4f32d1c529d525f2e55d8c78de208cff0de2b1306d1eaa35d0b49a3738ffa170977e252e1e85fa58654710f11de9f4267947258ca",
+            blake3: "00d95e1098670a56ee94558692f1e63e0ac3d2113c9e46568e2da9423a37ad8855a530aba3e6f67bc43beacb5edd7a54834cb0f946112630143b7b7bd930f707",
+            subdir: "linux-6.18.33",
         }
     }
 
-    fn dependencies(&self) -> &'static [Dependency] {
-        &[]
+    fn dependencies(&self, _target: Target) -> Vec<Dependency> {
+        vec![]
     }
 
-    fn build_dependencies(&self) -> &'static [Dependency] {
-        &[]
+    fn build_dependencies(&self, _target: Target) -> Vec<Dependency> {
+        vec![]
     }
 
-    fn flags(&self) -> &'static [Var] {
-        &[]
+    fn flags(&self, _target: Target) -> Flag {
+        Flag::new(vec![], vec![])
     }
 
     fn build_script(&self) -> &'static str {
         r#"set -euxo pipefail
-case "$ARCH" in
-  amd64) KARCH=x86_64 ;;
-  arm64) KARCH=arm64 ;;
-  riscv64) KARCH=riscv ;;
-  *) echo "未対応の architecture です: $ARCH"; exit 1 ;;
-esac
-pacman -Sy --noconfirm rsync
-mkdir -p "$BUILD"
-make -C "$SOURCE" O="$BUILD" headers_install ARCH="$KARCH" INSTALL_HDR_PATH="$OUT"/usr
+install_uapi() {
+  local karch="$1" dest="$2"
+  local o="$BUILD/$karch"
+  mkdir -p "$o" "$dest"
+  make -C "$SOURCE" O="$o" ARCH="$karch" headers
+  cp -a "$o/usr/include/." "$dest/"
+}
+install_uapi x86_64 "$OUT/usr/x86_64-linux-gnu/include"
+install_uapi arm64 "$OUT/usr/aarch64-linux-gnu/include"
+install_uapi riscv "$OUT/usr/riscv64-linux-gnu/include"
+install_uapi powerpc "$OUT/usr/powerpc64le-linux-gnu/include"
+install_uapi s390 "$OUT/usr/s390x-linux-gnu/include"
+mkdir -p "$OUT/usr/include"
+cp -a "$OUT/usr/${HOST_TRIPLE}/include/." "$OUT/usr/include/"
 "#
     }
 }

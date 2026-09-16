@@ -1,0 +1,82 @@
+# パッケージ定義
+
+`PACKAGES` に載るすべてのパッケージの仕様文書です。1 パッケージにつき 1 ファイルです。実装は [`builder/src/package/definition/`](../../../builder/src/package/definition/) です。プレフィックス付きツールチェーンのステージ順と共通ソースは [toolchain.md](../toolchain.md)、Host tools の共通前処理は [host-tools.md](../host-tools.md) です。公開対象の分類は [image/packages.md](../../image/packages.md) です。
+
+並びは `PACKAGES` 登録順です。
+
+| パッケージ名 | バージョン | 文書 |
+|-|-|-|
+| ca-certificates | 2026.07.22 | [ca-certificates.md](./ca-certificates.md) |
+| linux-headers | 6.18.33 | [linux-headers.md](./linux-headers.md) |
+| openssl | 4.0.2 | [openssl.md](./openssl.md) |
+| zlib | 1.3.2 | [zlib.md](./zlib.md) |
+| zlib-ng | 2.3.3 | [zlib-ng.md](./zlib-ng.md) |
+| x86_64-linux-gnu-binutils | 2.47 | [x86_64-linux-gnu-binutils.md](./x86_64-linux-gnu-binutils.md) |
+| x86_64-linux-gnu-gcc-stage1 | 16.2.0 | [x86_64-linux-gnu-gcc-stage1.md](./x86_64-linux-gnu-gcc-stage1.md) |
+| x86_64-linux-gnu-glibc-headers | 2.44 | [x86_64-linux-gnu-glibc-headers.md](./x86_64-linux-gnu-glibc-headers.md) |
+| x86_64-linux-gnu-gcc-stage2 | 16.2.0 | [x86_64-linux-gnu-gcc-stage2.md](./x86_64-linux-gnu-gcc-stage2.md) |
+| x86_64-linux-gnu-glibc | 2.44 | [x86_64-linux-gnu-glibc.md](./x86_64-linux-gnu-glibc.md) |
+| x86_64-linux-gnu-gcc | 16.2.0 | [x86_64-linux-gnu-gcc.md](./x86_64-linux-gnu-gcc.md) |
+| aarch64-linux-gnu-binutils | 2.47 | [aarch64-linux-gnu-binutils.md](./aarch64-linux-gnu-binutils.md) |
+| aarch64-linux-gnu-gcc-stage1 | 16.2.0 | [aarch64-linux-gnu-gcc-stage1.md](./aarch64-linux-gnu-gcc-stage1.md) |
+| aarch64-linux-gnu-glibc-headers | 2.44 | [aarch64-linux-gnu-glibc-headers.md](./aarch64-linux-gnu-glibc-headers.md) |
+| aarch64-linux-gnu-gcc-stage2 | 16.2.0 | [aarch64-linux-gnu-gcc-stage2.md](./aarch64-linux-gnu-gcc-stage2.md) |
+| aarch64-linux-gnu-glibc | 2.44 | [aarch64-linux-gnu-glibc.md](./aarch64-linux-gnu-glibc.md) |
+| aarch64-linux-gnu-gcc | 16.2.0 | [aarch64-linux-gnu-gcc.md](./aarch64-linux-gnu-gcc.md) |
+| riscv64-linux-gnu-binutils | 2.47 | [riscv64-linux-gnu-binutils.md](./riscv64-linux-gnu-binutils.md) |
+| riscv64-linux-gnu-gcc-stage1 | 16.2.0 | [riscv64-linux-gnu-gcc-stage1.md](./riscv64-linux-gnu-gcc-stage1.md) |
+| riscv64-linux-gnu-glibc-headers | 2.44 | [riscv64-linux-gnu-glibc-headers.md](./riscv64-linux-gnu-glibc-headers.md) |
+| riscv64-linux-gnu-gcc-stage2 | 16.2.0 | [riscv64-linux-gnu-gcc-stage2.md](./riscv64-linux-gnu-gcc-stage2.md) |
+| riscv64-linux-gnu-glibc | 2.44 | [riscv64-linux-gnu-glibc.md](./riscv64-linux-gnu-glibc.md) |
+| riscv64-linux-gnu-gcc | 16.2.0 | [riscv64-linux-gnu-gcc.md](./riscv64-linux-gnu-gcc.md) |
+| powerpc64le-linux-gnu-binutils | 2.47 | [powerpc64le-linux-gnu-binutils.md](./powerpc64le-linux-gnu-binutils.md) |
+| powerpc64le-linux-gnu-gcc-stage1 | 16.2.0 | [powerpc64le-linux-gnu-gcc-stage1.md](./powerpc64le-linux-gnu-gcc-stage1.md) |
+| powerpc64le-linux-gnu-glibc-headers | 2.44 | [powerpc64le-linux-gnu-glibc-headers.md](./powerpc64le-linux-gnu-glibc-headers.md) |
+| powerpc64le-linux-gnu-gcc-stage2 | 16.2.0 | [powerpc64le-linux-gnu-gcc-stage2.md](./powerpc64le-linux-gnu-gcc-stage2.md) |
+| powerpc64le-linux-gnu-glibc | 2.44 | [powerpc64le-linux-gnu-glibc.md](./powerpc64le-linux-gnu-glibc.md) |
+| powerpc64le-linux-gnu-gcc | 16.2.0 | [powerpc64le-linux-gnu-gcc.md](./powerpc64le-linux-gnu-gcc.md) |
+| s390x-linux-gnu-binutils | 2.47 | [s390x-linux-gnu-binutils.md](./s390x-linux-gnu-binutils.md) |
+| s390x-linux-gnu-gcc-stage1 | 16.2.0 | [s390x-linux-gnu-gcc-stage1.md](./s390x-linux-gnu-gcc-stage1.md) |
+| s390x-linux-gnu-glibc-headers | 2.44 | [s390x-linux-gnu-glibc-headers.md](./s390x-linux-gnu-glibc-headers.md) |
+| s390x-linux-gnu-gcc-stage2 | 16.2.0 | [s390x-linux-gnu-gcc-stage2.md](./s390x-linux-gnu-gcc-stage2.md) |
+| s390x-linux-gnu-glibc | 2.44 | [s390x-linux-gnu-glibc.md](./s390x-linux-gnu-glibc.md) |
+| s390x-linux-gnu-gcc | 16.2.0 | [s390x-linux-gnu-gcc.md](./s390x-linux-gnu-gcc.md) |
+| gmp | 6.3.0 | [gmp.md](./gmp.md) |
+| mpfr | 4.2.2 | [mpfr.md](./mpfr.md) |
+| mpc | 1.4.1 | [mpc.md](./mpc.md) |
+| isl | 0.26 | [isl.md](./isl.md) |
+| zstd | 1.5.7 | [zstd.md](./zstd.md) |
+| mold | 2.42.1 | [mold.md](./mold.md) |
+| libffi | 3.8.0 | [libffi.md](./libffi.md) |
+| pcre2 | 10.48 | [pcre2.md](./pcre2.md) |
+| ncurses | 6.6 | [ncurses.md](./ncurses.md) |
+| readline | 8.3 | [readline.md](./readline.md) |
+| expat | 2.8.4 | [expat.md](./expat.md) |
+| sqlite | 3.53.4 | [sqlite.md](./sqlite.md) |
+| libxcrypt | 4.5.2 | [libxcrypt.md](./libxcrypt.md) |
+| glib | 2.90.0 | [glib.md](./glib.md) |
+| bash | 5.3 | [bash.md](./bash.md) |
+| coreutils | 9.12 | [coreutils.md](./coreutils.md) |
+| xz | 5.8.4 | [xz.md](./xz.md) |
+| bzip2 | 1.0.8 | [bzip2.md](./bzip2.md) |
+| flex | 2.6.4 | [flex.md](./flex.md) |
+| perl | 5.42.3 | [perl.md](./perl.md) |
+| pkgconf | 2.5.1 | [pkgconf.md](./pkgconf.md) |
+| ninja | 1.13.2 | [ninja.md](./ninja.md) |
+| meson | 1.12.0 | [meson.md](./meson.md) |
+| python | 3.14.7 | [python.md](./python.md) |
+| cmake | 4.4.3 | [cmake.md](./cmake.md) |
+| make | 4.4.1 | [make.md](./make.md) |
+| m4 | 1.4.21 | [m4.md](./m4.md) |
+| bison | 3.8.2 | [bison.md](./bison.md) |
+| findutils | 4.11.0 | [findutils.md](./findutils.md) |
+| sed | 4.10 | [sed.md](./sed.md) |
+| grep | 3.12 | [grep.md](./grep.md) |
+| gawk | 5.4.1 | [gawk.md](./gawk.md) |
+| diffutils | 3.12 | [diffutils.md](./diffutils.md) |
+| patch | 2.8 | [patch.md](./patch.md) |
+| tar | 1.35 | [tar.md](./tar.md) |
+| gzip | 1.14 | [gzip.md](./gzip.md) |
+| texinfo | 7.3 | [texinfo.md](./texinfo.md) |
+| qemu | 11.1.1 | [qemu.md](./qemu.md) |
+| build-env | 1 | [build-env.md](./build-env.md) |

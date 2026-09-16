@@ -18,7 +18,12 @@ pub fn check(package: &dyn Package) -> Result<()> {
             continue;
         }
         validated += 1;
-        check_needed(package, &collect_basenames(&dir)?, &needed_in(&dir)?)?;
+        check_needed(
+            package,
+            target,
+            &collect_basenames(&dir)?,
+            &needed_in(&dir)?,
+        )?;
     }
     if validated == 0 {
         return Err(Error::message("パッケージがありません"));
@@ -28,6 +33,7 @@ pub fn check(package: &dyn Package) -> Result<()> {
 
 pub(crate) fn check_needed(
     package: &dyn Package,
+    target: Target,
     files: &BTreeSet<String>,
     needed: &BTreeSet<String>,
 ) -> Result<()> {
@@ -35,7 +41,24 @@ pub(crate) fn check_needed(
         if files.contains(soname.as_str()) {
             continue;
         }
-        let Some(dependency) = soname_to_package(soname) else {
+        if is_glibc_soname(soname) {
+            if provides_glibc(package) {
+                return Err(Error::message(format!(
+                    "{} は {} を提供するべきですが、パッケージに見つかりません",
+                    package.name(),
+                    soname
+                )));
+            }
+            if !declares_glibc(package, target) {
+                return Err(Error::message(format!(
+                    "{} は {} に依存していますが、依存として宣言されていません",
+                    package.name(),
+                    soname
+                )));
+            }
+            continue;
+        }
+        let Some(dependency) = soname_to_package(soname, target) else {
             return Err(Error::message(format!(
                 "未知の動的依存: {soname} ({})",
                 package.name()
@@ -48,7 +71,7 @@ pub(crate) fn check_needed(
                 soname
             )));
         }
-        if !package.depends_on(dependency) {
+        if !package.depends_on(target, dependency) {
             return Err(Error::message(format!(
                 "{} は {} に依存していますが、依存として宣言されていません",
                 package.name(),
@@ -57,6 +80,23 @@ pub(crate) fn check_needed(
         }
     }
     Ok(())
+}
+
+fn provides_glibc(package: &dyn Package) -> bool {
+    matches!(
+        package.role(),
+        crate::package::Role::Toolchain {
+            stage: crate::package::Stage::Glibc,
+            ..
+        }
+    )
+}
+
+fn declares_glibc(package: &dyn Package, target: Target) -> bool {
+    package
+        .dependencies(target)
+        .iter()
+        .any(|dependency| dependency.name.ends_with("-linux-gnu-glibc"))
 }
 
 fn collect_basenames(dir: &Path) -> Result<BTreeSet<String>> {
@@ -133,9 +173,9 @@ pub(crate) fn parse_needed(output: &str) -> Vec<String> {
         .collect()
 }
 
-pub(crate) fn soname_to_package(soname: &str) -> Option<&'static str> {
+pub(crate) fn soname_to_package(soname: &str, target: Target) -> Option<&'static str> {
     if is_glibc_soname(soname) {
-        return Some("glibc");
+        return Some(target.glibc_package());
     }
     if soname.starts_with("libssl.so") || soname.starts_with("libcrypto.so") {
         return Some("openssl");
@@ -145,6 +185,63 @@ pub(crate) fn soname_to_package(soname: &str) -> Option<&'static str> {
     }
     if soname.starts_with("libz-ng.so") {
         return Some("zlib-ng");
+    }
+    if soname.starts_with("libgmp.so") {
+        return Some("gmp");
+    }
+    if soname.starts_with("libmpfr.so") {
+        return Some("mpfr");
+    }
+    if soname.starts_with("libmpc.so") {
+        return Some("mpc");
+    }
+    if soname.starts_with("libisl.so") {
+        return Some("isl");
+    }
+    if soname.starts_with("libzstd.so") {
+        return Some("zstd");
+    }
+    if soname.starts_with("libffi.so") {
+        return Some("libffi");
+    }
+    if soname.starts_with("libpcre2-") {
+        return Some("pcre2");
+    }
+    if soname.starts_with("libncurses") || soname.starts_with("libtinfo") {
+        return Some("ncurses");
+    }
+    if soname.starts_with("libreadline.so") {
+        return Some("readline");
+    }
+    if soname.starts_with("libglib-") || soname.starts_with("libgobject-") {
+        return Some("glib");
+    }
+    if soname.starts_with("libstdc++.so")
+        || soname.starts_with("libgcc_s.so")
+        || soname.starts_with("libatomic.so")
+        || soname.starts_with("libgomp.so")
+        || soname.starts_with("libgfortran.so")
+        || soname.starts_with("libquadmath.so")
+    {
+        return Some(target.gcc_package());
+    }
+    if soname.starts_with("libcrypt.so")
+        || soname.starts_with("libowcrypt.so")
+        || soname.starts_with("libxcrypt.so")
+    {
+        return Some("libxcrypt");
+    }
+    if soname.starts_with("liblzma.so") {
+        return Some("xz");
+    }
+    if soname.starts_with("libbz2.so") {
+        return Some("bzip2");
+    }
+    if soname.starts_with("libexpat.so") {
+        return Some("expat");
+    }
+    if soname.starts_with("libsqlite3.so") {
+        return Some("sqlite");
     }
     None
 }
@@ -165,7 +262,6 @@ fn is_glibc_soname(soname: &str) -> bool {
         "libresolv.so",
         "libnsl.so",
         "libanl.so",
-        "libcrypt.so",
         "libthread_db.so",
         "libBrokenLocale.so",
         "libcidn.so",
@@ -185,6 +281,7 @@ mod tests {
         name: &'static str,
         dependencies: &'static [Dependency],
         build_dependencies: &'static [Dependency],
+        role: crate::package::Role,
     }
 
     impl Package for Fake {
@@ -197,12 +294,6 @@ mod tests {
         fn license(&self) -> &'static str {
             "MIT"
         }
-        fn build_only(&self) -> bool {
-            false
-        }
-        fn network(&self) -> bool {
-            false
-        }
         fn source(&self) -> Source {
             Source {
                 url: "",
@@ -211,17 +302,20 @@ mod tests {
                 subdir: "",
             }
         }
-        fn dependencies(&self) -> &'static [Dependency] {
-            self.dependencies
+        fn dependencies(&self, _target: crate::target::Target) -> Vec<Dependency> {
+            self.dependencies.to_vec()
         }
-        fn build_dependencies(&self) -> &'static [Dependency] {
-            self.build_dependencies
+        fn build_dependencies(&self, _target: crate::target::Target) -> Vec<Dependency> {
+            self.build_dependencies.to_vec()
         }
         fn build_script(&self) -> &'static str {
             ""
         }
-        fn flags(&self) -> &'static [crate::flags::Var] {
-            &[]
+        fn flags(&self, _target: crate::target::Target) -> crate::flags::Flag {
+            crate::flags::Flag::new(vec![], vec![])
+        }
+        fn role(&self) -> crate::package::Role {
+            self.role
         }
     }
 
@@ -244,15 +338,20 @@ mod tests {
     #[test]
     fn glibc_self_sonames_are_satisfied_by_symlink_names() {
         let glibc = Fake {
-            name: "glibc",
+            name: "x86_64-linux-gnu-glibc",
             dependencies: &[],
             build_dependencies: &[Dependency {
                 name: "linux-headers",
                 version: "1.0",
             }],
+            role: crate::package::Role::Toolchain {
+                triple: "x86_64-linux-gnu",
+                stage: crate::package::Stage::Glibc,
+            },
         };
         check_needed(
             &glibc,
+            crate::target::Target::BUILD_ENV,
             &BTreeSet::from([
                 "libc.so.6".to_string(),
                 "ld-linux-x86-64.so.2".to_string(),
@@ -266,11 +365,21 @@ mod tests {
     #[test]
     fn glibc_missing_own_soname_is_an_error() {
         let glibc = Fake {
-            name: "glibc",
+            name: "x86_64-linux-gnu-glibc",
             dependencies: &[],
             build_dependencies: &[],
+            role: crate::package::Role::Toolchain {
+                triple: "x86_64-linux-gnu",
+                stage: crate::package::Stage::Glibc,
+            },
         };
-        let error = check_needed(&glibc, &BTreeSet::new(), &needed(&["libc.so.6"])).unwrap_err();
+        let error = check_needed(
+            &glibc,
+            crate::target::Target::BUILD_ENV,
+            &BTreeSet::new(),
+            &needed(&["libc.so.6"]),
+        )
+        .unwrap_err();
         assert!(error.to_string().contains("提供するべき"));
     }
 
@@ -283,9 +392,11 @@ mod tests {
                 name: "linux-headers",
                 version: "1.0",
             }],
+            role: crate::package::Role::Package,
         };
         let error = check_needed(
             &openssl,
+            crate::target::Target::BUILD_ENV,
             &BTreeSet::new(),
             &needed(&["libc.so.6", "libnss_files.so.2"]),
         )
@@ -295,18 +406,37 @@ mod tests {
         let openssl = Fake {
             name: "openssl",
             dependencies: &[Dependency {
-                name: "glibc",
+                name: "x86_64-linux-gnu-glibc",
                 version: "1.0",
             }],
             build_dependencies: &[Dependency {
                 name: "linux-headers",
                 version: "1.0",
             }],
+            role: crate::package::Role::Package,
         };
         check_needed(
             &openssl,
+            crate::target::Target::BUILD_ENV,
             &BTreeSet::new(),
             &needed(&["libc.so.6", "libm.so.6"]),
+        )
+        .unwrap();
+
+        let bash = Fake {
+            name: "bash",
+            dependencies: &[Dependency {
+                name: "x86_64-linux-gnu-glibc",
+                version: "1.0",
+            }],
+            build_dependencies: &[],
+            role: crate::package::Role::Package,
+        };
+        check_needed(
+            &bash,
+            crate::target::Target::BUILD_ENV,
+            &BTreeSet::new(),
+            &needed(&["libc.so.6"]),
         )
         .unwrap();
     }
@@ -316,23 +446,47 @@ mod tests {
         let openssl = Fake {
             name: "openssl",
             dependencies: &[Dependency {
-                name: "glibc",
+                name: "x86_64-linux-gnu-glibc",
                 version: "1.0",
             }],
             build_dependencies: &[],
+            role: crate::package::Role::Package,
         };
-        let error =
-            check_needed(&openssl, &BTreeSet::new(), &needed(&["libfoo.so.1"])).unwrap_err();
+        let error = check_needed(
+            &openssl,
+            crate::target::Target::BUILD_ENV,
+            &BTreeSet::new(),
+            &needed(&["libfoo.so.1"]),
+        )
+        .unwrap_err();
         assert!(error.to_string().contains("未知の動的依存"));
     }
 
     #[test]
     fn maps_common_sonames() {
-        assert_eq!(soname_to_package("libm.so.6"), Some("glibc"));
-        assert_eq!(soname_to_package("libssl.so.3"), Some("openssl"));
-        assert_eq!(soname_to_package("libz.so.1"), Some("zlib"));
-        assert_eq!(soname_to_package("libz-ng.so.2"), Some("zlib-ng"));
-        assert_eq!(soname_to_package("libfoo.so.1"), None);
+        let target = crate::target::Target::BUILD_ENV;
+        assert_eq!(
+            soname_to_package("libm.so.6", target),
+            Some("x86_64-linux-gnu-glibc")
+        );
+        assert_eq!(soname_to_package("libssl.so.3", target), Some("openssl"));
+        assert_eq!(soname_to_package("libz.so.1", target), Some("zlib"));
+        assert_eq!(soname_to_package("libz-ng.so.2", target), Some("zlib-ng"));
+        assert_eq!(soname_to_package("libgmp.so.10", target), Some("gmp"));
+        assert_eq!(
+            soname_to_package("libstdc++.so.6", target),
+            Some("x86_64-linux-gnu-gcc")
+        );
+        assert_eq!(
+            soname_to_package("libatomic.so.1", target),
+            Some("x86_64-linux-gnu-gcc")
+        );
+        assert_eq!(
+            soname_to_package("libcrypt.so.1", target),
+            Some("libxcrypt")
+        );
+        assert_eq!(soname_to_package("liblzma.so.5", target), Some("xz"));
+        assert_eq!(soname_to_package("libfoo.so.1", target), None);
     }
 
     #[test]

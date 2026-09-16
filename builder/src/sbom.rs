@@ -7,14 +7,14 @@ use crate::util::timestamp;
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Document {
-    spdx_version: &'static str,
-    data_license: &'static str,
+    pub(crate) spdx_version: &'static str,
+    pub(crate) data_license: &'static str,
     #[serde(rename = "SPDXID")]
-    spdx_id: &'static str,
-    name: String,
-    document_namespace: String,
-    creation_info: CreationInfo,
-    packages: Vec<SpdxPackage>,
+    pub(crate) spdx_id: &'static str,
+    pub(crate) name: String,
+    pub(crate) document_namespace: String,
+    pub(crate) creation_info: CreationInfo,
+    pub(crate) packages: Vec<SpdxPackage>,
 }
 
 #[derive(Serialize)]
@@ -102,10 +102,58 @@ pub fn json(package: &dyn Package) -> Result<Vec<u8>> {
     Ok(serde_json::to_vec(&document(package)?)?)
 }
 
+pub fn json_many(packages: &[&dyn Package]) -> Result<Vec<u8>> {
+    if packages.is_empty() {
+        return Err(crate::error::Error::message(
+            "合成するパッケージがありません",
+        ));
+    }
+    let created = timestamp();
+    let names = packages
+        .iter()
+        .map(|package| package.name())
+        .collect::<Vec<_>>()
+        .join("+");
+    let mut document = document(packages[0])?;
+    document.name = names.clone();
+    document.document_namespace = format!("https://spdx.org/spdxdocs/containers-{names}-{created}");
+    document.packages = packages
+        .iter()
+        .map(|package| {
+            let name = package.name();
+            let version = package.version();
+            SpdxPackage {
+                spdx_id: format!("SPDXRef-{name}"),
+                name,
+                version_info: version,
+                download_location: package.source().url,
+                checksums: vec![
+                    Checksum {
+                        algorithm: "SHA3-512",
+                        checksum_value: package.source().sha3_512,
+                    },
+                    Checksum {
+                        algorithm: "BLAKE3",
+                        checksum_value: package.source().blake3,
+                    },
+                ],
+                license_declared: package.license(),
+                license_concluded: package.license(),
+                external_refs: vec![ExternalRef {
+                    reference_category: "PACKAGE-MANAGER",
+                    reference_type: "purl",
+                    reference_locator: format!("pkg:generic/{name}@{version}"),
+                }],
+            }
+        })
+        .collect();
+    Ok(serde_json::to_vec(&document)?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::package::{Dependency, Package, Source};
+    use crate::package::{Package, Source};
 
     struct Quoted;
 
@@ -119,12 +167,6 @@ mod tests {
         fn license(&self) -> &'static str {
             "MIT"
         }
-        fn build_only(&self) -> bool {
-            false
-        }
-        fn network(&self) -> bool {
-            false
-        }
         fn source(&self) -> Source {
             Source {
                 url: r#"https://example.invalid/pkg"quote.tar.gz"#,
@@ -133,17 +175,20 @@ mod tests {
                 subdir: "pkg",
             }
         }
-        fn dependencies(&self) -> &'static [Dependency] {
-            &[]
+        fn dependencies(&self, _target: crate::target::Target) -> Vec<crate::package::Dependency> {
+            vec![]
         }
-        fn build_dependencies(&self) -> &'static [Dependency] {
-            &[]
+        fn build_dependencies(
+            &self,
+            _target: crate::target::Target,
+        ) -> Vec<crate::package::Dependency> {
+            vec![]
         }
         fn build_script(&self) -> &'static str {
             ""
         }
-        fn flags(&self) -> &'static [crate::flags::Var] {
-            &[]
+        fn flags(&self, _target: crate::target::Target) -> crate::flags::Flag {
+            crate::flags::Flag::new(vec![], vec![])
         }
     }
 

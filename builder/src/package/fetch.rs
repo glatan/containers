@@ -19,6 +19,9 @@ pub fn fetch_package(package: &dyn Package) -> Result<Vec<String>> {
     let mut log = Vec::new();
     if cached {
         log.push(format!("{} は取得済みです", tarball.display()));
+    } else if let Some(cache) = hashcache_hit(filename, package.source()) {
+        fs::copy(&cache, &tarball).map_err(|source| Error::io(&tarball, source))?;
+        log.push(format!("{} をキャッシュから複製しました", cache.display()));
     } else {
         log.push(format!("{} を取得します", package.source().url));
         process::status(
@@ -44,6 +47,15 @@ pub fn fetch_package(package: &dyn Package) -> Result<Vec<String>> {
     )?;
     log.push(format!("{} を展開しました", dir.display()));
     Ok(log)
+}
+
+fn hashcache_hit(filename: &std::ffi::OsStr, source: Source) -> Option<std::path::PathBuf> {
+    let cache = Path::new("packages/sources/_hashcache").join(filename);
+    if cache.is_file() && verify(&cache, source).is_ok() {
+        Some(cache)
+    } else {
+        None
+    }
 }
 
 pub(crate) fn verify(path: &Path, source: Source) -> Result<()> {
@@ -82,12 +94,6 @@ mod tests {
         fn license(&self) -> &'static str {
             "MIT"
         }
-        fn build_only(&self) -> bool {
-            false
-        }
-        fn network(&self) -> bool {
-            false
-        }
         fn source(&self) -> Source {
             Source {
                 url: "https://example.invalid/src.tar",
@@ -96,17 +102,17 @@ mod tests {
                 subdir: "src",
             }
         }
-        fn dependencies(&self) -> &'static [Dependency] {
-            &[]
+        fn dependencies(&self, _target: crate::target::Target) -> Vec<Dependency> {
+            vec![]
         }
-        fn build_dependencies(&self) -> &'static [Dependency] {
-            &[]
+        fn build_dependencies(&self, _target: crate::target::Target) -> Vec<Dependency> {
+            vec![]
         }
         fn build_script(&self) -> &'static str {
             ""
         }
-        fn flags(&self) -> &'static [crate::flags::Var] {
-            &[]
+        fn flags(&self, _target: crate::target::Target) -> crate::flags::Flag {
+            crate::flags::Flag::new(vec![], vec![])
         }
         fn source_dir(&self) -> std::path::PathBuf {
             self.dir.clone()

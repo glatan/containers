@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use crate::error::{Error, Result};
 use crate::oci::layer;
 use crate::oci::model::{
-    Annotations, Descriptor, Digest, EmptyObject, Image, ImageConfig, ImageIndex, ImageManifest,
+    Annotations, Descriptor, Digest, ExecConfig, Image, ImageConfig, ImageIndex, ImageManifest,
     OciLayout, PlatformObject, RootFs, ZstdLevel,
 };
 use crate::target::Target;
@@ -20,6 +20,16 @@ pub fn build(
     image: &Image,
     layers: &[(Target, Vec<PathBuf>)],
     zstd_level: u8,
+) -> Result<()> {
+    build_with_config(output, image, layers, zstd_level, ExecConfig::default())
+}
+
+pub fn build_with_config(
+    output: &Path,
+    image: &Image,
+    layers: &[(Target, Vec<PathBuf>)],
+    zstd_level: u8,
+    config: ExecConfig,
 ) -> Result<()> {
     let zstd_level = ZstdLevel::new(zstd_level)?;
     if layers.is_empty() {
@@ -45,7 +55,7 @@ pub fn build(
     let mut manifests = Vec::new();
     for (target, layer_dirs) in layers {
         manifests.push(build_manifest(
-            &blobs, image, *target, layer_dirs, zstd_level,
+            &blobs, image, *target, layer_dirs, zstd_level, &config,
         )?);
     }
     let index = ImageIndex {
@@ -72,6 +82,7 @@ fn build_manifest(
     target: Target,
     layer_dirs: &[PathBuf],
     zstd_level: ZstdLevel,
+    exec: &ExecConfig,
 ) -> Result<Descriptor> {
     let mut layers = Vec::new();
     let mut diff_ids = Vec::new();
@@ -90,7 +101,7 @@ fn build_manifest(
         architecture: target.architecture(),
         os: "linux",
         variant: target.variant(),
-        config: EmptyObject {},
+        config: exec.clone(),
         rootfs: RootFs {
             type_: "layers",
             diff_ids,

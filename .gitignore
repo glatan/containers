@@ -1,7 +1,7 @@
 packages/artifacts/
 packages/sources/
 packages/build/
+packages/logs/
 images/
 oci-layouts/
 builder/target/
-memo.md

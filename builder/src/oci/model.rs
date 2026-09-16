@@ -133,12 +133,32 @@ pub(super) struct ImageConfig {
     pub architecture: &'static str,
     pub os: &'static str,
     pub variant: &'static str,
-    pub config: EmptyObject,
+    pub config: ExecConfig,
     pub rootfs: RootFs,
 }
 
-#[derive(Serialize)]
-pub(super) struct EmptyObject {}
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct ExecConfig {
+    #[serde(rename = "Env", skip_serializing_if = "Vec::is_empty")]
+    pub env: Vec<String>,
+    #[serde(rename = "Cmd", skip_serializing_if = "Vec::is_empty")]
+    pub cmd: Vec<String>,
+    #[serde(rename = "WorkingDir", skip_serializing_if = "Option::is_none")]
+    pub working_dir: Option<String>,
+}
+
+impl ExecConfig {
+    pub fn runnable() -> Self {
+        Self {
+            env: vec![
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string(),
+                "LD_LIBRARY_PATH=/usr/lib64:/usr/lib:/lib64:/lib".to_string(),
+            ],
+            cmd: vec!["/usr/bin/bash".to_string()],
+            working_dir: Some("/".to_string()),
+        }
+    }
+}
 
 #[derive(Serialize)]
 pub(super) struct RootFs {

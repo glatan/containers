@@ -1,5 +1,7 @@
-use crate::flags::Var;
-use crate::package::{Dependency, Package, Source};
+use crate::flags::Flag;
+use crate::package::recipe::{BuildContext, Env, Recipe, Step, Steps, Workdir};
+use crate::package::{Dependency, Package, Role, Source};
+use crate::target::Target;
 
 pub struct CaCertificates;
 
@@ -16,12 +18,8 @@ impl Package for CaCertificates {
         "MPL-2.0"
     }
 
-    fn build_only(&self) -> bool {
-        false
-    }
-
-    fn network(&self) -> bool {
-        false
+    fn role(&self) -> Role {
+        Role::Catalog
     }
 
     fn source(&self) -> Source {
@@ -33,23 +31,38 @@ impl Package for CaCertificates {
         }
     }
 
-    fn dependencies(&self) -> &'static [Dependency] {
-        &[]
+    fn dependencies(&self, _target: Target) -> Vec<Dependency> {
+        vec![]
     }
 
-    fn build_dependencies(&self) -> &'static [Dependency] {
-        &[]
+    fn build_dependencies(&self, _target: Target) -> Vec<Dependency> {
+        vec![]
     }
 
-    fn flags(&self) -> &'static [Var] {
-        &[]
+    fn flags(&self, _target: Target) -> Flag {
+        Flag::new(vec![], vec![])
     }
 
-    fn build_script(&self) -> &'static str {
-        r#"set -euxo pipefail
-install -D -m 644 "$SOURCE"/certifi/cacert.pem "$OUT"/etc/ssl/certs/ca-certificates.crt
-ln -s ca-certificates.crt "$OUT"/etc/ssl/certs/ca-bundle.crt
-ln -s certs/ca-certificates.crt "$OUT"/etc/ssl/cert.pem
-"#
+    fn recipe(&self, _ctx: &BuildContext) -> Recipe {
+        Recipe::Steps(
+            Steps::new(Env::None)
+                .sysroot(false)
+                .workdir(Workdir::None)
+                .step(Step::Install {
+                    src: "\"$SOURCE\"/certifi/cacert.pem",
+                    dst: "\"$OUT\"/etc/ssl/certs/ca-certificates.crt",
+                    mode: "644",
+                })
+                .step(Step::Symlink {
+                    target: "ca-certificates.crt",
+                    link: "\"$OUT\"/etc/ssl/certs/ca-bundle.crt",
+                    force: false,
+                })
+                .step(Step::Symlink {
+                    target: "certs/ca-certificates.crt",
+                    link: "\"$OUT\"/etc/ssl/cert.pem",
+                    force: false,
+                }),
+        )
     }
 }

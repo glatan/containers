@@ -65,10 +65,15 @@ fn hex_lower(bytes: &[u8]) -> String {
 }
 
 pub fn timestamp() -> String {
-    jiff::Timestamp::now()
-        .to_zoned(jiff::tz::TimeZone::UTC)
-        .strftime("%Y-%m-%dT%H:%M:%SZ")
-        .to_string()
+    utc_now().strftime("%Y-%m-%dT%H:%M:%SZ").to_string()
+}
+
+pub fn utc_date() -> String {
+    utc_now().strftime("%Y%m%d").to_string()
+}
+
+fn utc_now() -> jiff::Zoned {
+    jiff::Timestamp::now().to_zoned(jiff::tz::TimeZone::UTC)
 }
 
 pub fn write(path: &Path, contents: impl AsRef<[u8]>) -> Result<()> {

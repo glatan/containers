@@ -1,5 +1,6 @@
-use crate::flags::Var;
-use crate::package::{Dependency, Package, Source};
+use crate::flags::{Cflag, Flag, Ldflag};
+use crate::package::{Dependency, Package, Role, Source};
+use crate::target::Target;
 
 pub struct Zlib;
 
@@ -9,63 +10,71 @@ impl Package for Zlib {
     }
 
     fn version(&self) -> &'static str {
-        "1.3.1"
+        "1.3.2"
     }
 
     fn license(&self) -> &'static str {
         "Zlib"
     }
 
-    fn build_only(&self) -> bool {
-        false
-    }
-
-    fn network(&self) -> bool {
-        false
+    fn role(&self) -> Role {
+        Role::Catalog
     }
 
     fn source(&self) -> Source {
         Source {
-            url: "https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz",
-            sha3_512: "d4233237ef02d5a6182e4b3704b5a7da40169076edcc0ff0546441f27ace6f8258fc5668a241263e8f8b7726d974c82654ed06ea1680f82784f79874e6350570",
-            blake3: "207c3b0862cb4e3686f8405f76a98c38dbad9c94bcf4be4b9efca0716aba51ecbb74a7a73fb847a40884a5a12be05d3a3d1a9b534b11b16efcec551744bd3fb8",
-            subdir: "zlib-1.3.1",
+            url: "https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz",
+            sha3_512: "860936cb0ddea209f9c14219dbf05efbef7ea83abe93a25bf39dd591a8f075ab5ad0c8225b1455def844d831f2d7b8f645704ebe387e630ad3075f765925dcc7",
+            blake3: "ea79f8ae7c98d38ea360b70449fbb0052da4ff4a7201f03387113e5dab8543793587a6ee51d8307b5203aa03bf0a0053fca792f4c99d95c48aecc4b49359dc1b",
+            subdir: "zlib-1.3.2",
         }
     }
 
-    fn dependencies(&self) -> &'static [Dependency] {
-        &[Dependency {
-            name: "glibc",
-            version: "2.44",
-        }]
+    fn dependencies(&self, target: Target) -> Vec<Dependency> {
+        crate::package::with_libc(target, &[])
     }
 
-    fn build_dependencies(&self) -> &'static [Dependency] {
-        &[Dependency {
-            name: "linux-headers",
-            version: "6.12.109",
-        }]
+    fn build_dependencies(&self, _target: Target) -> Vec<Dependency> {
+        crate::package::headers_dep()
     }
 
-    fn flags(&self) -> &'static [Var] {
-        &[Var::Cflags]
+    fn flags(&self, target: Target) -> Flag {
+        Flag::new(
+            vec![
+                Cflag::O2,
+                Cflag::Pipe,
+                Cflag::March(target),
+                Cflag::TreeVectorize,
+                Cflag::NoSemanticInterposition,
+                Cflag::FortifySource,
+                Cflag::StackProtectorStrong,
+                Cflag::Lto,
+                Cflag::WerrorOdr,
+                Cflag::WerrorLtoTypeMismatch,
+                Cflag::WerrorStrictAliasing,
+            ],
+            vec![
+                Ldflag::FuseLdMold,
+                Ldflag::O1,
+                Ldflag::AsNeeded,
+                Ldflag::Relro,
+                Ldflag::Now,
+                Ldflag::Lto,
+                Ldflag::WerrorOdr,
+                Ldflag::WerrorLtoTypeMismatch,
+                Ldflag::WerrorStrictAliasing,
+            ],
+        )
     }
 
     fn build_script(&self) -> &'static str {
-        r#"set -euxo pipefail
-if [ "$TRIPLE" != "$HOST_TRIPLE" ]; then
-  pacman -Sy --noconfirm "${CROSS}gcc"
-  export CC="$CROSS"gcc
-  export AR="${CROSS}gcc-ar"
-  export RANLIB="${CROSS}gcc-ranlib"
-else
-  export CC=gcc
-  export AR=gcc-ar
-  export RANLIB=gcc-ranlib
+        concat!(
+            "set -euxo pipefail\n",
+            include_str!("sysroot_env.sh"),
+            r#"
+if [ -n "${SYSROOT:-}" ]; then
+  export CC="$CC --sysroot=$SYSROOT"
 fi
-export CC="$CC --sysroot=/dep/glibc -idirafter /dep/linux-headers/usr/include -B/dep/glibc/usr/lib64 -L/dep/glibc/usr/lib64 -L/dep/glibc/lib64"
-export CFLAGS="$CFLAGS -flto"
-export LDFLAGS="-flto -B/dep/glibc/usr/lib64 -L/dep/glibc/usr/lib64 -L/dep/glibc/lib64"
 PGO=/tmp/zlib-pgo
 rm -rf "$PGO"
 mkdir -p "$PGO"
@@ -87,6 +96,7 @@ else
   make -j"$(nproc)"
 fi
 make install DESTDIR="$OUT"
-"#
+"#,
+        )
     }
 }

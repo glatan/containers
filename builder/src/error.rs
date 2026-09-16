@@ -7,6 +7,8 @@ pub enum Error {
     Message(String),
     #[error("{command} の実行に失敗しました")]
     CommandFailed { command: &'static str },
+    #[error("{command} の実行に失敗しました (ログ: {log})")]
+    CommandFailedWithLog { command: &'static str, log: PathBuf },
     #[error("{command} の起動に失敗しました: {source}")]
     CommandSpawn {
         command: &'static str,

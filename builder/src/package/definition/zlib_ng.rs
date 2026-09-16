@@ -1,5 +1,6 @@
-use crate::flags::Var;
-use crate::package::{Dependency, Package, Source};
+use crate::flags::{Cflag, Flag, Ldflag};
+use crate::package::{Dependency, Package, Role, Source};
+use crate::target::Target;
 
 pub struct ZlibNg;
 
@@ -16,12 +17,8 @@ impl Package for ZlibNg {
         "Zlib"
     }
 
-    fn build_only(&self) -> bool {
-        false
-    }
-
-    fn network(&self) -> bool {
-        true
+    fn role(&self) -> Role {
+        Role::Catalog
     }
 
     fn source(&self) -> Source {
@@ -33,41 +30,63 @@ impl Package for ZlibNg {
         }
     }
 
-    fn dependencies(&self) -> &'static [Dependency] {
-        &[Dependency {
-            name: "glibc",
-            version: "2.44",
-        }]
+    fn dependencies(&self, target: Target) -> Vec<Dependency> {
+        crate::package::with_libc(target, &[])
     }
 
-    fn build_dependencies(&self) -> &'static [Dependency] {
-        &[Dependency {
-            name: "linux-headers",
-            version: "6.12.109",
-        }]
+    fn build_dependencies(&self, _target: Target) -> Vec<Dependency> {
+        let mut dependencies = crate::package::headers_dep();
+        dependencies.push(Dependency {
+            name: "cmake",
+            version: "4.4.3",
+        });
+        dependencies
     }
 
-    fn flags(&self) -> &'static [Var] {
-        &[Var::Cflags]
+    fn flags(&self, target: Target) -> Flag {
+        Flag::new(
+            vec![
+                Cflag::O2,
+                Cflag::Pipe,
+                Cflag::March(target),
+                Cflag::TreeVectorize,
+                Cflag::NoSemanticInterposition,
+                Cflag::FortifySource,
+                Cflag::StackProtectorStrong,
+                Cflag::Lto,
+                Cflag::WerrorOdr,
+                Cflag::WerrorLtoTypeMismatch,
+                Cflag::WerrorStrictAliasing,
+            ],
+            vec![
+                Ldflag::FuseLdMold,
+                Ldflag::O1,
+                Ldflag::AsNeeded,
+                Ldflag::Relro,
+                Ldflag::Now,
+                Ldflag::Lto,
+                Ldflag::WerrorOdr,
+                Ldflag::WerrorLtoTypeMismatch,
+                Ldflag::WerrorStrictAliasing,
+            ],
+        )
     }
 
     fn build_script(&self) -> &'static str {
-        r#"set -euxo pipefail
+        concat!(
+            "set -euxo pipefail\n",
+            include_str!("sysroot_env.sh"),
+            r#"
+CMAKE_CROSS=()
 if [ "$TRIPLE" != "$HOST_TRIPLE" ]; then
-  pacman -Sy --noconfirm cmake "${CROSS}gcc"
-  COMPILER="$CROSS"gcc
-  AR="${CROSS}gcc-ar"
-  RANLIB="${CROSS}gcc-ranlib"
-  NM="${CROSS}gcc-nm"
-else
-  pacman -Sy --noconfirm cmake
-  COMPILER=gcc
-  AR=gcc-ar
-  RANLIB=gcc-ranlib
-  NM=gcc-nm
+  CMAKE_CROSS=(
+    -DCMAKE_SYSTEM_NAME=Linux
+    -DCMAKE_SYSTEM_PROCESSOR="${TRIPLE%%-*}"
+    -DCMAKE_C_COMPILER_TARGET="$TRIPLE"
+  )
 fi
-SYSROOT_FLAGS="--sysroot=/dep/glibc -idirafter /dep/linux-headers/usr/include -B/dep/glibc/usr/lib64 -L/dep/glibc/usr/lib64 -L/dep/glibc/lib64"
 cmake -S "$SOURCE" -B "$BUILD" \
+  "${CMAKE_CROSS[@]}" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=/usr \
   -DCMAKE_INSTALL_LIBDIR=lib64 \
@@ -75,16 +94,16 @@ cmake -S "$SOURCE" -B "$BUILD" \
   -DWITH_GTEST=OFF \
   -DBUILD_TESTING=OFF \
   -DBUILD_SHARED_LIBS=ON \
-  -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
-  -DCMAKE_C_COMPILER="$COMPILER" \
+  -DCMAKE_C_COMPILER="$CC" \
   -DCMAKE_AR="$AR" \
   -DCMAKE_NM="$NM" \
   -DCMAKE_RANLIB="$RANLIB" \
-  -DCMAKE_C_FLAGS="$CFLAGS $SYSROOT_FLAGS" \
-  -DCMAKE_EXE_LINKER_FLAGS="$SYSROOT_FLAGS" \
-  -DCMAKE_SHARED_LINKER_FLAGS="$SYSROOT_FLAGS"
+  -DCMAKE_C_FLAGS="$CFLAGS" \
+  -DCMAKE_EXE_LINKER_FLAGS="$LDFLAGS" \
+  -DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS"
 cmake --build "$BUILD" -j"$(nproc)"
 DESTDIR="$OUT" cmake --install "$BUILD"
-"#
+"#,
+        )
     }
 }

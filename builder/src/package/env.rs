@@ -1,4 +1,4 @@
-/// パッケージビルドに使う環境イメージ。正本はこの定数です。
+/// シードとして使う Arch イメージ。合成 `build-env` が無いあいだの正本です。
 ///
 /// 実行時はタグではなく digest で固定します。更新するときは Docker Hub の
 /// `archlinux:base-devel` の tag digest を取り、`digest` だけ差し替えます。

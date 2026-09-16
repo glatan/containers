@@ -1,17 +1,17 @@
 # プラットフォーム
 
-パッケージイメージが対象にする CPU の一覧です。
-カタログとしては、ビルドできない場合を除きすべて必要です。
-OCI 上の意味は [oci](../oci/README.md) を参照してください。
+本プロジェクトのパッケージイメージが対象とする CPU プラットフォーム（architecture および variant）の一覧です。この表が `Target::all()` です。カタログと Host tools（qemu 以外）の `supports` はこの集合です。
 
-表は [`builder/src/target.rs`](../../builder/src/target.rs) の `Target::all()` と一致させます。ずれはテスト `documented_platforms_match_targets` で検出します。
+qemu、中間 gcc ステージ、`build-env` は HOST（amd64 / v4）のみです。`{triple}-glibc` はその architecture の variant だけです。最終 gcc / binutils の `supports` と製品キューは [toolchain.md](../package/toolchain.md) です。実装順は HOST → 各 architecture の基底 variant → 残り variant です。
 
-`status` は [Image Spec v1.1.1 の Platform Variants](https://github.com/opencontainers/image-spec/blob/v1.1.1/image-index.md#platform-variants) に対する位置づけです。
+本ドキュメントの表は、[`builder/src/target.rs`](../../builder/src/target.rs) の `Target::all()` と常に一致させます。内容の不整合はテスト `documented_platforms_match_targets` によって自動検出されます。
 
-- `listed` — 表に載る(または `…` で示される系列の)組み合わせ
-- `defined` — 表に無いが、仕様上は implementation-defined であり不正ではない
+表中の `status` は、[Image Spec v1.1.1 の Platform Variants](https://github.com/opencontainers/image-spec/blob/v1.1.1/image-index.md#platform-variants) に対する分類を示します。
 
-いま `package build` できるのは **amd64 v1〜v4、arm64 の全 variant、riscv64 の全 variant** です。ppc64le と s390x は Arch にクロス gcc が無いため、`--all-target` 時にスキップします。
+- `listed`: 仕様書の表に明記されている（または `…` で省略表記された系列に含まれる）組み合わせです。
+- `defined`: 仕様書の表には掲載されていませんが、仕様上 implementation-defined（実装定義）として許容されており、OCI 準拠として不正ではない組み合わせです。
+
+`--all-target` は各パッケージについて `supports` が真の Platform を組みます。製品キューより広い `supports` を持つパッケージでは、運用上の製品範囲は [toolchain.md](../package/toolchain.md) に従います。
 
 | architecture | variant | status |
 |-|-|-|
@@ -54,5 +54,5 @@ OCI 上の意味は [oci](../oci/README.md) を参照してください。
 | s390x | z16 | defined |
 | s390x | z17 | defined |
 
-一部ランタイムはよく使う組み合わせ以外を自動選択しないことがあります。
-利用側は image digest で pin します。
+一部のコンテナランタイムは、一般的に普及している組み合わせ以外のプラットフォームを自動選択できない場合があります。
+そのため、利用者側でイメージを指定する際は、Image Index のダイジェスト（image digest）を用いてプラットフォームを明示的に固定します。
