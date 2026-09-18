@@ -36,7 +36,7 @@
 
 | 名前 | 用途 |
 |-|-|
-| 共通の[ビルド環境イメージ](../README.md) | `build` によるコンパイル（シード環境では builder が `gcc` `make` を導入） |
+| 共通の[ビルド環境イメージ](../README.md) | `build` によるコンパイル。build スクリプト生成に必要な perl は host tool としてマウント（`host_tools()`） |
 
 ## ビルド設定
 
@@ -46,3 +46,4 @@
 |-|-|-|
 | `--prefix` | `/usr` | 常時 |
 | `--disable-werror` | | 常時 |
+| PGO | ネイティブビルドのみ適用（`Pgo::Profiled`） | `make check` |

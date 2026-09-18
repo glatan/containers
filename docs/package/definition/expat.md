@@ -45,3 +45,4 @@
 | フラグ | 設定値 | 条件 |
 |-|-|-|
 | `--prefix` | `/usr` | 常時 |
+| PGO | ネイティブビルドのみ適用（`Pgo::Profiled`） | `xmlwf` で同梱 XML（`doc/xmlwf.xml` 他）をパース |

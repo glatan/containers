@@ -38,9 +38,19 @@ impl Package for M4 {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+    }
+
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools(&["--prefix=/usr"])
+        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
     }
 }
 
 impl Bootstrap for M4 {}
+
+const PGO_WORKLOAD: &str = r#"find "$SOURCE" -name '*.m4' | while read -r _m; do
+  ./src/m4 "$_m" > /dev/null 2>&1
+done
+echo 'define(`x', `1')dnl x' | ./src/m4 > /dev/null
+./src/m4 -P "$SOURCE"/m4/*.m4 > /dev/null 2>&1"#;

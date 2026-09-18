@@ -48,3 +48,4 @@
 |-|-|-|
 | `Makefile-libbz2_so` | | 共有ライブラリのビルド |
 | `PREFIX` | `$OUT/usr` | `make install` 時のインストール先プレフィックス |
+| PGO | ネイティブビルドのみ適用（`Pgo::Profiled`） | 同梱ソースを連結した複数 MB 入力を `bzip2` で `-1` / `-6` / `-9` の 3 レベルで圧縮・解凍し `bzip2recover` も実行。パッケージ固有の `CFLAGS`（`-fpic -fPIC -D_FILE_OFFSET_BITS=64` 等）と make 引数は両フェーズで replay |

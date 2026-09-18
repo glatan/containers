@@ -81,7 +81,10 @@ pub fn info(name: &str, target: Target) -> Result<()> {
         println!("LDFLAGS: {ldflags}");
     }
     match defined.pgo() {
-        crate::flags::Pgo::Native => println!("PGO: native"),
+        crate::flags::Pgo::Profiled(workload) => {
+            println!("PGO: native ({})", workload.lines().next().unwrap_or(""))
+        }
+        crate::flags::Pgo::Custom => println!("PGO: custom"),
         crate::flags::Pgo::None => {}
     }
     let ctx = crate::package::recipe::BuildContext::of(defined.gnu_triple(), target);
@@ -313,7 +316,7 @@ fn describe_role(role: package::Role) -> String {
 }
 
 fn describe_recipe(recipe: &crate::package::recipe::Recipe) -> String {
-    use crate::package::recipe::{Env, Recipe, Step, Workdir};
+    use crate::package::recipe::{Env, PgoTemplate, Recipe, Step, Workdir};
     match recipe {
         Recipe::Shell(_) => "shell".to_owned(),
         Recipe::Noop => "noop".to_owned(),
@@ -340,8 +343,13 @@ fn describe_recipe(recipe: &crate::package::recipe::Recipe) -> String {
                     Step::Shell(_) => "shell".to_owned(),
                 })
                 .collect();
+            let pgo = match steps.pgo {
+                Some(PgoTemplate::Autotools(_)) => "autotools",
+                Some(PgoTemplate::Make(_)) => "make",
+                None => "none",
+            };
             format!(
-                "steps(env={env} std={} sysroot={} workdir={workdir}): {}",
+                "steps(env={env} std={} sysroot={} workdir={workdir} pgo={pgo}): {}",
                 steps.std.as_str(),
                 steps.sysroot,
                 kinds.join(" ")

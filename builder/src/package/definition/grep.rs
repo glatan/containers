@@ -33,9 +33,18 @@ impl Package for Grep {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+    }
+
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools(&["--prefix=/usr"])
+        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
     }
 }
+
+const PGO_WORKLOAD: &str = r#"./src/grep -r -E 'int|char' "$SOURCE" > /dev/null
+./src/grep -r -F 'include' "$SOURCE" > /dev/null
+./src/grep -r -i -w 'main' "$SOURCE" > /dev/null
+printf 'a\0b\0c' | ./src/grep -a 'b' > /dev/null"#;
 
 impl Bootstrap for Grep {}

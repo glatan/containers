@@ -22,7 +22,9 @@
 
 ### dependencies
 
-なし。
+| パッケージ | バージョン | 用途 |
+|-|-|-|
+| [python](./python.md) | 3.14.7 | meson の実行インタプリタ（実行時にも必要） |
 
 ### build-dependencies
 
@@ -32,7 +34,7 @@
 
 | 名前 | 用途 |
 |-|-|
-| 共通の[ビルド環境イメージ](../README.md) | `build` によるインストール（実行する python / pip は HOST 成果物をマウント） |
+| 共通の[ビルド環境イメージ](../README.md) | `build` によるインストール（実行する python は HOST 成果物をマウント） |
 
 ## ビルド設定
 
@@ -42,5 +44,6 @@ C 言語のコンパイルは行いません。
 
 | フラグ | 設定値 | 条件 |
 |-|-|-|
-| `pip install --root=$OUT --prefix=/usr --no-deps --no-build-isolation` | | 常時 |
+| `mesonbuild` 配置 | `$SOURCE/mesonbuild` を `$OUT/usr/lib/python{ver}/site-packages/` へコピーし、`python3 -m mesonbuild.mesonmain` を呼ぶ `usr/bin/meson` を生成 | 常時（python 成果物は `--without-ensurepip` で pip を持たないため） |
 | LTO | 適用しない | C 言語のコンパイルを伴わないため |
+| PGO | 適用しない（`Pgo::None`） | C 言語のコンパイルを伴わないため |

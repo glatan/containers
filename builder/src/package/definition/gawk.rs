@@ -33,9 +33,19 @@ impl Package for Gawk {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+    }
+
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools(&["--prefix=/usr"])
+        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
     }
 }
+
+const PGO_WORKLOAD: &str = r#"find "$SOURCE" -name '*.c' | while read -r _f; do
+  ./gawk '{ n += NF; if ($0 ~ /return/) r++ } END { print n, r }' "$_f" > /dev/null
+done
+./gawk 'BEGIN { for (i = 0; i < 100000; i++) { s = s i; x[i] = i * 2 } print length(s), length(x) }'
+seq 1 50000 | ./gawk '{ sum += $1; a[NR] = $1 } END { asort(a); print sum, a[1], a[NR] }' > /dev/null"#;
 
 impl Bootstrap for Gawk {}

@@ -289,8 +289,26 @@ impl Package for Prefixed {
             Stage::GlibcHeaders | Stage::GccStage1 | Stage::GccStage2 | Stage::Glibc => {
                 Flag::new(vec![], vec![])
             }
-            Stage::Gcc => Flag::new(vec![Cflag::O2, Cflag::Pipe, Cflag::March(target)], vec![]),
+            // コンパイラ自身のバイナリへ hardening。StrictFlexArrays3 は除外
+            // （GCC が [1] 末尾配列を使い FORTIFY=3 と相性が悪い）。
+            Stage::Gcc => Flag::new(
+                vec![
+                    Cflag::O2,
+                    Cflag::Pipe,
+                    Cflag::March(target),
+                    Cflag::Hardened,
+                    Cflag::NoWhardened,
+                ],
+                vec![],
+            ),
             Stage::Binutils => crate::flags::tool_flags(target),
+        }
+    }
+
+    fn pgo(&self) -> crate::flags::Pgo {
+        match self.stage {
+            Stage::Binutils | Stage::Gcc => crate::flags::Pgo::Custom,
+            _ => crate::flags::Pgo::None,
         }
     }
 
@@ -542,14 +560,56 @@ const BINUTILS_SCRIPT: &str = concat!(
     r#"set -euxo pipefail
 export CC_FOR_BUILD="${HOST_TRIPLE}-gcc"
 export CXX_FOR_BUILD="${HOST_TRIPLE}-g++"
-export AS="${PACKAGE_HOST}-as"
-mkdir -p "$BUILD"
-cd "$BUILD"
-"$SOURCE"/configure --build="$HOST_TRIPLE" --host="$PACKAGE_HOST" --target="$TRIPLE" \
-  --prefix=/usr --infodir=/usr/share/info/"$TRIPLE" --disable-nls --disable-werror \
-  --enable-plugins --with-system-zlib --without-debuginfod --disable-gprofng
-make -j"$(nproc)"
-make install DESTDIR="$OUT"
+CET_FLAGS=
+if [ "$TRIPLE" = x86_64-linux-gnu ]; then
+  CET_FLAGS=--enable-cet
+fi
+configure_binutils() {
+  "$SOURCE"/configure --build="$HOST_TRIPLE" --host="$PACKAGE_HOST" --target="$TRIPLE" \
+    --prefix=/usr --infodir=/usr/share/info/"$TRIPLE" --disable-nls --disable-werror \
+    --enable-plugins --with-system-zlib --without-debuginfod --disable-gprofng \
+    --enable-new-dtags --enable-relro --enable-default-execstack=no \
+    --enable-default-hash-style=gnu $CET_FLAGS
+}
+if [ "$TRIPLE" = x86_64-linux-gnu ] && [ "$PACKAGE_HOST" = "$HOST_TRIPLE" ]; then
+  # ネイティブ x86_64 のみ PGO。as/ld/objdump を回してプロファイルを集める。
+  export PGODIR=/tmp/pgo
+  rm -rf "$PGODIR"
+  mkdir -p "$PGODIR" "$BUILD/gen" "$BUILD/final"
+  cd "$BUILD/gen"
+  CFLAGS="${CFLAGS:-} -fprofile-generate=$PGODIR -fprofile-update=atomic" \
+  CXXFLAGS="${CXXFLAGS:-} -fprofile-generate=$PGODIR -fprofile-update=atomic" \
+  LDFLAGS="${LDFLAGS:-} -fprofile-generate" \
+  configure_binutils
+  make -j"$(nproc)"
+  (
+    _as="$BUILD/gen/gas/as-new"
+    _ld="$BUILD/gen/ld/ld-new"
+    _objdump="$BUILD/gen/binutils/objdump"
+    mkdir -p /tmp/bu-work
+    for _i in $(seq 1 64); do
+      printf '.text\n.globl f%s\nf%s:\n  mov $%s, %%eax\n  ret\n' "$_i" "$_i" "$_i" > /tmp/bu-work/t.s
+      "$_as" -o /tmp/bu-work/t.o /tmp/bu-work/t.s
+      "$_ld" -r -o "/tmp/bu-work/t$_i.o" /tmp/bu-work/t.o
+    done
+    "$_ld" -r -o /tmp/bu-work/all.o /tmp/bu-work/t*.o
+    "$_objdump" -d /tmp/bu-work/all.o > /dev/null
+    "$_objdump" -h /tmp/bu-work/all.o > /dev/null
+  ) || true
+  cd "$BUILD/final"
+  CFLAGS="${CFLAGS:-} -fprofile-use=$PGODIR -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch" \
+  CXXFLAGS="${CXXFLAGS:-} -fprofile-use=$PGODIR -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch" \
+  LDFLAGS="${LDFLAGS:-} -fprofile-use" \
+  configure_binutils
+  make -j"$(nproc)"
+  make install DESTDIR="$OUT"
+else
+  mkdir -p "$BUILD"
+  cd "$BUILD"
+  configure_binutils
+  make -j"$(nproc)"
+  make install DESTDIR="$OUT"
+fi
 "#,
 );
 
@@ -584,6 +644,7 @@ cd "$BUILD"
   --disable-werror --disable-libatomic --disable-libsanitizer --disable-libssp \
   --disable-libquadmath --disable-libgomp --disable-libstdcxx --disable-libvtv \
   --disable-bootstrap --disable-multilib --enable-languages=c --enable-lto --enable-plugin \
+  --enable-default-pie --enable-default-ssp \
   --enable-checking=release
 make -j"$(nproc)" all-gcc all-target-libgcc
 make DESTDIR="$OUT" install-gcc install-target-libgcc
@@ -653,7 +714,10 @@ cd "$BUILD"
   --disable-libatomic --disable-libsanitizer --disable-libssp --disable-libquadmath \
   --disable-libgomp --disable-libstdcxx --disable-libvtv --disable-bootstrap --disable-multilib \
   --enable-shared --enable-threads=posix --enable-languages=c \
-  --enable-lto --enable-plugin --enable-checking=release
+  --enable-lto --enable-plugin --enable-checking=release \
+  --enable-default-pie --enable-default-ssp \
+  --with-linker-hash-style=gnu --enable-linker-build-id \
+  --enable-gnu-indirect-function --enable-gnu-unique-object --enable-initfini-array
 make -j"$(nproc)" all-gcc all-target-libgcc
 make DESTDIR="$OUT" install-gcc install-target-libgcc
 "#;
@@ -679,6 +743,10 @@ esac
 export CXXFLAGS="${CFLAGS:-}"
 export LDFLAGS="-fuse-ld=mold"
 unset LD
+CET_FLAGS=
+if [ "$TRIPLE" = x86_64-linux-gnu ]; then
+  CET_FLAGS=--enable-cet
+fi
 export CPP="$STAGE2/bin/${TRIPLE}-gcc -E"
 BUILD_CC="${HOST_TRIPLE}-gcc" CC="$STAGE2/bin/${TRIPLE}-gcc" \
 AR="${TRIPLE}-ar" RANLIB="${TRIPLE}-ranlib" NM="${TRIPLE}-nm" \
@@ -686,6 +754,8 @@ AS="${TRIPLE}-as" LD="${TRIPLE}-ld" \
 OBJCOPY="${TRIPLE}-objcopy" OBJDUMP="${TRIPLE}-objdump" READELF="${TRIPLE}-readelf" \
 "$SOURCE"/configure --prefix=/ --host="$TRIPLE" --build="$HOST_TRIPLE" --libdir=/lib \
   --with-headers="$SYSROOT/include" --disable-werror --disable-nscd --disable-profile \
+  --enable-stack-protector=strong --enable-bind-now --enable-fortify-source \
+  $CET_FLAGS \
   libc_cv_forced_unwind=yes libc_cv_c_cleanup=yes
 echo "build-programs=no" >> configparms
 make -j"$(nproc)"
@@ -737,13 +807,31 @@ fi
 export CFLAGS_FOR_BUILD="$_bf"
 export CXXFLAGS_FOR_BUILD="$_bf"
 export LDFLAGS_FOR_BUILD="${_build_root:+--sysroot=$_build_root}"
+# final gcc のみ per-variant。libgcc/libstdc++ 等のランタイムを
+# variant ISA でビルドし、フラグを落としたパッケージの既定も底上げする。
+# stage1/stage2 は BUILD_ENV でしかビルドされないため triple ベースラインのまま。
+# $MARCH は PACKAGE_HOST（成果物が動く Platform）の ISA なので、host arch と
+# codegen arch が一致する場合だけ使う。amd64 で組む aarch64 gcc 等の
+# 異種クロスでは triple ベースラインへフォールバックする。
+_host_arch="${PACKAGE_HOST%%-*}"
+_target_arch="${TRIPLE%%-*}"
 case "$TRIPLE" in
-  x86_64-linux-gnu) GCC_ARCH_FLAGS='--with-arch=x86-64' ;;
-  aarch64-linux-gnu) GCC_ARCH_FLAGS='--with-arch=armv8-a' ;;
-  riscv64-linux-gnu) GCC_ARCH_FLAGS='--with-arch=rv64gc --with-abi=lp64d' ;;
-  powerpc64le-linux-gnu) GCC_ARCH_FLAGS='--with-cpu=power8' ;;
-  s390x-linux-gnu) GCC_ARCH_FLAGS='--with-arch=z900' ;;
+  x86_64-linux-gnu) _baseline=x86-64 ;;
+  aarch64-linux-gnu) _baseline=armv8-a ;;
+  riscv64-linux-gnu) _baseline=rv64gc ;;
+  powerpc64le-linux-gnu) _baseline=power8 ;;
+  s390x-linux-gnu) _baseline=z900 ;;
   *) echo "未対応の triple: $TRIPLE"; exit 1 ;;
+esac
+if [ "$_host_arch" = "$_target_arch" ]; then
+  _baseline="$MARCH"
+fi
+case "$TRIPLE" in
+  x86_64-linux-gnu) GCC_ARCH_FLAGS="--with-arch=$_baseline --enable-cet" ;;
+  aarch64-linux-gnu) GCC_ARCH_FLAGS="--with-arch=$_baseline" ;;
+  riscv64-linux-gnu) GCC_ARCH_FLAGS="--with-arch=$_baseline --with-abi=lp64d" ;;
+  powerpc64le-linux-gnu) GCC_ARCH_FLAGS="--with-cpu=$_baseline" ;;
+  s390x-linux-gnu) GCC_ARCH_FLAGS="--with-arch=$_baseline --enable-decimal-float" ;;
 esac
 SYSROOT=/usr/"$TRIPLE"
 _profiledir="$BUILD/pgo-profile-data"
@@ -850,7 +938,12 @@ configure_final_gcc() {
     --disable-nls --disable-werror --disable-libssp --disable-libstdcxx-pch --disable-bootstrap --disable-multilib \
     $SANITIZER_FLAGS $PLUGIN_FLAGS \
     --enable-languages=c,c++ --enable-lto --enable-checking=release \
-    --enable-__cxa_atexit --enable-threads=posix --enable-shared
+    --enable-__cxa_atexit --enable-threads=posix --enable-shared \
+    --enable-default-pie --enable-default-ssp \
+    --with-linker-hash-style=gnu --enable-linker-build-id \
+    --enable-gnu-indirect-function --enable-gnu-unique-object --enable-initfini-array \
+    --enable-libstdcxx-backtrace --enable-host-pie --enable-host-bind-now \
+    --with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'
 }
 if [ "$PACKAGE_HOST" != "$HOST_TRIPLE" ] || [ "$ARCH/$VARIANT" != "amd64/v4" ]; then
   if [ "$PACKAGE_HOST" != "$HOST_TRIPLE" ]; then
@@ -870,8 +963,8 @@ if [ "$PACKAGE_HOST" != "$HOST_TRIPLE" ] || [ "$ARCH/$VARIANT" != "amd64/v4" ]; 
   exit 0
 fi
 cd "$BUILD/instrumented"
-CFLAGS="${CFLAGS:-} -fprofile-generate=$_profiledir" \
-CXXFLAGS="${CXXFLAGS:-} -fprofile-generate=$_profiledir" \
+CFLAGS="${CFLAGS:-} -fprofile-generate=$_profiledir -fprofile-update=atomic" \
+CXXFLAGS="${CXXFLAGS:-} -fprofile-generate=$_profiledir -fprofile-update=atomic" \
 LDFLAGS="${LDFLAGS:-} -fprofile-generate=$_profiledir" \
 configure_final_gcc
 make -j"$(nproc)"
@@ -886,9 +979,9 @@ done
 find "$_ts/g++.dg" -maxdepth 1 -name '*.C' -print0 | \
   xargs -0 -P"$(nproc)" -I{} "$_xgpp" -B"$_B" -O2 -S -o /dev/null -w {} 2>/dev/null || true
 cd "$BUILD/final"
-CFLAGS="${CFLAGS:-} -fprofile-use=$_profiledir -fprofile-correction" \
-CXXFLAGS="${CXXFLAGS:-} -fprofile-use=$_profiledir -fprofile-correction" \
-LDFLAGS="${LDFLAGS:-}" \
+CFLAGS="${CFLAGS:-} -fprofile-use=$_profiledir -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch" \
+CXXFLAGS="${CXXFLAGS:-} -fprofile-use=$_profiledir -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch" \
+LDFLAGS="${LDFLAGS:-} -fprofile-use" \
 configure_final_gcc
 make -j"$(nproc)"
 make DESTDIR="$OUT" install

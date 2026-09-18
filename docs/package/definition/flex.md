@@ -25,7 +25,6 @@
 | パッケージ | バージョン | 用途 |
 |-|-|-|
 | [x86_64-linux-gnu-glibc](./x86_64-linux-gnu-glibc.md)（他 Platform ではその `{triple}-glibc`） | 2.44 | `--sysroot`（`/dep/${TRIPLE}-glibc/usr/${TRIPLE}` 優先）によるリンク |
-| [m4](./m4.md) | 1.4.21 | マクロプロセッサ |
 
 ### build-dependencies
 
@@ -47,3 +46,4 @@
 |-|-|-|
 | `--prefix` | `/usr` | 常時 |
 | `-std` | `gnu11` | gnulib の `lib/malloc.c` が K&R 宣言のため gnu17 で壊れる |
+| PGO | ネイティブビルドのみ適用（`Pgo::Profiled`） | `flex` で同梱の `.l` ファイルをスキャナ生成 |

@@ -21,3 +21,14 @@
 ## 依存
 
 実行時はパッケージ Platform の `{triple}-glibc` に加え、libffi、zlib、openssl、expat、sqlite、ncurses、readline、xz、bzip2、zstd です。ビルド専用は linux-headers です。対象 Platform と共通前処理は [host-tools.md](../host-tools.md) です。python は `BOOTSTRAP` 配列に載せず、`build-env` 合成後に自前環境で組みます。openssl などの実行時依存は python のグラフが引きます。他パッケージがビルド時に実行する python は HOST 成果物をマウントします。
+
+## ビルド設定
+
+実行時依存の `/dep/{name}/usr/include`・`lib{,64}` を `CFLAGS` / `LDFLAGS` / `PKG_CONFIG_PATH` に足してから configure します。`$OUT/usr/bin/python` から `python3` へのシンボリックリンクを作成します。
+
+| フラグ | 設定値 | 条件 |
+|-|-|-|
+| `--prefix` | `/usr` | 常時 |
+| `--enable-shared` | | 常時 |
+| `--enable-optimizations` | | ネイティブビルドのみ（`Pgo::Custom`。PROFILE_TASK で生成バイナリを実行する自己完結 PGO のため、クロスでは付けない） |
+| `--without-ensurepip` | | 常時 |

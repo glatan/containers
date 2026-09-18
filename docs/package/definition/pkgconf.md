@@ -48,6 +48,7 @@
 | `--with-pkg-config-dir` | `/usr/lib/pkgconfig:/usr/share/pkgconfig` | 常時 |
 | `--with-system-libdir` | `/usr/lib` | 常時 |
 | `--with-system-includedir` | `/usr/include` | 常時 |
+| PGO | ネイティブビルドのみ適用（`Pgo::Profiled`） | `/dep`・`/usr` の `.pc` ファイルを `pkgconf --cflags --libs` / `--modversion` で解決 |
 
 `pkg-config` 互換のシンボリックリンクを作成します。
 

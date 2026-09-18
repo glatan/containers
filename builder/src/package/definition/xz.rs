@@ -33,9 +33,18 @@ impl Package for Xz {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+    }
+
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools(&["--prefix=/usr"])
+        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
     }
 }
 
 impl Bootstrap for Xz {}
+
+const PGO_WORKLOAD: &str = r#"for _i in 1 2 3 4 5 6 7 8; do find "$SOURCE" -name '*.c' -o -name '*.h' | xargs cat; done > /tmp/pgo-input
+for _opt in -0 -6 -9e; do
+  ./src/xz/xz -T4 "$_opt" -c /tmp/pgo-input | ./src/xz/xz -d -c > /dev/null
+done"#;

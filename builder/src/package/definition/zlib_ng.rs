@@ -1,4 +1,4 @@
-use crate::flags::{Cflag, Flag, Ldflag};
+use crate::flags::Flag;
 use crate::package::{Dependency, Package, Role, Source};
 use crate::target::Target;
 
@@ -44,32 +44,11 @@ impl Package for ZlibNg {
     }
 
     fn flags(&self, target: Target) -> Flag {
-        Flag::new(
-            vec![
-                Cflag::O2,
-                Cflag::Pipe,
-                Cflag::March(target),
-                Cflag::TreeVectorize,
-                Cflag::NoSemanticInterposition,
-                Cflag::FortifySource,
-                Cflag::StackProtectorStrong,
-                Cflag::Lto,
-                Cflag::WerrorOdr,
-                Cflag::WerrorLtoTypeMismatch,
-                Cflag::WerrorStrictAliasing,
-            ],
-            vec![
-                Ldflag::FuseLdMold,
-                Ldflag::O1,
-                Ldflag::AsNeeded,
-                Ldflag::Relro,
-                Ldflag::Now,
-                Ldflag::Lto,
-                Ldflag::WerrorOdr,
-                Ldflag::WerrorLtoTypeMismatch,
-                Ldflag::WerrorStrictAliasing,
-            ],
-        )
+        crate::flags::tool_flags(target)
+    }
+
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Custom
     }
 
     fn build_script(&self) -> &'static str {
@@ -85,22 +64,48 @@ if [ "$TRIPLE" != "$HOST_TRIPLE" ]; then
     -DCMAKE_C_COMPILER_TARGET="$TRIPLE"
   )
 fi
-cmake -S "$SOURCE" -B "$BUILD" \
-  "${CMAKE_CROSS[@]}" \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_INSTALL_PREFIX=/usr \
-  -DCMAKE_INSTALL_LIBDIR=lib64 \
-  -DZLIB_COMPAT=OFF \
-  -DWITH_GTEST=OFF \
-  -DBUILD_TESTING=OFF \
-  -DBUILD_SHARED_LIBS=ON \
-  -DCMAKE_C_COMPILER="$CC" \
-  -DCMAKE_AR="$AR" \
-  -DCMAKE_NM="$NM" \
-  -DCMAKE_RANLIB="$RANLIB" \
-  -DCMAKE_C_FLAGS="$CFLAGS" \
-  -DCMAKE_EXE_LINKER_FLAGS="$LDFLAGS" \
-  -DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS"
+configure_cmake() {
+  cmake -S "$SOURCE" -B "$1" \
+    "${CMAKE_CROSS[@]}" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCMAKE_INSTALL_LIBDIR=lib64 \
+    -DZLIB_COMPAT=OFF \
+    -DWITH_GTEST=OFF \
+    -DBUILD_TESTING="$2" \
+    -DBUILD_SHARED_LIBS=ON \
+    -DCMAKE_C_COMPILER="$CC" \
+    -DCMAKE_AR="$AR" \
+    -DCMAKE_NM="$NM" \
+    -DCMAKE_RANLIB="$RANLIB" \
+    -DCMAKE_C_FLAGS="$3" \
+    -DCMAKE_EXE_LINKER_FLAGS="$4" \
+    -DCMAKE_SHARED_LINKER_FLAGS="$4"
+}
+if [ "$TRIPLE" = "$HOST_TRIPLE" ]; then
+  # ネイティブのみ PGO。instrumented ツリーで minideflate を動かし、
+  # 別ツリーで -fprofile-use の成果物を作る。
+  export PGODIR=/tmp/pgo
+  rm -rf "$PGODIR"
+  mkdir -p "$PGODIR"
+  configure_cmake "$BUILD/gen" ON \
+    "$CFLAGS -fprofile-generate=$PGODIR -fprofile-update=atomic" \
+    "$LDFLAGS -fprofile-generate"
+  cmake --build "$BUILD/gen" -j"$(nproc)"
+  export LD_LIBRARY_PATH="$BUILD/gen${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  (
+    for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do cat "$SOURCE"/*.c "$SOURCE"/*.h; done > /tmp/pgo-input
+    for _level in 1 6 9; do
+      "$BUILD/gen/minideflate" -c "-$_level" < /tmp/pgo-input | "$BUILD/gen/minideflate" -d -c > /dev/null
+    done
+  ) || true
+  unset LD_LIBRARY_PATH
+  configure_cmake "$BUILD" OFF \
+    "$CFLAGS -fprofile-use=$PGODIR -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch" \
+    "$LDFLAGS -fprofile-use"
+else
+  configure_cmake "$BUILD" OFF "$CFLAGS" "$LDFLAGS"
+fi
 cmake --build "$BUILD" -j"$(nproc)"
 DESTDIR="$OUT" cmake --install "$BUILD"
 "#,

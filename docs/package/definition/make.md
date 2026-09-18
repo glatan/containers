@@ -45,3 +45,4 @@
 | フラグ | 設定値 | 条件 |
 |-|-|-|
 | `--prefix` | `/usr` | 常時 |
+| PGO | ネイティブビルドのみ適用（`Pgo::Profiled`） | 生成した Makefile を `make` で実行（`all`・`clean`・`-n`） |

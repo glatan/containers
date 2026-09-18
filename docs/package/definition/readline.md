@@ -14,8 +14,8 @@
 | 項目 | 値 |
 |-|-|
 | URL | https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz |
-| sha3-512 | `6ba1e8ee6e7e00e0fe3606f5c04db12aa311b714b1975eecab05e0ae2b1e4a39b369fef3f42656910385bf5fb04b901fc46d2cb77ef58eb8d5df8f9f694e1e82` |
-| blake3 | `9ca0529d332612d9b626786a3458db41f71587d6cf120fcbf9cb7be9ceadbf1d293d0c2e3995f5431665a343c5b525d886295551f357ff3307ec93ceee47c9e0` |
+| sha3-512 | `58fed6675aabd02dfab76dd82dddcda75361c96f28782a37883487961352885854dc44fd2868871242c7187ec26837d265c73d131948cffc6eff6238f2d46311` |
+| blake3 | `7109f094062bda387a0c16b4875375b96e36437bebbbd8d8f91bb27ba01d687f0e55e7df793b8b1e47dd4d6d4c990d0428a475e748b86defb20881d01f12a6ad` |
 | 展開ディレクトリ | `readline-8.3` |
 
 ## 依存
@@ -47,4 +47,5 @@
 |-|-|-|
 | `--prefix` | `/usr` | 常時 |
 | `--with-curses` | | 常時 |
-| `SHLIB_LIBS` | `-lncursesw` | 常時 |
+| `SHLIB_LIBS` | `-lncursesw` | 常時（PGO の instrumented / use 両ビルドでも replay） |
+| PGO | ネイティブビルドのみ適用（`Pgo::Profiled`） | `examples/rl`・`examples/rlversion` をビルドして実行 |

@@ -45,3 +45,4 @@
 | フラグ | 設定値 | 条件 |
 |-|-|-|
 | `--prefix` | `/usr` | 常時 |
+| PGO | ネイティブビルドのみ適用（`Pgo::Profiled`） | `find` / `xargs` で同梱ソースを走査（`-name`・`-size`・`-newer`・`-print0`） |

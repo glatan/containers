@@ -14,8 +14,8 @@
 | 項目 | 値 |
 |-|-|
 | URL | https://ftp.gnu.org/gnu/tar/tar-1.35.tar.xz |
-| sha3-512 | `6ba10e401b44cb7246ee95d8eb1a147e4529d8e7c10b754877ee54b7ca5796df3fef8c353381a943a4192b67f1ee0fbfb1e779a1cf64560d2bbfdc0349ca4e1c` |
-| blake3 | `9eb03d8d6978430f878a99a770337c76cc7823f03b5ee0689b9148d88e894c25987d60f588c8008064a59bb5f73d8495c6a51d45dc716869a2d2fb4ea778b7e2` |
+| sha3-512 | `d075aad9bfe5bde143c87388e3b4995775f0b40016e851d1243cc3b6a59fd65c5eeb8a23624ee41b18999dbd850213cbff7ebfb256e85c3a8441c3aa2cd7747c` |
+| blake3 | `55e3853752c56a607ae5dbc9e9190fe5d3f7599b76bb80abe0edba36d712c36bb60b803541ce46293cdf80cb80b8c84fd6940ca9c446fd5db3b04c7ee16664bc` |
 | 展開ディレクトリ | `tar-1.35` |
 
 ## 依存
@@ -45,3 +45,5 @@
 | フラグ | 設定値 | 条件 |
 |-|-|-|
 | `--prefix` | `/usr` | 常時 |
+| `--disable-acl` | | 常時 |
+| PGO | ネイティブビルドのみ適用（`Pgo::Profiled`） | `tar` で同梱ソースのアーカイブ作成・一覧・展開を往復 |

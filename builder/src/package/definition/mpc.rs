@@ -45,11 +45,23 @@ impl Package for Mpc {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(MAKE_CHECK_WORKLOAD)
+    }
+
     fn recipe(&self, ctx: &BuildContext) -> Recipe {
-        Recipe::autotools_args(vec![
-            "--prefix=/usr".into(),
-            format!("--with-gmp={}", ctx.overlay("gmp")),
-            format!("--with-mpfr={}", ctx.overlay("mpfr")),
-        ])
+        Recipe::autotools_pgo_args(
+            crate::package::recipe::Env::Autotools,
+            vec![
+                "--prefix=/usr".into(),
+                format!("--with-gmp={}", ctx.overlay("gmp")),
+                format!("--with-mpfr={}", ctx.overlay("mpfr")),
+            ],
+            MAKE_CHECK_WORKLOAD,
+        )
     }
 }
+
+/// make check へフラグ変数を伝播（テストバイナリも instrumented 化）。
+const MAKE_CHECK_WORKLOAD: &str =
+    "make check CFLAGS=\"$CFLAGS\" CXXFLAGS=\"${CXXFLAGS:-}\" LDFLAGS=\"$LDFLAGS\"";

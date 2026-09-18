@@ -33,10 +33,15 @@ impl Package for Zstd {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+    }
+
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
         Recipe::Steps(
             Steps::new(Env::Autotools)
                 .workdir(Workdir::InSource)
+                .pgo(crate::package::recipe::PgoTemplate::Make(PGO_WORKLOAD))
                 .step(Step::make(&[
                     "PREFIX=/usr",
                     "LIBDIR=/usr/lib",
@@ -48,3 +53,8 @@ impl Package for Zstd {
         )
     }
 }
+
+const PGO_WORKLOAD: &str = r#"for _i in 1 2 3 4 5 6 7 8; do cat ./lib/*.c ./lib/*/*.c ./lib/*/*.h ./programs/*.c 2>/dev/null; done > /tmp/pgo-input
+for _level in 1 3 9 19; do
+  ./programs/zstd -b"$_level" -T0 /tmp/pgo-input
+done"#;

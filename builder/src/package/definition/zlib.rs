@@ -1,4 +1,4 @@
-use crate::flags::{Cflag, Flag, Ldflag};
+use crate::flags::Flag;
 use crate::package::recipe::{BuildContext, Recipe};
 use crate::package::{Dependency, Package, Role, Source};
 use crate::target::Target;
@@ -40,36 +40,11 @@ impl Package for Zlib {
     }
 
     fn flags(&self, target: Target) -> Flag {
-        Flag::new(
-            vec![
-                Cflag::O2,
-                Cflag::Pipe,
-                Cflag::March(target),
-                Cflag::TreeVectorize,
-                Cflag::NoSemanticInterposition,
-                Cflag::FortifySource,
-                Cflag::StackProtectorStrong,
-                Cflag::Lto,
-                Cflag::WerrorOdr,
-                Cflag::WerrorLtoTypeMismatch,
-                Cflag::WerrorStrictAliasing,
-            ],
-            vec![
-                Ldflag::FuseLdMold,
-                Ldflag::O1,
-                Ldflag::AsNeeded,
-                Ldflag::Relro,
-                Ldflag::Now,
-                Ldflag::Lto,
-                Ldflag::WerrorOdr,
-                Ldflag::WerrorLtoTypeMismatch,
-                Ldflag::WerrorStrictAliasing,
-            ],
-        )
+        crate::flags::tool_flags(target)
     }
 
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Native
+        crate::flags::Pgo::Custom
     }
 
     fn recipe(&self, ctx: &BuildContext) -> Recipe {
@@ -103,10 +78,16 @@ cd "$BUILD"
 );
 
 const PGO: &str = r#"./configure --prefix=/usr --libdir=/usr/lib64 --shared
-make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-generate -fprofile-dir=$PGO" LDFLAGS="$LDFLAGS -fprofile-generate"
-echo 'pgo' | ./minigzip | ./minigzip -d >/dev/null
-./example >/dev/null
+make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-generate=$PGO -fprofile-update=atomic" LDFLAGS="$LDFLAGS -fprofile-generate"
+export LD_LIBRARY_PATH="$PWD${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+(
+  for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do cat ./*.c ./*.h; done > /tmp/zlib-pgo-input
+  for _level in 1 6 9; do
+    ./minigzip -c "-$_level" < /tmp/zlib-pgo-input | ./minigzip -d -c > /dev/null
+  done
+  ./example > /dev/null
+) || true
 make distclean
 ./configure --prefix=/usr --libdir=/usr/lib64 --shared
-make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-use -fprofile-dir=$PGO -fprofile-correction -Wno-missing-profile" LDFLAGS="$LDFLAGS -fprofile-use"
+make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-use=$PGO -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch" LDFLAGS="$LDFLAGS -fprofile-use"
 "#;

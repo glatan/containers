@@ -49,6 +49,6 @@ gcc 16.2.0。URL とハッシュは [toolchain.md](../toolchain.md) です。
 
 ## ビルド設定
 
-C/C++、`--disable-bootstrap`。gcc フラグ `--with-arch=z900`。PGO と sanitizer は [toolchain.md](../toolchain.md) です。configure は `--build=$HOST_TRIPLE --host=$PACKAGE_HOST --target=s390x-linux-gnu` です。
+C/C++、`--disable-bootstrap`。gcc フラグ `--with-arch=$MARCH --enable-decimal-float`（variant ごとの `$MARCH`、stage1/2 は `--with-arch=z900`）。PGO と sanitizer は [toolchain.md](../toolchain.md) です。configure は `--build=$HOST_TRIPLE --host=$PACKAGE_HOST --target=s390x-linux-gnu` です。
 
 `supports` は `Target::all()` です。製品キューは [toolchain.md](../toolchain.md)。このパッケージでは HOST と、architecture `s390x` の variant（z900 から z17）です。

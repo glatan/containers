@@ -1,4 +1,4 @@
-use crate::flags::{Cflag, Flag, Ldflag};
+use crate::flags::Flag;
 use crate::package::recipe::{BuildContext, Recipe};
 use crate::package::{Dependency, Package, Role, Source};
 use crate::target::Target;
@@ -45,37 +45,11 @@ impl Package for Openssl {
     }
 
     fn flags(&self, target: Target) -> Flag {
-        Flag::new(
-            vec![
-                Cflag::O2,
-                Cflag::Pipe,
-                Cflag::March(target),
-                Cflag::TreeVectorize,
-                Cflag::NoSemanticInterposition,
-                Cflag::FortifySource,
-                Cflag::StackProtectorStrong,
-                Cflag::FormatSecurity,
-                Cflag::Lto,
-                Cflag::WerrorOdr,
-                Cflag::WerrorLtoTypeMismatch,
-                Cflag::WerrorStrictAliasing,
-            ],
-            vec![
-                Ldflag::FuseLdMold,
-                Ldflag::O1,
-                Ldflag::AsNeeded,
-                Ldflag::Relro,
-                Ldflag::Now,
-                Ldflag::Lto,
-                Ldflag::WerrorOdr,
-                Ldflag::WerrorLtoTypeMismatch,
-                Ldflag::WerrorStrictAliasing,
-            ],
-        )
+        crate::flags::tool_flags(target)
     }
 
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Native
+        crate::flags::Pgo::Custom
     }
 
     fn recipe(&self, ctx: &BuildContext) -> Recipe {
@@ -115,11 +89,20 @@ configure
 "#,
 );
 
-const PGO: &str = r#"make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-generate" LDFLAGS="$LDFLAGS -fprofile-generate"
+const PGO: &str = r#"export PGODIR=/tmp/pgo
+rm -rf "$PGODIR"
+mkdir -p "$PGODIR"
+make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-generate=$PGODIR -fprofile-update=atomic" LDFLAGS="$LDFLAGS -fprofile-generate"
 export LD_LIBRARY_PATH="$PWD${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-./apps/openssl speed -seconds 1 \
-  rsa2048 ecdsap256 \
-  aes-128-cbc aes-256-cbc \
-  sha256 sha512
-make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-use -fprofile-correction -Wno-missing-profile" LDFLAGS="$LDFLAGS -fprofile-use"
+# ビルドツリー内の provider（default.so 等）を読めるようにする。
+# これが無いと EVP 系アルゴリズムが一切実行できずプロファイルが空になる。
+export OPENSSL_MODULES="$PWD/providers"
+export OPENSSL_CONF=/dev/null
+(
+  ./apps/openssl speed -seconds 1 rsa2048 ecdsap256 ed25519
+  ./apps/openssl speed -seconds 1 -evp aes-128-gcm -evp aes-256-gcm -evp chacha20-poly1305 -evp sha256 -evp sha512
+  ./apps/openssl speed -seconds 1 aes-128-cbc aes-256-cbc sha256 sha512
+) || true
+make clean
+make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-use=$PGODIR -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch" LDFLAGS="$LDFLAGS -fprofile-use"
 "#;

@@ -93,6 +93,8 @@ pub struct Steps {
     pub sysroot: bool,
     /// ビルドディレクトリの立て方。
     pub workdir: Workdir,
+    /// ネイティブビルド時の PGO 展開。クロスでは通常ステップへフォールバック。
+    pub pgo: Option<PgoTemplate>,
     pub steps: Vec<Step>,
 }
 
@@ -103,6 +105,7 @@ impl Steps {
             std: Std::Gnu17,
             sysroot: true,
             workdir: Workdir::Build,
+            pgo: None,
             steps: Vec::new(),
         }
     }
@@ -122,6 +125,12 @@ impl Steps {
         self
     }
 
+    /// ネイティブのみ PGO フェーズへ展開するテンプレートを宣言する。
+    pub const fn pgo(mut self, pgo: PgoTemplate) -> Self {
+        self.pgo = Some(pgo);
+        self
+    }
+
     pub fn step(mut self, step: Step) -> Self {
         self.steps.push(step);
         self
@@ -129,16 +138,32 @@ impl Steps {
 }
 
 /// env プリリュード。
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Env {
-    /// `-std` 付与 + クロス時の gnulib cache 変数 +
-    /// `autotools_configure`（config.log tail 付き）。LTO/Werror 剥がしは
-    /// host 側の `Flag::sanitized` で行う。
+    /// `-std` 付与 + クロス時の gnulib cache 変数 + `sanitize_flags` で
+    /// configure のみ LTO/LTO系`-Werror=*`/`-f{,no-}hardened` を剥がす
+    /// `autotools_configure`（config.log tail 付き）。`Step::Make` 系には
+    /// `CFLAGS`/`CXXFLAGS`/`LDFLAGS` の var override を自動付与する。
     Autotools,
-    /// LTO を保持する最小 env + `autotools_configure`。
+    /// フルフラグのままの `autotools_configure`（configure が CFLAGS を
+    /// Makefile に焼き直す gmp/bash/ncurses 型。var override は付けない）。
     Lto,
     /// `set -euxo pipefail` のみ。
     None,
+}
+
+/// PGO テンプレート。workload は `( … ) || true` で囲んで emit する
+/// コンテナ内シェル片。
+#[derive(Clone, Copy, Debug)]
+pub enum PgoTemplate {
+    /// configure → instrumented make → workload → `make distclean` →
+    /// reconfigure → profile-use make → install。
+    /// `Env::Autotools` は make 変数上書きで注入し、`Env::Lto` は
+    /// configure env 経由で注入する（gmp 型）。
+    Autotools(&'static str),
+    /// instrumented make → workload → `make clean` → profile-use make →
+    /// install（configure を持たない in-source make 系。zstd/bzip2）。
+    Make(&'static str),
 }
 
 /// ビルドディレクトリの立て方。
@@ -229,6 +254,28 @@ impl Recipe {
         )
     }
 
+    /// 定型 autotools + PGO テンプレート（ネイティブのみ展開）。
+    /// `workload` は `( … ) || true` で囲んで emit されるシェル片。
+    pub fn autotools_pgo(args: &[&'static str], workload: &'static str) -> Self {
+        Self::autotools_pgo_env(Env::Autotools, args, workload)
+    }
+
+    /// env を選べる定型 autotools + PGO テンプレート。
+    pub fn autotools_pgo_env(env: Env, arguments: &[&'static str], workload: &'static str) -> Self {
+        Self::autotools_pgo_args(env, args(arguments), workload)
+    }
+
+    /// 実行時 configure 引数 + PGO テンプレート（gmp の ABI 等）。
+    pub fn autotools_pgo_args(env: Env, args: Vec<String>, workload: &'static str) -> Self {
+        Self::Steps(
+            Steps::new(env)
+                .pgo(PgoTemplate::Autotools(workload))
+                .step(Step::Configure(args))
+                .step(Step::make(&[]))
+                .step(Step::make_install(&[])),
+        )
+    }
+
     /// レンダリングしたシェルスクリプト。
     pub fn render(&self, ctx: &BuildContext) -> String {
         match self {
@@ -273,6 +320,37 @@ export ac_cv_func_realloc_0_nonnull=yes
 export ac_cv_func_memcmp_working=yes
 "#;
 
+/// configure probe 用の env 剥がし（`Flag::sanitized` と同じ集合）。
+/// `-flto*`・LTO 系 `-Werror=*`・`-f{,no-}hardened` を落とす。
+/// `-Werror=format-security` は残す（Fedora と同じ）。
+const SANITIZE_FLAGS: &str = r#"sanitize_flags() {
+  printf '%s' "$1" | sed -E 's/-flto(=full|=auto|=thin)?//g; s/-Werror=(odr|lto-type-mismatch|strict-aliasing)//g; s/-f(no-)?hardened//g'
+}
+"#;
+
+/// instrumented ビルドを実行した成果物を workload が実行できるよう
+/// `$PWD` と `*/.libs` を `LD_LIBRARY_PATH` へ載せる。
+const PGO_LD_LIBRARY_PATH: &str = r#"export LD_LIBRARY_PATH="$PWD${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+for _libdir in "$PWD"/lib "$PWD"/programs $(find "$PWD" -type d -name .libs 2>/dev/null); do
+  [ -d "$_libdir" ] && export LD_LIBRARY_PATH="$_libdir:$LD_LIBRARY_PATH"
+done
+"#;
+
+/// `-fprofile-generate` への env 切り替え（ベース値を `_PGO_*` へ退避）。
+const PGO_GENERATE: &str = concat!(
+    "export _PGO_CFLAGS=\"${CFLAGS:-}\" _PGO_CXXFLAGS=\"${CXXFLAGS:-}\" _PGO_LDFLAGS=\"${LDFLAGS:-}\"\n",
+    "export CFLAGS=\"$_PGO_CFLAGS -fprofile-generate=$PGODIR -fprofile-update=atomic\"\n",
+    "export CXXFLAGS=\"$_PGO_CXXFLAGS -fprofile-generate=$PGODIR -fprofile-update=atomic\"\n",
+    "export LDFLAGS=\"$_PGO_LDFLAGS -fprofile-generate\"\n",
+);
+
+/// `-fprofile-use` への env 切り替え。
+const PGO_USE: &str = concat!(
+    "export CFLAGS=\"$_PGO_CFLAGS -fprofile-use=$PGODIR -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch\"\n",
+    "export CXXFLAGS=\"$_PGO_CXXFLAGS -fprofile-use=$PGODIR -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch\"\n",
+    "export LDFLAGS=\"$_PGO_LDFLAGS -fprofile-use\"\n",
+);
+
 impl Steps {
     fn render(&self, ctx: &BuildContext) -> String {
         let mut out = String::new();
@@ -288,9 +366,13 @@ impl Steps {
                     out.push_str(CROSS_BUILD_CC);
                     out.push_str(CROSS_CACHE);
                 }
+                out.push_str(SANITIZE_FLAGS);
                 out.push_str(
                     r#"autotools_configure() {
-  if ! "$SOURCE"/configure --build="$HOST_TRIPLE" --host="${PACKAGE_HOST:-$TRIPLE}" "$@"; then
+  if ! CFLAGS="$(sanitize_flags "${CFLAGS:-}")" \
+       CXXFLAGS="$(sanitize_flags "${CXXFLAGS:-}")" \
+       LDFLAGS="$(sanitize_flags "${LDFLAGS:-}")" \
+       "$SOURCE"/configure --build="$HOST_TRIPLE" --host="${PACKAGE_HOST:-$TRIPLE}" "$@"; then
     if [ -f config.log ]; then
       echo "===== config.log (last 80 lines) ====="
       tail -n 80 config.log
@@ -321,15 +403,127 @@ impl Steps {
                 .push_str("mkdir -p \"$BUILD\"\ncp -a \"$SOURCE\"/. \"$BUILD\"/\ncd \"$BUILD\"\n"),
             Workdir::None => {}
         }
-        for step in &self.steps {
-            step.render(&mut out);
+        match (self.pgo, ctx.cross()) {
+            (Some(PgoTemplate::Autotools(workload)), false) => {
+                out.push_str(PGODIR_PRELUDE);
+                self.render_pgo_autotools(&mut out, workload);
+            }
+            (Some(PgoTemplate::Make(workload)), false) => {
+                out.push_str(PGODIR_PRELUDE);
+                self.render_pgo_make(&mut out, workload);
+            }
+            _ => self.render_steps(&mut out),
         }
         out
     }
+
+    fn render_steps(&self, out: &mut String) {
+        for step in &self.steps {
+            step.render(out, self.env);
+        }
+    }
+
+    /// テンプレート A: configure → instrumented make → workload →
+    /// distclean → reconfigure → use make → install。
+    /// `Env::Lto` は configure が env を Makefile へ焼くため profile フラグを
+    /// configure 前に export する。`Env::Autotools` は make 変数上書きが
+    /// env を拾うため configure 後に export する。
+    fn render_pgo_autotools(&self, out: &mut String, workload: &str) {
+        let Some(configure) = self
+            .steps
+            .iter()
+            .position(|step| matches!(step, Step::Configure(_)))
+        else {
+            return self.render_steps(out);
+        };
+        let first_make = self
+            .steps
+            .iter()
+            .position(|step| matches!(step, Step::Make { .. }))
+            .unwrap_or(self.steps.len());
+        let install = self
+            .steps
+            .iter()
+            .position(|step| matches!(step, Step::MakeInstall { .. }))
+            .unwrap_or(self.steps.len());
+        // Configure→Make→MakeInstall の順序が崩れた手組み Steps では
+        // スライスが逆転して panic するため、PGO なしへフォールバックする。
+        if configure + 1 > first_make || first_make > install {
+            return self.render_steps(out);
+        }
+        for step in &self.steps[..configure] {
+            step.render(out, self.env);
+        }
+        if matches!(self.env, Env::Lto) {
+            out.push_str(PGO_GENERATE);
+        }
+        self.steps[configure].render(out, self.env);
+        for step in &self.steps[configure + 1..first_make] {
+            step.render(out, self.env);
+        }
+        if matches!(self.env, Env::Autotools) {
+            out.push_str(PGO_GENERATE);
+        }
+        for step in &self.steps[first_make..install] {
+            step.render(out, self.env);
+        }
+        out.push_str(PGO_LD_LIBRARY_PATH);
+        render_workload(out, workload);
+        out.push_str("make distclean || make clean\n");
+        out.push_str(PGO_USE);
+        self.steps[configure].render(out, self.env);
+        for step in &self.steps[configure + 1..first_make] {
+            step.render(out, self.env);
+        }
+        for step in &self.steps[first_make..install] {
+            step.render(out, self.env);
+        }
+        for step in &self.steps[install..] {
+            step.render(out, self.env);
+        }
+    }
+
+    /// テンプレート B: instrumented make → workload → clean →
+    /// use make → install（configure 無しの in-source make 系）。
+    fn render_pgo_make(&self, out: &mut String, workload: &str) {
+        let install = self
+            .steps
+            .iter()
+            .position(|step| matches!(step, Step::MakeInstall { .. }))
+            .unwrap_or(self.steps.len());
+        out.push_str(PGO_GENERATE);
+        for step in &self.steps[..install] {
+            step.render(out, self.env);
+        }
+        out.push_str(PGO_LD_LIBRARY_PATH);
+        render_workload(out, workload);
+        out.push_str("make clean || make distclean\n");
+        out.push_str(PGO_USE);
+        for step in &self.steps[..install] {
+            step.render(out, self.env);
+        }
+        for step in &self.steps[install..] {
+            step.render(out, self.env);
+        }
+    }
+}
+
+/// `PGODIR` は絶対パス必須（相対だと実行時 cwd に依存する）。
+const PGODIR_PRELUDE: &str = "export PGODIR=/tmp/pgo\nrm -rf \"$PGODIR\"\nmkdir -p \"$PGODIR\"\n";
+
+/// workload シェル片を `( … ) || true` で囲む。1 テストの失敗で
+/// プロファイル生成全体を捨てないため。
+fn render_workload(out: &mut String, workload: &str) {
+    out.push_str("(\n");
+    out.push_str(workload);
+    if !workload.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str(") || true\n");
 }
 
 impl Step {
-    fn render(&self, out: &mut String) {
+    fn render(&self, out: &mut String, env: Env) {
         match self {
             Step::Configure(args) => {
                 out.push_str("autotools_configure");
@@ -346,12 +540,18 @@ impl Step {
                 for arg in args {
                     let _ = write!(out, " {arg}");
                 }
+                if matches!(env, Env::Autotools) {
+                    render_flag_vars(out, args);
+                }
                 out.push('\n');
             }
             Step::MakeInstall { vars } => {
                 out.push_str("make install");
                 for var in vars {
                     let _ = write!(out, " {var}");
+                }
+                if matches!(env, Env::Autotools) {
+                    render_flag_vars(out, vars);
                 }
                 out.push_str(" DESTDIR=\"$OUT\"\n");
             }
@@ -379,6 +579,22 @@ impl Step {
     }
 }
 
+/// autotools が `@CFLAGS@` を Makefile へ焼き込むのを打ち消す変数上書き。
+/// ステップが既に同名変数を明示している場合（bzip2 の `CFLAGS=` 等）は
+/// そちらを尊重して付与しない。
+fn render_flag_vars(out: &mut String, args: &[String]) {
+    for (name, value) in [
+        ("CFLAGS", "\"${CFLAGS:-}\""),
+        ("CXXFLAGS", "\"${CXXFLAGS:-}\""),
+        ("LDFLAGS", "\"${LDFLAGS:-}\""),
+    ] {
+        let owned = format!("{name}=");
+        if !args.iter().any(|arg| arg.starts_with(&owned)) {
+            let _ = write!(out, " {name}={value}");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -391,8 +607,12 @@ mod tests {
     fn autotools_renders_prelude_configure_make_install() {
         let recipe = Recipe::autotools(&["--prefix=/usr", "--disable-acl"]);
         let script = recipe.render(&ctx());
-        // LTO/Werror 剥がしは host 側の Flag::sanitized が担う
-        assert!(!script.contains("sanitize_flags"), "{script}");
+        // configure のみ sanitize し、make/install は var override でフルフラグ
+        assert!(script.contains("sanitize_flags"), "{script}");
+        assert!(
+            script.contains("CFLAGS=\"$(sanitize_flags \"${CFLAGS:-}\")\""),
+            "{script}"
+        );
         assert!(script.contains("-std=gnu17"), "{script}");
         // sysroot 検出は wrap_script 側（マウント情報が必要なため）
         assert!(!script.contains("--sysroot=$SYSROOT"), "{script}");
@@ -400,8 +620,40 @@ mod tests {
             script.contains("autotools_configure --prefix=/usr --disable-acl"),
             "{script}"
         );
-        assert!(script.contains("make -j\"$(nproc)\""), "{script}");
-        assert!(script.contains("make install DESTDIR=\"$OUT\""), "{script}");
+        assert!(
+            script.contains(
+                "make -j\"$(nproc)\" CFLAGS=\"${CFLAGS:-}\" CXXFLAGS=\"${CXXFLAGS:-}\" LDFLAGS=\"${LDFLAGS:-}\""
+            ),
+            "{script}"
+        );
+        assert!(
+            script.contains("make install CFLAGS=\"${CFLAGS:-}\" CXXFLAGS=\"${CXXFLAGS:-}\" LDFLAGS=\"${LDFLAGS:-}\" DESTDIR=\"$OUT\""),
+            "{script}"
+        );
+    }
+
+    #[test]
+    fn autotools_make_skips_explicit_flag_vars() {
+        let recipe = Recipe::Steps(
+            Steps::new(Env::Autotools)
+                .workdir(Workdir::InSource)
+                .step(Step::Make {
+                    jobs: false,
+                    args: args(&[
+                        "CFLAGS=\"$CFLAGS -fpic -D_FILE_OFFSET_BITS=64\"",
+                        "LDFLAGS=\"$LDFLAGS\"",
+                    ]),
+                })
+                .step(Step::make_install(&["PREFIX=/usr"])),
+        );
+        let script = recipe.render(&ctx());
+        // 明示 CFLAGS=/LDFLAGS= は残り、CXXFLAGS のみ自動付与される
+        assert!(
+            script.contains(
+                "make CFLAGS=\"$CFLAGS -fpic -D_FILE_OFFSET_BITS=64\" LDFLAGS=\"$LDFLAGS\" CXXFLAGS=\"${CXXFLAGS:-}\""
+            ),
+            "{script}"
+        );
     }
 
     #[test]
@@ -410,6 +662,70 @@ mod tests {
         let script = recipe.render(&ctx());
         assert!(!script.contains("sanitize_flags"), "{script}");
         assert!(script.contains("autotools_configure"), "{script}");
+    }
+
+    #[test]
+    fn autotools_pgo_native_expands_phases() {
+        let recipe = Recipe::autotools_pgo(&["--prefix=/usr"], "./tool --bench");
+        let script = recipe.render(&ctx());
+        assert!(script.contains("export PGODIR=/tmp/pgo"), "{script}");
+        assert!(script.contains("-fprofile-generate=$PGODIR"), "{script}");
+        assert!(script.contains("-fprofile-use=$PGODIR"), "{script}");
+        assert!(script.contains("-fprofile-correction"), "{script}");
+        assert!(script.contains("make distclean || make clean"), "{script}");
+        assert!(script.contains("(\n./tool --bench\n) || true"), "{script}");
+        // configure → gen make → workload → distclean → reconfigure → use make
+        let configure = script.find("autotools_configure --prefix=/usr").unwrap();
+        let second = script[configure + 1..]
+            .find("autotools_configure --prefix=/usr")
+            .map(|pos| configure + 1 + pos);
+        assert!(second.is_some(), "再 configure がありません: {script}");
+    }
+
+    #[test]
+    fn autotools_pgo_cross_falls_back_to_plain() {
+        let target = Target::Arm64(crate::target::Arm64Variant::V8);
+        let ctx = BuildContext::of(None, target);
+        let recipe = Recipe::autotools_pgo(&["--prefix=/usr"], "./tool --bench");
+        let script = recipe.render(&ctx);
+        assert!(!script.contains("-fprofile-generate"), "{script}");
+        assert!(!script.contains("PGODIR"), "{script}");
+        assert!(
+            script.contains("autotools_configure --prefix=/usr"),
+            "{script}"
+        );
+    }
+
+    #[test]
+    fn autotools_pgo_lto_env_exports_before_configure() {
+        let recipe =
+            Recipe::autotools_pgo_env(Env::Lto, &["--prefix=/usr", "ABI=64"], "make check");
+        let script = recipe.render(&ctx());
+        let gen_at = script.find("-fprofile-generate=$PGODIR").unwrap();
+        let configure = script.find("autotools_configure --prefix").unwrap();
+        // Env::Lto は configure env で注入するため export が先
+        assert!(gen_at < configure, "{script}");
+        // Env::Lto では make 変数上書きを付けない
+        assert!(!script.contains("CFLAGS=\"$CFLAGS\" DESTDIR"), "{script}");
+    }
+
+    #[test]
+    fn make_pgo_replays_build_and_install() {
+        let recipe = Recipe::Steps(
+            Steps::new(Env::Autotools)
+                .workdir(Workdir::InSource)
+                .pgo(PgoTemplate::Make("./zstd -b3 input"))
+                .step(Step::make(&["PREFIX=/usr"]))
+                .step(Step::make_install(&["PREFIX=/usr"])),
+        );
+        let script = recipe.render(&ctx());
+        assert_eq!(script.matches("make -j\"$(nproc)\" PREFIX=/usr").count(), 2);
+        assert_eq!(script.matches("make install PREFIX=/usr").count(), 1);
+        assert!(script.contains("make clean || make distclean"), "{script}");
+        assert!(
+            script.contains("(\n./zstd -b3 input\n) || true"),
+            "{script}"
+        );
     }
 
     #[test]
@@ -425,10 +741,8 @@ mod tests {
             script.contains("cp -a \"$SOURCE\"/. \"$BUILD\"/"),
             "{script}"
         );
-        assert!(
-            script.contains("make install PREFIX=/usr DESTDIR=\"$OUT\""),
-            "{script}"
-        );
+        assert!(script.contains("make install PREFIX=/usr"), "{script}");
+        assert!(script.contains("DESTDIR=\"$OUT\""), "{script}");
     }
 
     #[test]

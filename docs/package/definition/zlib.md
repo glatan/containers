@@ -51,9 +51,9 @@ openssl からは依存されません。
 | `--prefix` | `/usr` | 常時 |
 | `--libdir` | `/usr/lib64` | 常時 |
 | `--shared` | | 常時 |
-| `flags()` の Cflag | openssl と同等だが `FormatSecurity` は付与しない | 書式付き出力処理がほぼ存在しないため |
+| `flags()` | `tool_flags(target)`（既定セット。[README.md](../README.md) の既定フラグ表） | 個別追加・除外はなし |
 | `flags()` の Ldflag | openssl と同等 | 依存関係グラフの末端ライブラリであるため |
 | LTO | 適用する | builder のフラグ指定による |
 | PGO | ネイティブビルドのみ適用 | `make` の `CFLAGS` / `LDFLAGS` に `-fprofile-generate` / `-fprofile-use` を付与 |
 
-PGO は生成バイナリを実行可能なネイティブビルド時のみ適用します（`Pgo::Native`）。クロスビルドではプロファイル採取を実行できないため、`recipe(ctx)` が `ctx.cross()` で分岐して素の `make`（`CHOST=$TRIPLE` 付き `configure`）に切り替えます。ネイティブでは `-fprofile-generate` でビルド後、`minigzip`（`echo 'pgo' | ./minigzip | ./minigzip -d`）と `example` をワークロードとして実行し、`make distclean` のうえ `-fprofile-use` で再ビルドします。
+PGO は生成バイナリを実行可能なネイティブビルド時のみ適用します（`Pgo::Custom`）。クロスビルドではプロファイル採取を実行できないため、`recipe(ctx)` が `ctx.cross()` で分岐して素の `make`（`CHOST=$TRIPLE` 付き `configure`）に切り替えます。ネイティブでは `-fprofile-generate` でビルド後、同梱ソース（`.c` / `.h` を 16 回連結した複数 MB 入力）を `minigzip` で `-1` / `-6` / `-9` の 3 レベルで圧縮・解凍し、`example` も実行して `make distclean` のうえ `-fprofile-use` で再ビルドします。

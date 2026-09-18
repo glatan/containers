@@ -48,7 +48,14 @@ impl Package for Meson {
                 .sysroot(false)
                 .workdir(Workdir::None)
                 .step(Step::Shell(
-                    "python3 -m pip install --root=\"$OUT\" --prefix=/usr --no-deps --no-build-isolation \"$SOURCE\"",
+                    // python 成果物は --without-ensurepip で pip を持たないため、
+                    // mesonbuild を site-packages へ直接配置して launcher を作る。
+                    r#"_pyver=$(python3 -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')
+_site="$OUT/usr/lib/$_pyver/site-packages"
+mkdir -p "$_site" "$OUT/usr/bin"
+cp -a "$SOURCE"/mesonbuild "$_site"/
+printf '#!/bin/sh\nexec python3 -m mesonbuild.mesonmain "$@"\n' > "$OUT/usr/bin/meson"
+chmod +x "$OUT/usr/bin/meson""#,
                 )),
         )
     }

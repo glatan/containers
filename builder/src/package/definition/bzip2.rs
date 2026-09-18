@@ -33,10 +33,15 @@ impl Package for Bzip2 {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+    }
+
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
         Recipe::Steps(
             Steps::new(Env::Autotools)
                 .workdir(Workdir::InSource)
+                .pgo(crate::package::recipe::PgoTemplate::Make(PGO_WORKLOAD))
                 .step(Step::Shell(
                     "sed -i 's/$(CC) -shared/$(CC) $(LDFLAGS) -shared/' Makefile-libbz2_so",
                 ))
@@ -63,9 +68,8 @@ impl Package for Bzip2 {
                         "bzip2recover",
                     ]),
                 })
-                .step(Step::Make {
-                    jobs: false,
-                    args: crate::package::recipe::args(&["install", "PREFIX=\"$OUT/usr\""]),
+                .step(Step::MakeInstall {
+                    vars: crate::package::recipe::args(&["PREFIX=\"$OUT/usr\""]),
                 })
                 .step(Step::Shell(
                     "mkdir -p \"$OUT/usr/lib\"
@@ -74,3 +78,9 @@ cp -a libbz2.so* \"$OUT/usr/lib/\"",
         )
     }
 }
+
+const PGO_WORKLOAD: &str = r#"for _i in 1 2 3 4 5 6 7 8; do cat ./*.c ./*.h 2>/dev/null; done > /tmp/pgo-input
+for _opt in -1 -6 -9; do
+  ./bzip2 -c "$_opt" /tmp/pgo-input | ./bzip2 -d -c > /dev/null
+done
+./bzip2 -c -9 /tmp/pgo-input > /tmp/pgo.bz2 && ./bzip2recover /tmp/pgo.bz2 > /dev/null 2>&1"#;

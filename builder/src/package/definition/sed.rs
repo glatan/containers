@@ -33,9 +33,19 @@ impl Package for Sed {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+    }
+
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools(&["--prefix=/usr"])
+        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
     }
 }
+
+const PGO_WORKLOAD: &str = r#"find "$SOURCE" -name '*.c' -o -name '*.h' | while read -r _f; do
+  ./sed/sed -e 's/int/INT/g' -e 's/return/RET/g' "$_f" > /dev/null
+done
+./sed/sed -n '1,50p' "$SOURCE"/configure > /dev/null
+./sed/sed -e 'y/abc/ABC/' -e '/^#/d' "$SOURCE"/config.h.in > /dev/null 2>&1"#;
 
 impl Bootstrap for Sed {}

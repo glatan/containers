@@ -14,7 +14,86 @@
 
 `CC`、`CXX`、`AR`、`RANLIB`、`NM` などのツールチェーン環境変数は builder が制御します。シード上で HOST 向けに組むあいだは `CC=gcc` です。自前 gcc のあと、および合成イメージ上では、対象 Platform の `CROSS` 接頭辞を付けます。amd64 では `x86_64-linux-gnu-gcc`、arm64 では `aarch64-linux-gnu-gcc` です。
 
-フラグトークンの正本は [`builder/src/flags.rs`](../../builder/src/flags.rs) です。builder は `CFLAGS` に指定された `-flto` を `LDFLAGS` へ暗黙に複製せず、両者で独立してフラグを管理します。基本最適化レベルには `-O2` を指定し、CPU 最適化オプションは対象 variant から一意に決定します（ppc64le は `-mcpu=`、それ以外は `-march=` を使用し、ホスト環境に依存する `native` は指定しません）。`FormatSecurity` トークンは `-Wformat` と `-Wformat-security` の 2 つのコンパイラフラグへ展開されます。PGO の適用方針は `Package::pgo()`（`Pgo::None` / `Pgo::Native`）で宣言し、プロファイル採取および適用手順は `recipe(ctx)` が `ctx.cross()` で分岐して静的に組み込みます。`-O3`、`-g`、`-Wall`、`-fexceptions` はカタログ用コンパイラフラグとしては付与しません。
+フラグトークンの正本は [`builder/src/flags.rs`](../../builder/src/flags.rs) です。builder は `CFLAGS` に指定された `-flto` を `LDFLAGS` へ暗黙に複製せず、両者で独立してフラグを管理します。基本最適化レベルには `-O2` を指定し、CPU 最適化オプションは対象 variant から一意に決定します（ppc64le は `-mcpu=`、それ以外は `-march=` を使用し、ホスト環境に依存する `native` は指定しません）。`FormatSecurityError` トークンは `-Wformat` と `-Werror=format-security` の 2 つのコンパイラフラグへ、`FortifySource` トークンは `-U_FORTIFY_SOURCE` と `-D_FORTIFY_SOURCE=3` へ展開されます。PGO の適用方針は `Package::pgo()`（`Pgo::None` / `Pgo::Profiled(ワークロード)` / `Pgo::Custom`）で宣言し、プロファイル採取および適用手順は `recipe(ctx)` が `ctx.cross()` で分岐して静的に組み込みます。`-O3`、`-g`、`-Wall` はカタログ用コンパイラフラグとしては付与しません（`-fexceptions` は既定セットに含みます）。
+
+## フラグ注入経路
+
+いつ・どこで・どのオプションが渡されるかの一覧です。
+
+| 層 | 注入点 | 実装 | 内容 | 適用条件 |
+|-|-|-|-|-|
+| L1 ツールチェーン既定 | 最終 gcc の specs / configure | `toolchain.rs` の `--with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'`、`--enable-default-pie`、`--enable-default-ssp` | CFLAGS を無視するビルド系にも `-fhardened` / PIE / SSP を既定適用 | 最終 gcc 経由の全コンパイル。`-fno-hardened` で傘フラグのみ解除（toolchain 既定 PIE/SSP は残存） |
+| L2 環境変数 | コンテナ `CFLAGS` / `CXXFLAGS` / `LDFLAGS` | `container.rs` の `linker_env()` が `flags().env()` を渡す | `tool_flags(target)`（後述の既定セット）またはパッケージ固有 `flags()` | 常時。`CXXFLAGS` は `CFLAGS` と同値。mold 成果物が無い時のみ `-fuse-ld=mold` を除去 |
+| L3 recipe プリリュード | configure 実行時の一時 env | `recipe.rs` の `autotools_configure` が `sanitize_flags` で `CFLAGS` / `CXXFLAGS` / `LDFLAGS` を一時上書き | `-flto*`・LTO 系 `-Werror={odr,lto-type-mismatch,strict-aliasing}`・`-f{,no-}hardened` を configure のみ除去（`-Werror=format-security` は保持） | `Env::Autotools` のみ。`Env::Lto`（configure が CFLAGS を Makefile へ焼くパッケージ）と `Env::None` では除去しない |
+| L3b `-std` 付与 | `CFLAGS` への末尾追加 | `Steps::std`（プリリュードで `export CFLAGS="... -std=gnu17"`、flex は `gnu11`） | gnulib 等の K&R 宣言保護 | `Env::Autotools` のみ |
+| L4 make 変数上書き | `make` / `make install` 引数 | `Step::Make` / `MakeInstall` が `CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}"` を自動付与 | configure が `@CFLAGS@` で Makefile へ焼いた sanitize 済み値をフルフラグで打ち消す | `Env::Autotools`。ステップが同名変数を明示済み（bzip2 の `CFLAGS=` 等）の場合は付与しない |
+| L5 PGO フェーズ | `-fprofile-generate` / `-fprofile-use` の env 切替 | `PgoTemplate` が `_PGO_*` へ退避して export | instrumented / use フェーズのフラグ（後述の PGO フェーズ表） | ネイティブビルドのみ。クロスでは PGO ブロック全体が素の手順へフォールバック |
+| L6 パッケージ固有 | スクリプト内 export / 引数 | 各 `definition/*.rs` | openssl / zlib / zlib-ng / mold / toolchain / qemu の独自手順、glibc の CFLAGS 等 | パッケージごと |
+
+## 既定フラグセット（`tool_flags`）
+
+| トークン | 展開 | 種別 | 対象 |
+|-|-|-|-|
+| `O2` | `-O2` | Perf | 全 |
+| `Pipe` | `-pipe` | Perf | 全 |
+| `March(target)` | `-march=<variant>`（ppc64le は `-mcpu=`） | Perf | 全 |
+| `TreeVectorize` | `-ftree-vectorize` | Perf | 全 |
+| `NoSemanticInterposition` | `-fno-semantic-interposition` | Perf | 全 |
+| `NoPlt` | `-fno-plt` | Perf | amd64 / arm64 |
+| `TlsDialectGnu2` | `-mtls-dialect=gnu2` | Perf | amd64 |
+| `Hardened` | `-fhardened` | Harden | 全（`NoHardened` で傘のみ解除可） |
+| `NoWhardened` | `-Wno-hardened` | Harden | 全 |
+| `StackProtectorStrong` | `-fstack-protector-strong` | Harden | 全 |
+| `FormatSecurityError` | `-Wformat -Werror=format-security` | Harden | 全（sanitize でも保持） |
+| `StrictFlexArrays3` | `-fstrict-flex-arrays=3` | Harden | 全 |
+| `ZeroInitPaddingBits` | `-fzero-init-padding-bits=all` | Harden | 全 |
+| `NoDeleteNullPointer` | `-fno-delete-null-pointer-checks` | Harden | 全 |
+| `NoStrictOverflow` | `-fno-strict-overflow` | Harden | 全 |
+| `NoStrictAliasing` | `-fno-strict-aliasing` | Harden | 全 |
+| `Exceptions` | `-fexceptions` | Harden | 全 |
+| `Wtrampolines` | `-Wtrampolines` | Harden | 全 |
+| `BranchProtection` | `-mbranch-protection=standard` | Harden | arm64 |
+| `ZeroCallUsedRegs` | `-fzero-call-used-regs=used-gpr` | Harden | amd64 / arm64 |
+| `Lto` | `-flto=auto` | Perf | 全（configure では除去） |
+| `WerrorOdr` / `WerrorLtoTypeMismatch` / `WerrorStrictAliasing` | `-Werror={odr,lto-type-mismatch,strict-aliasing}` | Perf | 全（configure では除去） |
+
+| トークン（Ldflag） | 展開 | 対象 |
+|-|-|-|
+| `FuseLdMold` | `-fuse-ld=mold` | 全（mold 成果物が無い時は host 側で除去。mold 自身には付けない） |
+| `O1` | `-Wl,-O1` | 全 |
+| `AsNeeded` | `-Wl,--as-needed` | 全 |
+| `NoCopyDtNeeded` | `-Wl,--no-copy-dt-needed-entries` | 全 |
+| `Relro` / `Now` / `NoExecStack` | `-Wl,-z,{relro,now,noexecstack}` | 全 |
+| `PackRelativeRelocs` | `-Wl,-z,pack-relative-relocs` | amd64 / arm64 / ppc64le（s390x・riscv64 は除外） |
+| `Lto` | `-flto=auto` | 全 |
+| `WerrorOdr` / `WerrorLtoTypeMismatch` / `WerrorStrictAliasing` | `-Werror=*` 同上 | 全 |
+| `CetReportError` | `-Wl,-z,cet-report=error` | opt-in（amd64。strict CET のビルド時診断） |
+| `NoDlopen` | `-Wl,-z,nodlopen` | opt-in |
+| `Zdefs` | `-Wl,-z,defs` | opt-in |
+| `BsymbolicFunctions` | `-Wl,-Bsymbolic-functions` | opt-in |
+| `NoHardened` | `-fno-hardened` | opt-in（CFLAGS / LDFLAGS 双方で指定可能） |
+
+`FortifySource`（`-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3`）は `-fhardened` と二重定義警告になるため既定セットには含めず、`NoHardened` を選ぶパッケージの明示トークンとして残します。
+
+## PGO フェーズ別フラグ遷移
+
+`PGODIR=/tmp/pgo`（絶対パス）に `.gcda` を集めます。`PgoTemplate::Autotools`（configure あり）は ①configure → ②instrumented build → ③workload → ④`make distclean || make clean` → ⑤再 configure → ⑥use build → ⑦install。`PgoTemplate::Make`（configure 無しの in-source make 系）は ②→③→`make clean || make distclean`→⑥→⑦です。
+
+| フェーズ | 実行内容 | CFLAGS / CXXFLAGS | LDFLAGS | 備考 |
+|-|-|-|-|
+| ① configure | `autotools_configure` | sanitized（L3）+ ベース値（`Env::Lto` では `-fprofile-generate` も注入） | 同左 | `Env::Autotools` は configure が焼く値を L4 で打ち消すため make 時に注入 |
+| ② instrumented build | `make -j`（pkg 固有 args を replay） | ベース + `-fprofile-generate=$PGODIR -fprofile-update=atomic` | ベース + `-fprofile-generate` | ネイティブのみ |
+| ③ workload | パッケージ宣言のシェル片を `( ... ) || true` で実行 | — | — | 実行前に `$PWD`・`$PWD/lib`・`$PWD/programs`・`*/.libs` を `LD_LIBRARY_PATH` へ auto-export |
+| ⑤ use build | `make -j`（同 args replay） | ベース + `-fprofile-use=$PGODIR -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch` | ベース + `-fprofile-use` | ネイティブのみ |
+
+## PGO 対象パッケージ
+
+| `Pgo` | パッケージ | ワークロード概要 |
+|-|-|-|
+| `Profiled`（template A） | xz / gzip / pcre2 / sqlite / grep / sed / gawk / diffutils / findutils / tar / patch / m4 / bison / make / pkgconf / coreutils / texinfo / expat / readline / flex / bash / libffi | ビルドしたバイナリで `$SOURCE` または同梱データを処理（`make check` は mpfr / mpc / isl / libxcrypt / gmp、libffi は FFI スモークテスト、bash は組み込み機能の実行）。詳細は各 `{パッケージ名}.md` |
+| `Profiled`（template B） | zstd / bzip2 | `zstd -b` ベンチ（複数レベル・`-T0`）、bzip2 `-1`/`-6`/`-9` roundtrip + `bzip2recover` |
+| `Custom` | openssl / zlib / zlib-ng / mold / ninja / python / `{triple}-binutils` / `{triple}-gcc` | openssl は `speed` + `speed -evp`（generate/use 間に `make clean`）。zlib / zlib-ng は複数 MB 実データ × `-1`/`-6`/`-9`。ninja は bootstrap で自身を rebuild。mold は自身でリンクを実行。python は `--enable-optimizations` の自己完結 PGO |
+| `None` | ncurses / qemu / meson / glib / cmake / perl / glibc / linux-headers / ca-certificates / build-env / 中間 gcc ステージ | `tic` は libncurses を駆動しない、qemu は独自フラグ管理、meson は C コードなし、残りは非現実・個別判断 |
 
 種別ごとの例外は、glibc と最終 gcc は [toolchain.md](./toolchain.md)、Host tools は [host-tools.md](./host-tools.md)、カタログと qemu は各 `{パッケージ名}.md` です。
 

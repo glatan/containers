@@ -33,7 +33,16 @@ impl Package for Pcre2 {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+    }
+
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools(&["--prefix=/usr"])
+        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
     }
 }
+
+const PGO_WORKLOAD: &str = r#"for _input in "$SOURCE"/testdata/testinput1 "$SOURCE"/testdata/testinput2 "$SOURCE"/testdata/testinput4 "$SOURCE"/testdata/testinput5; do
+  [ -f "$_input" ] && ./pcre2test -q "$_input" /tmp/pcre2-out
+done
+./pcre2test -q "$SOURCE/testdata/testinput1" /dev/null"#;

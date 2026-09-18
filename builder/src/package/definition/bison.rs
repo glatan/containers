@@ -38,7 +38,16 @@ impl Package for Bison {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+    }
+
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools(&["--prefix=/usr"])
+        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
     }
 }
+
+const PGO_WORKLOAD: &str = r#"export BISON_PKGDATADIR="$SOURCE/data"
+for _y in "$SOURCE"/src/parse-gram.y "$SOURCE"/examples/*/calc.y "$SOURCE"/tests/*.y; do
+  [ -f "$_y" ] && ./src/bison -o /tmp/bison-out.c "$_y" 2>/dev/null
+done"#;

@@ -39,9 +39,14 @@ impl Package for Bash {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+    }
+
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
         Recipe::Steps(
             Steps::new(Env::Lto)
+                .pgo(crate::package::recipe::PgoTemplate::Autotools(PGO_WORKLOAD))
                 .step(Step::configure(&["--prefix=/usr", "--without-bash-malloc"]))
                 .step(Step::make(&[]))
                 .step(Step::make_install(&[]))
@@ -55,3 +60,10 @@ impl Package for Bash {
 }
 
 impl Bootstrap for Bash {}
+
+const PGO_WORKLOAD: &str = r#"./bash -c '
+x=0; for i in $(seq 1 10000); do x=$((x+i)); done; echo "$x" > /dev/null
+s=""; for f in "$SOURCE"/*; do s="$s${f##*/}"; done; echo "${#s}" > /dev/null
+for i in $(seq 1 2000); do v="abc$i"; printf "%s" "${v%[0-9]*}${v##*[a-z]}" > /dev/null; done
+shopt -s nullglob; for f in "$SOURCE"/*.{c,h} "$SOURCE"/*/*.c; do echo "${#f}" > /dev/null; done
+'"#;

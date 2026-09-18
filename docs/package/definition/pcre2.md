@@ -48,3 +48,4 @@
 | `--enable-pcre2-16` | | 常時 |
 | `--enable-pcre2-32` | | 常時 |
 | `--enable-jit` | | 常時 |
+| PGO | ネイティブビルドのみ適用（`Pgo::Profiled`） | `pcre2test` で `testdata/testinput{1,2,4,5}` を実行 |

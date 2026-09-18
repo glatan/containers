@@ -38,12 +38,18 @@ impl Package for Flex {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+    }
+
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
         Recipe::Steps(
             Steps::new(Env::Autotools)
                 // gnulib の lib/malloc.c は K&R 宣言のため gnu17 で壊れる
                 .std(Std::Gnu11)
                 .workdir(Workdir::InSource)
+                // config.h fixup（configure〜make 間ステップ）は両フェーズで replay される
+                .pgo(crate::package::recipe::PgoTemplate::Autotools(PGO_WORKLOAD))
                 .step(Step::Shell(
                     r#"if [ -f lib/malloc.c ]; then
   cat > lib/malloc.c <<'EOF'
@@ -67,3 +73,7 @@ fi"#,
         )
     }
 }
+
+const PGO_WORKLOAD: &str = r#"find "$SOURCE" -name '*.l' | while read -r _l; do
+  ./src/flex -o /tmp/flex-out.c "$_l" 2>/dev/null
+done"#;

@@ -52,9 +52,8 @@ openssl からは依存されません。標準 zlib の `libz.so` とは配置�
 | `CMAKE_INSTALL_LIBDIR` | `lib64` | 常時 |
 | `CMAKE_SYSTEM_NAME` | `Linux` | `$TRIPLE` が `$HOST_TRIPLE` と異なるとき |
 | `ZLIB_COMPAT` | `OFF` | 常時（標準 zlib との競合を防ぐため `libz.so` は出力しない） |
-| `BUILD_TESTING` | `OFF` | 常時（テスト用バイナリのビルドを無効化） |
+| `BUILD_TESTING` | `OFF`（PGO instrumented ツリーでは `ON`） | 常時（テスト用バイナリのビルドを無効化） |
 | `WITH_GTEST` | `OFF` | 常時 |
-| `flags()` の Cflag | openssl と同等だが `FormatSecurity` は付与しない | 書式付き出力処理がほぼ存在しないため |
-| `flags()` の Ldflag | openssl と同等 | 依存関係グラフの末端ライブラリであるため |
+| `flags()` | `tool_flags(target)`（既定セット。[README.md](../README.md) の既定フラグ表） | 個別追加・除外はなし |
 | LTO | 適用する | builder のフラグ指定による |
-| PGO | 適用しない | プロファイル手順を設けていないため |
+| PGO | ネイティブビルドのみ適用（`Pgo::Custom`） | 別ツリー `$BUILD/gen` で `-fprofile-generate` の instrumented ビルドを組み、同梱ソースを 16 回連結した複数 MB 入力を `minideflate` で `-1` / `-6` / `-9` の 3 レベルで圧縮・解凍してプロファイルを採取。`$BUILD` で `-fprofile-use` の成果物を組む |

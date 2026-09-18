@@ -49,3 +49,4 @@
 | `--prefix` | `/usr` | 常時 |
 | `--enable-readline` | | 常時 |
 | `CPPFLAGS` | `-DSQLITE_ENABLE_COLUMN_METADATA -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS4 -DSQLITE_ENABLE_FTS5 -DSQLITE_ENABLE_RTREE` を追加 | 常時 |
+| PGO | ネイティブビルドのみ適用（`Pgo::Profiled`） | `sqlite3` でテーブル作成・INSERT / SELECT / JOIN / UPDATE / `VACUUM` を実行 |

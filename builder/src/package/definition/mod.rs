@@ -379,7 +379,7 @@ mod tests {
             find("zlib-ng")
                 .unwrap()
                 .rendered_script(target)
-                .contains("BUILD_TESTING=OFF")
+                .contains("-DBUILD_TESTING=")
         );
         assert!(
             !find("zlib-ng")
@@ -391,7 +391,7 @@ mod tests {
             find("zlib-ng")
                 .unwrap()
                 .rendered_script(target)
-                .contains(r#"CMAKE_SHARED_LINKER_FLAGS="$LDFLAGS""#)
+                .contains(r#"CMAKE_SHARED_LINKER_FLAGS="$4""#)
         );
         assert!(
             find("zlib-ng")
@@ -409,59 +409,21 @@ mod tests {
 
     #[test]
     fn packages_request_individual_cflags_and_ldflags() {
-        use crate::flags::{Cflag, Ldflag};
         use crate::target::{Amd64Variant, Target};
         let target = Target::Amd64(Amd64Variant::V1);
         let glibc = find("x86_64-linux-gnu-glibc").unwrap().flags(target);
         assert!(glibc.cflags().is_empty());
         assert!(glibc.ldflags().is_empty());
-        let openssl_cflags = [
-            Cflag::O2,
-            Cflag::Pipe,
-            Cflag::March(target),
-            Cflag::TreeVectorize,
-            Cflag::NoSemanticInterposition,
-            Cflag::FortifySource,
-            Cflag::StackProtectorStrong,
-            Cflag::FormatSecurity,
-            Cflag::Lto,
-            Cflag::WerrorOdr,
-            Cflag::WerrorLtoTypeMismatch,
-            Cflag::WerrorStrictAliasing,
-        ];
-        let zlib_cflags = [
-            Cflag::O2,
-            Cflag::Pipe,
-            Cflag::March(target),
-            Cflag::TreeVectorize,
-            Cflag::NoSemanticInterposition,
-            Cflag::FortifySource,
-            Cflag::StackProtectorStrong,
-            Cflag::Lto,
-            Cflag::WerrorOdr,
-            Cflag::WerrorLtoTypeMismatch,
-            Cflag::WerrorStrictAliasing,
-        ];
-        let dso_ldflags = [
-            Ldflag::FuseLdMold,
-            Ldflag::O1,
-            Ldflag::AsNeeded,
-            Ldflag::Relro,
-            Ldflag::Now,
-            Ldflag::Lto,
-            Ldflag::WerrorOdr,
-            Ldflag::WerrorLtoTypeMismatch,
-            Ldflag::WerrorStrictAliasing,
-        ];
-        let openssl = find("openssl").unwrap().flags(target);
-        assert_eq!(openssl.cflags(), &openssl_cflags);
-        assert_eq!(openssl.ldflags(), &dso_ldflags);
-        let zlib = find("zlib").unwrap().flags(target);
-        assert_eq!(zlib.cflags(), &zlib_cflags);
-        assert_eq!(zlib.ldflags(), &dso_ldflags);
-        let zlib_ng = find("zlib-ng").unwrap().flags(target);
-        assert_eq!(zlib_ng.cflags(), &zlib_cflags);
-        assert_eq!(zlib_ng.ldflags(), &dso_ldflags);
+        // openssl/zlib/zlib-ng は既定ポリシー（tool_flags）をそのまま使う
+        let expected = crate::flags::tool_flags(target);
+        for name in ["openssl", "zlib", "zlib-ng"] {
+            let flags = find(name).unwrap().flags(target);
+            assert_eq!(flags.cflags(), expected.cflags(), "{name}");
+            assert_eq!(flags.ldflags(), expected.ldflags(), "{name}");
+        }
+        // mold だけは -fuse-ld=mold を外す（自身をリンクできない）
+        let mold = find("mold").unwrap().flags(target);
+        assert!(!mold.ldflags().contains(&crate::flags::Ldflag::FuseLdMold));
         let headers = find("linux-headers").unwrap().flags(target);
         assert!(headers.cflags().is_empty());
         assert!(headers.ldflags().is_empty());

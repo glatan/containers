@@ -1,4 +1,4 @@
-use crate::flags::{Cflag, Flag, Ldflag};
+use crate::flags::{Flag, Ldflag};
 use crate::package::{Bootstrap, Dependency, Package, Source};
 use crate::target::Target;
 
@@ -54,19 +54,18 @@ impl Package for Mold {
     }
 
     fn flags(&self, target: Target) -> Flag {
+        // mold 自身は -fuse-ld=mold でリンクできないため除外する
         Flag::new(
-            vec![
-                Cflag::O2,
-                Cflag::Pipe,
-                Cflag::March(target),
-                Cflag::TreeVectorize,
-                Cflag::NoSemanticInterposition,
-                Cflag::FortifySource,
-                Cflag::StackProtectorStrong,
-                Cflag::FormatSecurity,
-            ],
-            vec![Ldflag::O1, Ldflag::Relro, Ldflag::Now],
+            crate::flags::tool_cflags(target),
+            crate::flags::tool_ldflags(target)
+                .into_iter()
+                .filter(|flag| *flag != Ldflag::FuseLdMold)
+                .collect(),
         )
+    }
+
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Custom
     }
 
     fn build_script(&self) -> &'static str {
@@ -95,21 +94,54 @@ if [ "$TRIPLE" != "$HOST_TRIPLE" ]; then
     -DCMAKE_CXX_COMPILER_TARGET="$TRIPLE"
   )
 fi
-cmake -S "$SOURCE" -B "$BUILD" \
-  "${CMAKE_CROSS[@]}" \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_INSTALL_PREFIX=/usr \
-  -DCMAKE_C_COMPILER="$CC" \
-  -DCMAKE_CXX_COMPILER="$CXX" \
-  -DCMAKE_C_FLAGS="${CFLAGS:-}" \
-  -DCMAKE_CXX_FLAGS="${CXXFLAGS:-}" \
-  -DCMAKE_EXE_LINKER_FLAGS="${LDFLAGS:-}" \
-  -DCMAKE_SHARED_LINKER_FLAGS="${LDFLAGS:-}" \
-  -DMOLD_USE_MIMALLOC=ON \
-  -DMOLD_USE_SYSTEM_MIMALLOC=OFF \
-  -DMOLD_USE_SYSTEM_TBB=OFF
-cmake --build "$BUILD" -j"$(nproc)"
-cmake --install "$BUILD" --prefix "$OUT/usr"
+configure_mold() {
+  cmake -S "$SOURCE" -B "$1" \
+    "${CMAKE_CROSS[@]}" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCMAKE_C_COMPILER="$CC" \
+    -DCMAKE_CXX_COMPILER="$CXX" \
+    -DCMAKE_C_FLAGS="$2" \
+    -DCMAKE_CXX_FLAGS="$3" \
+    -DCMAKE_EXE_LINKER_FLAGS="$4" \
+    -DCMAKE_SHARED_LINKER_FLAGS="$4" \
+    -DMOLD_USE_MIMALLOC=ON \
+    -DMOLD_USE_SYSTEM_MIMALLOC=OFF \
+    -DMOLD_USE_SYSTEM_TBB=OFF
+}
+if [ "$TRIPLE" = "$HOST_TRIPLE" ]; then
+  # ネイティブのみ PGO。instrumented mold でリンクを実行してプロファイルを集め、
+  # 別ツリーで -fprofile-use の成果物を作る。
+  export PGODIR=/tmp/pgo
+  rm -rf "$PGODIR"
+  mkdir -p "$PGODIR"
+  configure_mold "$BUILD/gen" \
+    "${CFLAGS:-} -fprofile-generate=$PGODIR -fprofile-update=atomic" \
+    "${CXXFLAGS:-} -fprofile-generate=$PGODIR -fprofile-update=atomic" \
+    "${LDFLAGS:-} -fprofile-generate"
+  cmake --build "$BUILD/gen" -j"$(nproc)"
+  (
+    mkdir -p /tmp/moldbin /tmp/moldwork
+    ln -sf "$BUILD/gen/mold" /tmp/moldbin/ld.mold
+    for _i in 1 2 3 4 5; do
+      printf 'int fn%s(void){return %s;}\n' "$_i" "$_i" | "$CC" -x c - -c -o "/tmp/moldwork/t$_i.o"
+      "$CC" -B/tmp/moldbin -fuse-ld=mold -shared -o "/tmp/moldwork/t$_i.so" "/tmp/moldwork/t$_i.o"
+    done
+    printf 'int main(void){return fn1();}\nextern int fn1(void);\n' | "$CC" -x c - -c -o /tmp/moldwork/main.o
+    "$CC" -B/tmp/moldbin -fuse-ld=mold -o /tmp/moldwork/prog /tmp/moldwork/main.o /tmp/moldwork/t1.o
+    "$CC" -B/tmp/moldbin -fuse-ld=mold -pie -o /tmp/moldwork/prog-pie /tmp/moldwork/main.o /tmp/moldwork/t1.o
+  ) || true
+  configure_mold "$BUILD/use" \
+    "${CFLAGS:-} -fprofile-use=$PGODIR -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch" \
+    "${CXXFLAGS:-} -fprofile-use=$PGODIR -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch" \
+    "${LDFLAGS:-} -fprofile-use"
+  cmake --build "$BUILD/use" -j"$(nproc)"
+  cmake --install "$BUILD/use" --prefix "$OUT/usr"
+else
+  configure_mold "$BUILD" "${CFLAGS:-}" "${CXXFLAGS:-}" "${LDFLAGS:-}"
+  cmake --build "$BUILD" -j"$(nproc)"
+  cmake --install "$BUILD" --prefix "$OUT/usr"
+fi
 "#,
         )
     }

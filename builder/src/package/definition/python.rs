@@ -88,7 +88,19 @@ impl Package for Python {
         crate::flags::tool_flags(target)
     }
 
-    fn recipe(&self, _ctx: &BuildContext) -> Recipe {
+    /// `--enable-optimizations` の自己完結 PGO（gen→PROFILE_TASK→use を内部で回す）。
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Custom
+    }
+
+    fn recipe(&self, ctx: &BuildContext) -> Recipe {
+        // --enable-optimizations は PROFILE_TASK でビルドした python を
+        // 実行するため、生成バイナリを動かせないクロスビルドでは付けない。
+        let mut configure_args = vec!["--prefix=/usr", "--enable-shared"];
+        if !ctx.cross() {
+            configure_args.push("--enable-optimizations");
+        }
+        configure_args.push("--without-ensurepip");
         Recipe::Steps(
             Steps::new(Env::Autotools)
                 .step(Step::Shell(
@@ -106,11 +118,7 @@ impl Package for Python {
   fi
 done"#,
                 ))
-                .step(Step::configure(&[
-                    "--prefix=/usr",
-                    "--enable-shared",
-                    "--without-ensurepip",
-                ]))
+                .step(Step::configure(&configure_args))
                 .step(Step::make(&[]))
                 .step(Step::make_install(&[]))
                 .step(Step::Symlink {

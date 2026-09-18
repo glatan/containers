@@ -33,9 +33,28 @@ impl Package for Make {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+    }
+
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools(&["--prefix=/usr"])
+        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
     }
 }
+
+const PGO_WORKLOAD: &str = r#"mkdir -p /tmp/mk-work
+cat > /tmp/mk-work/Makefile <<'EOF'
+SRCS := $(wildcard *.c)
+OBJS := $(SRCS:.c=.o)
+all: $(OBJS)
+	@echo done $(words $(OBJS))
+%.o: %.c
+	@echo cc $<
+clean:
+	@rm -f *.o
+EOF
+for _i in 1 2 3 4 5; do echo "int f$_i(void){return $_i;}" > /tmp/mk-work/f$_i.c; done
+./make -C /tmp/mk-work all clean all
+./make -C /tmp/mk-work -n all > /dev/null"#;
 
 impl Bootstrap for Make {}

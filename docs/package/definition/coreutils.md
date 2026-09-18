@@ -25,7 +25,6 @@
 | パッケージ | バージョン | 用途 |
 |-|-|-|
 | [x86_64-linux-gnu-glibc](./x86_64-linux-gnu-glibc.md)（他 Platform ではその `{triple}-glibc`） | 2.44 | `--sysroot`（`/dep/${TRIPLE}-glibc/usr/${TRIPLE}` 優先）によるリンク |
-| [gmp](./gmp.md) | 6.3.0 | 多倍長演算サポート |
 
 ### build-dependencies
 
@@ -46,3 +45,7 @@
 | フラグ | 設定値 | 条件 |
 |-|-|-|
 | `--prefix` | `/usr` | 常時 |
+| `--disable-acl` | | 常時 |
+| `--disable-xattr` | | 常時 |
+| `--without-selinux` | | 常時 |
+| PGO | ネイティブビルドのみ適用（`Pgo::Profiled`） | `ls -lR`・`sort`・`cp -a`・`wc`・`cat`・`md5sum` パイプラインで同梱ソースを処理 |

@@ -21,3 +21,12 @@
 ## 依存
 
 実行時はパッケージ Platform の `{triple}-glibc`、`{triple}-gcc`（libstdc++ / libgcc_s / libatomic）、zlib、zstd です。ビルド専用は linux-headers と cmake です。自分自身には `-fuse-ld=mold` を付けません。シード中のリンクは Arch の mold です。compose 後の標準リンカは自前 mold です。対象 Platform と共通前処理は [host-tools.md](../host-tools.md) です。他パッケージがビルド時に実行する cmake は HOST 成果物をマウントします。
+
+## ビルド設定
+
+| フラグ | 設定値 | 条件 |
+|-|-|-|
+| `CMAKE_BUILD_TYPE` | `Release` | 常時 |
+| `CMAKE_INSTALL_PREFIX` | `/usr` | 常時 |
+| `-fuse-ld=mold` | 付与しない | 常時（自身を mold でリンクしない。`Ldflag::FuseLdMold` を flags から除外） |
+| PGO | ネイティブビルドのみ適用（`Pgo::Custom`） | `-fprofile-generate` の instrumented ビルドを組み、その mold でオブジェクトのリンクを実行してプロファイルを採取。`-fprofile-use` の成果物を別ツリーで組む |

@@ -45,6 +45,7 @@ impl Package for Texinfo {
         }
         Recipe::Steps(
             Steps::new(Env::Autotools)
+                .pgo(crate::package::recipe::PgoTemplate::Autotools(PGO_WORKLOAD))
                 .step(Step::Configure(args))
                 .step(Step::Shell(
                     "if [ ! -f tools/Makefile ]; then
@@ -56,4 +57,21 @@ fi",
                 .step(Step::make_install(&[])),
         )
     }
+
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+    }
 }
+
+const PGO_WORKLOAD: &str = r#"# texi2any は configure が生成するラッパー。out-of-tree で
+# 見つからない場合に備えてビルドツリーから解決する。
+_texi2any="$BUILD/tp/texi2any"
+if [ ! -x "$_texi2any" ]; then
+  _texi2any=$(find "$BUILD" -name texi2any -type f -print -quit)
+fi
+for _texi in "$SOURCE"/doc/*.texi; do
+  [ -f "$_texi" ] && "$_texi2any" --plaintext "$_texi" > /dev/null 2>&1
+done
+find "$SOURCE" -name '*.texi' | head -5 | while read -r _t; do
+  "$_texi2any" --html "$_t" -o /tmp/texi-out 2>/dev/null
+done"#;

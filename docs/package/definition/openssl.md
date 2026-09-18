@@ -59,13 +59,12 @@
 | `--openssldir` | `/etc/ssl` | 常時 |
 | `--libdir` | `lib64` | 常時 |
 | LTO | 適用する | builder の `Cflag::Lto` / `Ldflag::Lto` で指定（Configure の `enable-lto` は 3.6 系で未提供） |
-| PGO | ネイティブビルドのみ適用 | `make` の `CFLAGS` / `LDFLAGS` に `-fprofile-generate` / `-fprofile-use` を付与 |
+| PGO | ネイティブビルドのみ適用（`Pgo::Custom`） | `make` の `CFLAGS` / `LDFLAGS` に `-fprofile-generate` / `-fprofile-use` を付与 |
 | `make` ターゲット | `install_sw` | 常時（マニュアルファイルはインストールしない） |
-| `flags()` の Cflag | `O2` `Pipe` `March` `TreeVectorize` `NoSemanticInterposition` `FortifySource` `StackProtectorStrong` `FormatSecurity` `Lto` および LTO の `Werror*` | BIO/print 処理が存在するため `FormatSecurity` を付与 |
-| `flags()` の Ldflag | `O1` `AsNeeded` `Relro` `Now` `Lto` および LTO の `Werror*` | 依存関係グラフの末端（leaf）ライブラリであるため `Now` を付与 |
+| `flags()` | `tool_flags(target)`（既定セット。[README.md](../README.md) の既定フラグ表） | 個別追加・除外はなし |
 | `AR` / `RANLIB` / `NM` | ネイティブは `gcc-ar` 等、クロスは `${CROSS}gcc-ar` 等 | LTO 最適化オブジェクトの処理に必要 |
 
-LTO は常時有効とします。一方、PGO は生成バイナリを実行可能なネイティブビルド時のみ適用します。クロスビルド環境（生成コードの triple がホスト triple と異なる場合）ではプロファイル採取を実行できないため、LTO のみ適用します。分岐は `Pgo::Native` ポリシーとして `recipe(ctx)` が `ctx.cross()` で静的に解決します。
+LTO は常時有効とします。一方、PGO は生成バイナリを実行可能なネイティブビルド時のみ適用します。クロスビルド環境（生成コードの triple がホスト triple と異なる場合）ではプロファイル採取を実行できないため、LTO のみ適用します。分岐は `Pgo::Custom` ポリシーとして `recipe(ctx)` が `ctx.cross()` で静的に解決します。
 
 ## PGO のプロファイル生成手順
 
@@ -74,13 +73,14 @@ LTO は常時有効とします。一方、PGO は生成バイナリを実行可
 | 手順 | 処理内容 |
 |-|-|
 | 1 | `Configure` の実行後、`-fprofile-generate` を付与してビルドする |
-| 2 | ビルドディレクトリを `LD_LIBRARY_PATH` に入れて、下表のワークロードを実行してプロファイルを採取する |
-| 3 | 同一ビルドディレクトリ内で、`-fprofile-use` を付与して再ビルドする |
+| 2 | ビルドディレクトリを `LD_LIBRARY_PATH` に、providers ディレクトリを `OPENSSL_MODULES` に入れて（`OPENSSL_CONF=/dev/null` で設定読み込みを回避）、下表のワークロードを実行してプロファイルを採取する |
+| 3 | `make clean` で中間生成物を除去し、同一ビルドディレクトリ内で `-fprofile-use` を付与して再ビルドする |
 
 ワークロード（`apps/openssl speed -seconds 1`）:
 
 | 項目 | 対象アルゴリズム |
 |-|-|
-| 公開鍵 | `rsa2048` `ecdsap256` |
+| 公開鍵 | `rsa2048` `ecdsap256` `ed25519` |
+| EVP（AEAD） | `aes-128-gcm` `aes-256-gcm` `chacha20-poly1305` `sha256` `sha512` |
 | 暗号 | `aes-128-cbc` `aes-256-cbc` |
 | ダイジェスト | `sha256` `sha512` |

@@ -3,7 +3,7 @@
 | 項目 | 値 |
 |-|-|
 | パッケージ名 | `patch` |
-| バージョン | 2.7.6 |
+| バージョン | 2.8 |
 | ライセンス | GPL-3.0-or-later |
 | パッケージイメージ | 公開対象（[公開一覧](../../image/packages.md)） |
 | ネットワーク | 不要（シード環境では builder が導入） |
@@ -13,10 +13,10 @@
 
 | 項目 | 値 |
 |-|-|
-| URL | https://ftp.gnu.org/gnu/patch/patch-2.7.6.tar.xz |
-| sha3-512 | `60fa793d5f3066e133ebc36ea3a58cfbcad4d49d9773b06a4b162590fc36f1ee187d904791ee7e289bf53b95c3b17798725ee19f5647530c1157fdfb1758c56e` |
-| blake3 | `bfa9d0121172f37c35fa0a7a0808a3d54c1538318855476a267e891c9fa6a88b8fa213f508cb32fbc13fa2a3c7499d7990141e9c74577f86f7b9492167d48384` |
-| 展開ディレクトリ | `patch-2.7.6` |
+| URL | https://ftp.gnu.org/gnu/patch/patch-2.8.tar.xz |
+| sha3-512 | `d18e96a61a152e03a84d36384931fa3ce01f36240414b2af3bbd5c7ba02a665251cb8300ad2e4d9f7387238e0a717294928f8a30343c7a8647a80e66f543f9b5` |
+| blake3 | `d7dadf0ac720de7560f140a9021928bc0f8089182121c0e65c8bec115cf311240545c913ea3be61b067c31dd4787ac6b2fe7da2d18b1f4047b1ff65a9e55fa60` |
+| 展開ディレクトリ | `patch-2.8` |
 
 ## 依存
 
@@ -45,3 +45,4 @@
 | フラグ | 設定値 | 条件 |
 |-|-|-|
 | `--prefix` | `/usr` | 常時 |
+| PGO | ネイティブビルドのみ適用（`Pgo::Profiled`） | 同梱ソースへの `diff -u` 出力を `./src/patch` で dry-run / 適用 |

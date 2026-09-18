@@ -35,15 +35,29 @@ impl Package for Ninja {
     ) -> Vec<crate::package::Dependency> {
         crate::package::headers_dep()
     }
+    /// `configure.py --bootstrap` の実行に必要（成果物にはリンクしない）。
+    fn host_tools(&self, _target: crate::target::Target) -> Vec<&'static str> {
+        vec!["python"]
+    }
+
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
 
-    fn recipe(&self, _ctx: &BuildContext) -> Recipe {
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Custom
+    }
+
+    fn recipe(&self, ctx: &BuildContext) -> Recipe {
+        let bootstrap = if ctx.cross() {
+            "python3 configure.py --bootstrap"
+        } else {
+            PGO_BOOTSTRAP
+        };
         Recipe::Steps(
             Steps::new(Env::Autotools)
                 .workdir(Workdir::InSource)
-                .step(Step::Shell("python3 configure.py --bootstrap"))
+                .step(Step::Shell(bootstrap))
                 .step(Step::Install {
                     src: "ninja",
                     dst: "\"$OUT\"/usr/bin/ninja",
@@ -52,3 +66,23 @@ impl Package for Ninja {
         )
     }
 }
+
+/// instrumented bootstrap → ninja で自身を rebuild（workload）→
+/// clean → -fprofile-use bootstrap。
+const PGO_BOOTSTRAP: &str = r#"export PGODIR=/tmp/pgo
+rm -rf "$PGODIR"
+mkdir -p "$PGODIR"
+export _PGO_CXXFLAGS="${CXXFLAGS:-}" _PGO_LDFLAGS="${LDFLAGS:-}"
+export CXXFLAGS="$_PGO_CXXFLAGS -fprofile-generate=$PGODIR -fprofile-update=atomic"
+export LDFLAGS="$_PGO_LDFLAGS -fprofile-generate"
+python3 configure.py --bootstrap
+(
+  ./ninja --version
+  # bootstrap 直後は ninja が最新なので、obj を消して再ビルドさせる
+  rm -f build/*.o
+  ./ninja -j"$(nproc)" ninja
+) || true
+rm -rf build ninja
+export CXXFLAGS="$_PGO_CXXFLAGS -fprofile-use=$PGODIR -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"
+export LDFLAGS="$_PGO_LDFLAGS -fprofile-use"
+python3 configure.py --bootstrap"#;

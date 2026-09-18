@@ -18,11 +18,13 @@ cmake は mold の build-dep として seed 上で先に組み、python は `bui
 
 ## コンパイラフラグと前処理
 
-コンパイラへ渡す既定のフラグは `tool_flags`（`-O2`、CPU プラットフォーム指定、バイナリ強化フラグ、`-flto`、および LTO 品質保証用の `-Werror=*`）です。トークンの展開は [`builder/src/flags.rs`](../../builder/src/flags.rs) です。
+コンパイラへ渡す既定のフラグは `tool_flags`（`-O2`、CPU プラットフォーム指定、バイナリ強化フラグ（`-fhardened` を含む）、`-flto=auto`、および LTO 品質保証用の `-Werror=*`）です。トークンの展開は [`builder/src/flags.rs`](../../builder/src/flags.rs) です。
 
-GNU Autotools（configure）を使用するツールの多くでは、フラグから `-flto` および `-Werror=*` を除外し、`-std=gnu17` を追加します（flex は `gnu11`）。除外は host 側の `Flag::sanitized()`（`Recipe::Steps` の `Env::Autotools` のみに適用）、`-std` 追加は recipe プリリュードの `Steps::std` で行います。シード環境の GCC 16 では、この組み合わせにおいて GMP のコンパイラ検査（compiler probe）および gnulib の検出処理が失敗するためです。保守的な措置として同様の前処理を configure 系の Host tools 全体に一括して適用していますが、GMP 以外のすべてのツールで同一の失敗が必ず発生することを確認したわけではありません。
+GNU Autotools（configure）を使用するツールでは、configure 実行時のみフラグから `-flto*`・LTO 系 `-Werror=*`・`-fhardened` 系を除外し、`-std=gnu17` を追加します（flex は `gnu11`）。除外は `autotools_configure` が `sanitize_flags` で `CFLAGS` / `CXXFLAGS` / `LDFLAGS` を一時上書きする方式（`Env::Autotools` のみに適用）、`-std` 追加は recipe プリリュードの `Steps::std` で行います。シード環境の GCC 16 では、この組み合わせにおいて GMP のコンパイラ検査（compiler probe）および gnulib の検出処理が失敗するためです。configure が Makefile へ焼いた sanitized 値は、`Step::Make` / `MakeInstall` が付与する `CFLAGS="$CFLAGS"` 等の make 変数上書きでフルフラグへ戻ります。configure が CFLAGS を Makefile へ焼くパッケージ（gmp 等）は `Env::Lto` で sanitize を回避し、PGO 時は `-fprofile-generate` を configure 時の CFLAGS へ注入します。
 
-この前処理を適用しないパッケージは、ncurses、bash、および glib です。これらには `tool_flags` に含まれる LTO フラグ（`-flto`）がそのまま維持されます。meson は Python パッケージのインストール処理のみを行うため、C コンパイラの LTO は使用しません。Host tools パッケージには PGO の適用手順を設けていません。
+この前処理（`Env::Autotools` の sanitize と `-std` 付与）を適用しないパッケージは、`Env::Lto` を使う bash / gmp / ncurses、`Env::None` の meson / ca-certificates、独自 `build_script` の glib / qemu / zlib-ng / mold / linux-headers、`Recipe::Shell` の zlib / openssl、`Recipe::Noop` の build-env です。なお perl は `Env::Autotools` ではなく専用の `autotools_env.sh` を使うため、`-flto*`・`-Werror=*` を剥がす点は同じですが `-fhardened` は残り、`make` にも sanitized 値が残る旧仕様です。`Env::Lto` では configure がフルフラグを Makefile へ焼くため、make 時の変数上書きなしに LTO とバイナリ強化が維持されます。meson は Python パッケージの配置処理のみを行うため、C コンパイラの LTO は使用しません。
+
+Host tools の多くにはネイティブ実行可能な PGO を適用します。`Pgo::Profiled` は各パッケージのワークロード（`make check` またはビルドしたツール自身でのデータ処理）、`Pgo::Custom` は openssl / ninja / zlib / zlib-ng / mold / python の個別手順です。適用対象とワークロードは [README.md](./README.md) の PGO 対象パッケージ表を参照してください。ncurses は `tic` が libncurses の消費者経路を駆動しないため `Pgo::None` です。
 
 ホスト用 glibc がビルド済みである場合は、`/dep/${TRIPLE}-glibc/usr/${TRIPLE}` を優先して `--sysroot` に渡し、linux-headers の `-idirafter` をコンパイラ引数に追加します。qemu のリンク方針は [qemu.md](./definition/qemu.md) です。
 
@@ -36,7 +38,7 @@ GNU Autotools（configure）を使用するツールの多くでは、フラグ�
 | [mpfr](./definition/mpfr.md) | 4.2.2 | LGPL-3.0-or-later | `--prefix=/usr` |
 | [mpc](./definition/mpc.md) | 1.4.1 | LGPL-3.0-or-later | `--prefix=/usr` |
 | [isl](./definition/isl.md) | 0.26 | MIT | `--prefix=/usr` |
-| [zstd](./definition/zstd.md) | 1.5.7 | BSD-3-Clause OR GPL-2.0-only | `make PREFIX=/usr HAVE_ZLIB=0 HAVE_LZMA=0 HAVE_LZ4=0` |
+| [zstd](./definition/zstd.md) | 1.5.7 | BSD-3-Clause OR GPL-2.0-only | `make PREFIX=/usr LIBDIR=/usr/lib HAVE_ZLIB=0 HAVE_LZMA=0 HAVE_LZ4=0` |
 | [libffi](./definition/libffi.md) | 3.8.0 | MIT | `--prefix=/usr` |
 | [pcre2](./definition/pcre2.md) | 10.48 | BSD-3-Clause | `--prefix=/usr` |
 | [ncurses](./definition/ncurses.md) | 6.6 | MIT-open-group | widec および pc-files。C++ バインディングなし。LTO を維持 |
@@ -65,7 +67,7 @@ GNU Autotools（configure）を使用するツールの多くでは、フラグ�
 | [texinfo](./definition/texinfo.md) | 7.3 | GPL-3.0-or-later | `--prefix=/usr` |
 | [pkgconf](./definition/pkgconf.md) | 2.5.1 | ISC | `--prefix=/usr` |
 | [ninja](./definition/ninja.md) | 1.13.2 | Apache-2.0 | bootstrap 処理により `ninja` バイナリを生成 |
-| [meson](./definition/meson.md) | 1.12.0 | Apache-2.0 | `pip install --no-deps` |
+| [meson](./definition/meson.md) | 1.12.0 | Apache-2.0 | `mesonbuild` を site-packages へ直接配置（python は pip を持たない） |
 | [python](./definition/python.md) | 3.14.7 | Python-2.0 | `--enable-shared`。openssl を実行時依存に含む |
 | [cmake](./definition/cmake.md) | 4.4.3 | BSD-3-Clause | `./bootstrap` で C++ のみから組む |
 | [mold](./definition/mold.md) | 2.42.1 | MIT | cmake。自分には `-fuse-ld=mold` を付けない |

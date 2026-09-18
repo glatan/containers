@@ -25,8 +25,6 @@
 | パッケージ | バージョン | 用途 |
 |-|-|-|
 | [x86_64-linux-gnu-glibc](./x86_64-linux-gnu-glibc.md)（他 Platform ではその `{triple}-glibc`） | 2.44 | `--sysroot`（`/dep/${TRIPLE}-glibc/usr/${TRIPLE}` 優先）によるリンク |
-| [ncurses](./ncurses.md) | 6.5 | 端末制御ライブラリ |
-| [perl](./perl.md) | 5.42.3 | `makeinfo` の実行環境 |
 
 ### build-dependencies
 
@@ -38,7 +36,7 @@
 
 | 名前 | 用途 |
 |-|-|
-| 共通の[ビルド環境イメージ](../README.md) | `build` によるコンパイル（シード環境では builder が `gcc` `make` `perl` を導入） |
+| 共通の[ビルド環境イメージ](../README.md) | `build` によるコンパイル。`texi2any` の実行に必要な perl は host tool としてマウント（`host_tools()`） |
 
 ## ビルド設定
 
@@ -47,4 +45,5 @@
 | フラグ | 設定値 | 条件 |
 |-|-|-|
 | `--prefix` | `/usr` | 常時 |
-| `PERL=/usr/bin/perl` | | 常時 |
+| `--disable-perl-xs` | | クロスビルド時のみ（perl XS をターゲット向けにビルドしない） |
+| PGO | ネイティブビルドのみ適用（`Pgo::Profiled`） | ビルドツリーから解決した `texi2any` で同梱 `.texi` を `--plaintext` / `--html` 変換 |

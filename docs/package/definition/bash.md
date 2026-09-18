@@ -49,4 +49,5 @@
 |-|-|-|
 | `--prefix` | `/usr` | 常時 |
 | `--without-bash-malloc` | | 常時 |
-| LTO | 適用する | 共通前処理を適用しないため、既定フラグの `-flto` を維持 |
+| LTO | 適用する | `Env::Lto` で configure し、configure が Makefile へ焼いたフルフラグをそのまま使う |
+| PGO | ネイティブビルドのみ適用（`Pgo::Profiled`） | `bash -c` で算術ループ・文字列展開・パラメータ展開・glob を実行 |

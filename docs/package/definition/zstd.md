@@ -14,8 +14,8 @@
 | 項目 | 値 |
 |-|-|
 | URL | https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz |
-| sha3-512 | `3f24bf7c770c8f94676443cfa11075ffcb3a70e7e1f486a4e392cae6a0d2fc41071d79730f576e3e5898cfd145cbeae11ff9203a9876f1e8feaeeb0429f6dd85` |
-| blake3 | `b18c64cfb92d6e3c091931326cbb0bf7817eb253b811fb2d86a076717f903740e53a2a46c37c227eb058444a956ae53d532f146a782b1bdf1e8784c6ef4931a2` |
+| sha3-512 | `9fcbd59a61d336c34cd46ff6f335787848d37e8c6d0a4aef468755ef4d31fcce7368ce35650282b31d28303bc985470a97b06110b8fb050b0e72eba66afabca8` |
+| blake3 | `730dca31244abd219e995f03a55d95b2cfb4b3e16cda055a79fa6f30a4f0e1db8febef4887bffd4b8c19d6926fca83c0ae68e6e5abf535c0c0a85193342d8568` |
 | 展開ディレクトリ | `zstd-1.5.7` |
 
 ## 依存
@@ -51,5 +51,6 @@ Autotools の `configure` スクリプトではなく、Makefile を直接呼び
 | `HAVE_ZLIB` | `0` | 常時 |
 | `HAVE_LZMA` | `0` | 常時 |
 | `HAVE_LZ4` | `0` | 常時 |
+| PGO | ネイティブビルドのみ適用（`Pgo::Profiled`） | 同梱ソースを連結した複数 MB 入力を `zstd -b{1,3,9,19} -T0` でベンチマーク |
 
 CLI の .gz / .xz / .lz4 連携は無効化し、シード環境のライブラリを自動検出させません。`liblz4` 等を実行時依存として引き込まないためです。

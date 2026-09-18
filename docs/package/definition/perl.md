@@ -51,6 +51,8 @@ Autotools ではなく、独自の `Configure` スクリプトを使用します
 | `-Dprefix` | `/usr` | 常時 |
 | `-Dvendorprefix` | `/usr` | 常時 |
 | `-Duse64bitall` | | 常時 |
+| `-Dusethreads` | | 常時 |
+| `-Duseshrplib` | | 常時 |
 | `-Dcc` / `-Dld` | `$CC` | リンクは gcc ドライバと `-fuse-ld=mold` に任せる。`LD` に GNU ld は置かない |
 | `-Accflags` | 既定の CFLAGS（sysroot 含む） | 常時。Configure のコンパイラ検査が `CFLAGS` を読まないため明示する |
 | `-Aldflags` | 既定の LDFLAGS（sysroot と `-fuse-ld=mold` を含む） | 常時。同上 |
@@ -62,3 +64,4 @@ Autotools ではなく、独自の `Configure` スクリプトを使用します
 | `-Dsysroot` | `/dep/${TRIPLE}-glibc/usr/${TRIPLE}` | HOST 以外 |
 | `-Darchname` | `$TRIPLE` | HOST 以外 |
 | LTO | 適用しない | `Configure` スクリプトのプローブ処理と競合するため |
+| PGO | 適用しない（`Pgo::None`） | 独自 `Configure` がフラグを管理し、PGO 手順の注入経路がないため |

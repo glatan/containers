@@ -46,3 +46,4 @@
 | フラグ | 設定値 | 条件 |
 |-|-|-|
 | `--prefix` | `/usr` | 常時 |
+| PGO | ネイティブビルドのみ適用（`Pgo::Profiled`） | `bison` で同梱の `.y` 文法（`parse-gram.y`・`examples`・`tests`）を処理 |

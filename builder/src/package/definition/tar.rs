@@ -33,9 +33,19 @@ impl Package for Tar {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+    }
+
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools(&["--prefix=/usr", "--disable-acl"])
+        Recipe::autotools_pgo(&["--prefix=/usr", "--disable-acl"], PGO_WORKLOAD)
     }
 }
+
+const PGO_WORKLOAD: &str = r#"mkdir -p /tmp/tar-out
+./src/tar -cf /tmp/pgo.tar -C "$SOURCE" .
+./src/tar -tf /tmp/pgo.tar > /dev/null
+./src/tar -xf /tmp/pgo.tar -C /tmp/tar-out
+./src/tar -cf - -C "$SOURCE" . | ./src/tar -tf - > /dev/null"#;
 
 impl Bootstrap for Tar {}

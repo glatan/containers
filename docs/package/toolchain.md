@@ -2,7 +2,7 @@
 
 クロス開発およびブートストラップに使用するプレフィックス付きツールチェーンのビルド方針です。全体の段階は [build-flow.md](./build-flow.md) です。パッケージごとの依存と triple 固有の configure は [definition/](./definition/) の `{パッケージ名}.md` です。1 パッケージ 1 ファイルです。
 
-5 つの GNU triple それぞれについて、binutils から最終 gcc までを 7 段階で組みます。Phase 1 の `env bootstrap` が組むのは x86_64 だけです。他 triple は HOST 上で、基底 variant の `{triple}-glibc` のあとに `{triple}-binutils` / `{triple}-gcc` を組みます。これが他 arch パッケージを HOST でクロスコンパイルする実行コンパイラです。依存としてマウントする gcc / binutils は常に HOST（amd64 / v4）の成果物です。
+5 つの GNU triple それぞれについて、binutils / gcc-stage1 / glibc-headers / gcc-stage2 / glibc / 最終 gcc の 6 段階で組みます（linux-headers は別パッケージ）。Phase 1 の `env bootstrap` が組むのは x86_64 だけです。他 triple は HOST 上で、基底 variant の `{triple}-glibc` のあとに `{triple}-binutils` / `{triple}-gcc` を組みます。これが他 arch パッケージを HOST でクロスコンパイルする実行コンパイラです。依存としてマウントする gcc / binutils は常に HOST（amd64 / v4）の成果物です。
 
 ## 製品キューと `supports`
 
@@ -66,6 +66,17 @@ glibc blake3: `6d07bc16d8d066b1c0ae713d762175f261e27df9cab8015ec11e1c980c05e79b0
 
 `{triple}-binutils` の configure は `--enable-plugins`、`--with-system-zlib`、`--without-debuginfod`、`--disable-gprofng` を指定します。gold は組みません。`libstdc++.so.6` / `libgcc_s.so.1` への実行時依存（gcc との循環）を避けるためです。リンカは mold に一本化しています。
 
+| 対象 | configure オプション | 効果 |
+|-|-|-|
+| binutils（全 triple） | `--enable-new-dtags` `--enable-relro` `--enable-default-execstack=no` `--enable-default-hash-style=gnu` | RUNPATH 化・RELRO 既定・`-z noexecstack` を ld 既定化・生 `ld` 呼び出しも gnu hash に |
+| binutils（`x86_64-linux-gnu`） | `--enable-cet` | ld を CET 対応に |
+| gcc-stage1（全 triple） | `--enable-default-pie` `--enable-default-ssp` | 生成コンパイラの既定（freestanding でも無害） |
+| gcc-stage2（全 triple） | stage1 と同じ + `--with-linker-hash-style=gnu` `--enable-linker-build-id` `--enable-gnu-indirect-function` `--enable-gnu-unique-object` `--enable-initfini-array` | stage2 が libgcc_s.so をリンクするため hash-style 等が必要 |
+| glibc（全 triple） | `--enable-stack-protector=strong` `--enable-bind-now` `--enable-fortify-source` | libc 自身の SSP / eager binding / fortify（LEVEL はコンパイラ最大 = 3） |
+| glibc（`x86_64-linux-gnu`） | `--enable-cet`（strict） | libc の CET。全 ELF 出力の `readelf -n` CET マーク audit が前提（非マーク DSO の dlopen は strict ではエラー） |
+
+x86_64 のネイティブ binutils（`$TRIPLE = x86_64-linux-gnu` かつ `$PACKAGE_HOST = $HOST_TRIPLE`）には PGO を適用します。instrumented ツリーで `as` / `ld` / `objdump` を生成アセンブリの assemble・リンク・逆アセンブルで駆動してプロファイルを採取し、別ツリーで `-fprofile-use` の成果物を組みます。クロス binutils には適用しません。
+
 ## linux-headers の取り込み
 
 stage1、glibc-headers、stage2、glibc、および最終 gcc の各ステージでは、sysroot の `include/` ディレクトリへ [linux-headers](./definition/linux-headers.md) のカーネルユーザー空間ヘッダをコピーします。まず優先して `/dep/linux-headers/usr/${TRIPLE}/include` を参照し、該当ディレクトリが存在しない場合に限り共通の `/dep/linux-headers/usr/include` へフォールバックします。
@@ -76,6 +87,27 @@ stage1、glibc-headers、stage2、glibc、および最終 gcc の各ステージ
 
 最終 gcc の configure では、instrumented（プロファイル採取用）および final（最終成果物）の双方において、`--disable-bootstrap`、`--disable-multilib`、`--enable-languages=c,c++`、`--enable-lto`、および `--enable-plugin` を指定します。なお、stage1 および stage2 ではすべての triple において `--disable-libsanitizer` を指定します。
 
+| 対象 | configure オプション | 効果 |
+|-|-|-|
+| 最終 gcc（全 triple） | `--enable-default-pie` `--enable-default-ssp` `--with-linker-hash-style=gnu` `--enable-linker-build-id` `--enable-gnu-indirect-function` `--enable-gnu-unique-object` `--enable-initfini-array` `--enable-libstdcxx-backtrace` `--enable-host-pie` `--enable-host-bind-now` | 既定 PIE/SSP + リンカー挙動 + cc1/xgcc 等コンパイラ自身のバイナリも PIE/BIND_NOW 化 |
+| 最終 gcc（amd64） | `--enable-cet` | CET（`-fcf-protection` と対） |
+| 最終 gcc（s390x） | `--enable-decimal-float` | libgcc の DFP ランタイム |
+| 最終 gcc（全 triple） | `--with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'` | CFLAGS を無視するビルド系へのベースライン適用。`-fno-hardened` で傘フラグのみ解除可能（`NoHardened` トークン）。target ランタイム lib（libgcc/libstdc++ 等）も `-fhardened` でビルドされる（intended） |
+
+`GCC_ARCH_FLAGS`（`--with-arch` / `--with-cpu`）は最終 gcc のみ per-variant にします。libgcc / libstdc++ / libatomic 等のランタイムを variant の ISA で組み、フラグを落としたパッケージの既定も底上げします。stage1 / stage2 / glibc-headers は BUILD_ENV（amd64 / v4）でしか組まないため triple ベースライン（`x86-64` / `armv8-a` / `rv64gc` / `power8` / `z900`）のままです。
+
+`$MARCH` は `PACKAGE_HOST`（成果物が動く Platform）の ISA なので、host arch = codegen arch の場合だけ使用します。amd64 で組む aarch64 gcc 等の異種クロスでは triple ベースラインへフォールバックします。
+
+| triple | 最終 gcc の `GCC_ARCH_FLAGS`（同 arch 時 / 異種クロス時） |
+|-|-|
+| `x86_64-linux-gnu` | `--with-arch=$MARCH` / `--with-arch=x86-64`、いずれも `--enable-cet` |
+| `aarch64-linux-gnu` | `--with-arch=$MARCH` / `--with-arch=armv8-a` |
+| `riscv64-linux-gnu` | `--with-arch=$MARCH` / `--with-arch=rv64gc`、いずれも `--with-abi=lp64d` |
+| `powerpc64le-linux-gnu` | `--with-cpu=$MARCH` / `--with-cpu=power8` |
+| `s390x-linux-gnu` | `--with-arch=$MARCH` / `--with-arch=z900`、いずれも `--enable-decimal-float` |
+
+ppc64le の `--with-long-double-format=ieee` は ABI 変更を伴うため現状採用しません（ターゲット既定の IBM extended のまま）。
+
 最終 gcc においては、`$TRIPLE` が `x86_64-linux-gnu` である場合に限り libsanitizer を有効化し、それ以外の非ホスト向け triple には `--disable-libsanitizer` を付与します。これは riscv64 の PGO ステージにおいて `sanitizer_platform_limits_posix` のビルドが失敗したためです。保守的な措置として他の非ホスト向け triple にも同様に `--disable-libsanitizer` を付与していますが、aarch64、powerpc64le、および s390x において同一の失敗が必ず発生することを確認したわけではありません。
 
-PGO の適用手順は、instrumented ビルド時に `-fprofile-generate` を指定し、final ビルド時に `-fprofile-use` を指定します。final ビルドの `CFLAGS` には `-flto=auto` を付与しません。`-flto=auto` を付与した場合、`libgcc_s.so` のシンボルバージョン情報が破損するためです。なお、configure レベルでの `--enable-lto` 自体は有効のまま維持します。
+PGO の適用手順は、instrumented ビルド時に `-fprofile-generate=$_profiledir -fprofile-update=atomic`（binutils は `$PGODIR`）を指定し、final ビルド時に `-fprofile-use=$_profiledir -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch` を指定します（LDFLAGS には素の `-fprofile-generate` / `-fprofile-use`）。final ビルドの `CFLAGS` には `-flto=auto` を付与しません。`-flto=auto` を付与した場合、`libgcc_s.so` のシンボルバージョン情報が破損するためです。なお、configure レベルでの `--enable-lto` 自体は有効のまま維持します。

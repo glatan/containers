@@ -33,12 +33,22 @@ impl Package for Gmp {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled("make check")
+    }
+
     fn recipe(&self, ctx: &BuildContext) -> Recipe {
         let abi = match ctx.target {
             crate::target::Target::Riscv64(_) => "standard",
             crate::target::Target::Ppc64le(_) => "mode64",
             _ => "64",
         };
-        Recipe::autotools_args(vec!["--prefix=/usr".into(), format!("ABI={abi}")])
+        // configure が CFLAGS を Makefile へ焼くため Env::Lto（PGO フラグは
+        // configure env で注入される）
+        Recipe::autotools_pgo_args(
+            crate::package::recipe::Env::Lto,
+            vec!["--prefix=/usr".into(), format!("ABI={abi}")],
+            "make check",
+        )
     }
 }

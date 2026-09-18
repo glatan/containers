@@ -33,14 +33,28 @@ impl Package for Coreutils {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+    }
+
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools(&[
-            "--prefix=/usr",
-            "--disable-acl",
-            "--disable-xattr",
-            "--without-selinux",
-        ])
+        Recipe::autotools_pgo(
+            &[
+                "--prefix=/usr",
+                "--disable-acl",
+                "--disable-xattr",
+                "--without-selinux",
+            ],
+            PGO_WORKLOAD,
+        )
     }
 }
 
 impl Bootstrap for Coreutils {}
+
+const PGO_WORKLOAD: &str = r#"./src/ls -lR "$SOURCE" > /dev/null
+./src/sort "$SOURCE"/src/*.c > /dev/null 2>&1 || true
+./src/cp -a "$SOURCE" /tmp/coreutils-copy
+./src/wc -l "$SOURCE"/src/*.c > /dev/null 2>&1 || true
+./src/cat "$SOURCE"/configure | ./src/md5sum > /dev/null
+find "$SOURCE" -name '*.h' -print0 | ./src/sort -z > /dev/null"#;

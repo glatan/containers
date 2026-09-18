@@ -33,9 +33,18 @@ impl Package for Findutils {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+    }
+
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools(&["--prefix=/usr"])
+        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
     }
 }
+
+const PGO_WORKLOAD: &str = r#"./find/find "$SOURCE" -name '*.c' -type f > /dev/null
+./find/find "$SOURCE" -type f -size +10k -readable > /dev/null
+./find/find "$SOURCE" -name 'Make*' -o -name '*.am' > /dev/null
+./find/find "$SOURCE" -type f -newer "$SOURCE"/configure -print0 | ./xargs/xargs -0 echo > /dev/null"#;
 
 impl Bootstrap for Findutils {}

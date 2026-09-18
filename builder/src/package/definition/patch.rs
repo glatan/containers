@@ -33,9 +33,21 @@ impl Package for Patch {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+    }
+
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools(&["--prefix=/usr"])
+        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
     }
 }
+
+const PGO_WORKLOAD: &str = r#"mkdir -p /tmp/patch-work
+cp -a "$SOURCE"/src/*.c /tmp/patch-work/ 2>/dev/null || cp -a "$SOURCE"/*.c /tmp/patch-work/
+for _f in /tmp/patch-work/*.c; do
+  sed 's/^int /INT /' "$_f" > "$_f.new"
+  diff -u "$_f" "$_f.new" | ./src/patch --dry-run -s "$_f" > /dev/null
+  ./src/patch -s -o "$_f.out" "$_f" < <(diff -u "$_f" "$_f.new") > /dev/null
+done"#;
 
 impl Bootstrap for Patch {}

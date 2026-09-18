@@ -47,3 +47,6 @@
 | フラグ | 設定値 | 条件 |
 |-|-|-|
 | `--prefix` | `/usr` | 常時 |
+| `--with-gmp` | オーバーレイの gmp 成果物 | 常時 |
+| `--with-mpfr` | オーバーレイの mpfr 成果物 | 常時 |
+| PGO | ネイティブビルドのみ適用（`Pgo::Profiled`） | `make check` |

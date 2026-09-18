@@ -48,4 +48,5 @@ Autotools や CMake ではなく、付属の Python スクリプトでブート�
 | コマンド / フラグ | 設定値 | 条件 |
 |-|-|-|
 | `python3 configure.py --bootstrap` | | 常時 |
-| LTO | 適用しない | ブートストラップスクリプトがビルドフラグの注入に対応していないため |
+| LTO | 適用する | `configure.py` は `CXXFLAGS` / `LDFLAGS` を環境変数から拾うため、既定フラグの `-flto=auto` が注入される |
+| PGO | ネイティブビルドのみ適用（`Pgo::Custom`） | `-fprofile-generate` で bootstrap した ninja が自身のオブジェクトを再ビルドしてプロファイルを採取し、`-fprofile-use` で再 bootstrap。`configure.py` の実行には host tool として python をマウント |

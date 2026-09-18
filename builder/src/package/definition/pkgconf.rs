@@ -38,7 +38,18 @@ impl Package for Pkgconf {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+    }
+
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools(&["--prefix=/usr"])
+        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
     }
 }
+
+const PGO_WORKLOAD: &str = r#"find /dep /usr -name '*.pc' 2>/dev/null | while read -r _pc; do
+  _dir=$(dirname "$_pc")
+  _name=$(basename "$_pc" .pc)
+  PKG_CONFIG_PATH="$_dir" ./pkgconf --cflags --libs "$_name" > /dev/null 2>&1
+  PKG_CONFIG_PATH="$_dir" ./pkgconf --modversion "$_name" > /dev/null 2>&1
+done"#;

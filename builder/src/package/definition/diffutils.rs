@@ -33,9 +33,22 @@ impl Package for Diffutils {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+    }
+
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools(&["--prefix=/usr"])
+        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
     }
 }
+
+const PGO_WORKLOAD: &str = r#"cp -a "$SOURCE" /tmp/pgo-src2
+find /tmp/pgo-src2 -name '*.c' | head -20 | while read -r _f; do
+  ./src/diff -u "$_f" "$_f" > /dev/null
+done
+echo x >> /tmp/pgo-src2/ChangeLog 2>/dev/null || touch /tmp/pgo-src2/extra.c
+./src/diff -r "$SOURCE" /tmp/pgo-src2 > /dev/null
+./src/diff --brief -r "$SOURCE" /tmp/pgo-src2 > /dev/null
+./src/diff -u "$SOURCE"/configure /tmp/pgo-src2/configure > /dev/null"#;
 
 impl Bootstrap for Diffutils {}

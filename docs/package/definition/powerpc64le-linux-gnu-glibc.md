@@ -32,7 +32,7 @@ glibc 2.44。URL とハッシュは [toolchain.md](../toolchain.md) です。
 
 | 名前 | 用途 |
 |-|-|
-| 共通の[ビルド環境イメージ](../README.md) | `build` によるコンパイル |
+| 共通の[ビルド環境イメージ](../README.md) | `build` によるコンパイル。bison / python / m4 は host tool として optional mount（glibc→python→openssl→glibc の循環回避のため依存宣言には書かない） |
 
 ## ビルド設定
 

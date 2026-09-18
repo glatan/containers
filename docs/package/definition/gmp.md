@@ -48,3 +48,4 @@
 | `ABI` | `standard` | `riscv64-*` |
 | `ABI` | `mode64` | `powerpc64le-*`、`powerpc64-*` |
 | `--prefix` | `/usr` | 常時 |
+| PGO | ネイティブビルドのみ適用（`Pgo::Profiled`） | `make check`。`Env::Lto` のため `-fprofile-generate` / `-fprofile-use` は configure 時の `CFLAGS` へ注入 |

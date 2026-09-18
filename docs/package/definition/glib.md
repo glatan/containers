@@ -34,6 +34,10 @@
 | パッケージ | バージョン | 用途 |
 |-|-|-|
 | [linux-headers](./linux-headers.md) | 6.18.33 | `-idirafter /dep/linux-headers/usr/include` によるカーネルヘッダ参照 |
+| [meson](./meson.md) | 1.12.0 | ビルドシステム（HOST 成果物をマウント） |
+| [ninja](./ninja.md) | 1.13.2 | ビルド実行（HOST 成果物をマウント） |
+| [python](./python.md) | 3.14.7 | meson のインタプリタ（HOST 成果物をマウント） |
+| [pkgconf](./pkgconf.md) | 2.5.1 | 依存ライブラリ検出（HOST 成果物をマウント） |
 
 ### ビルド環境
 
@@ -54,4 +58,7 @@ meson 実行前に、ホスト用 glibc の `--sysroot` オプションおよび
 | `-Dnls` | `disabled` | 常時 |
 | `-Dtests` | `false` | 常時 |
 | `-Dsysprof` | `disabled` | 常時（`glib-2.0.pc` が外部の `sysprof-capture-4` を要求しないようにする） |
+| `-Dintrospection` | `disabled` | 常時 |
+| `--wrap-mode` | `nofallback` | 常時（サブプロジェクトの自動取得を禁止） |
 | LTO | 適用する | 共通前処理を適用しないため、既定フラグの `-flto` を維持 |
+| PGO | 適用しない（`Pgo::None`） | meson ビルドのため PGO テンプレートの対象外。現状は個別手順を設けていない |

@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::error::{Error, Result};
 use crate::flags::Ldflag;
-use crate::package::recipe::{BuildContext, Env, Recipe};
+use crate::package::recipe::{BuildContext, Recipe};
 use crate::package::{self, Bootstrap, Package, Role, Stage};
 use crate::process;
 use crate::target::Target;
@@ -363,23 +363,12 @@ pub(super) fn uses_mold(package: &dyn Package, target: Target) -> bool {
             .contains(&Ldflag::FuseLdMold)
 }
 
-/// `Env::Autotools` レシピは LTO/`-Werror=*` で壊れるため、
-/// `autotools_env.sh` の `sanitize_flags` 相当を host 側で剥がす。
-fn sanitizes_flags(package: &dyn Package, target: Target) -> bool {
-    let ctx = BuildContext::of(package.gnu_triple(), target);
-    matches!(
-        package.recipe(&ctx),
-        Recipe::Steps(steps) if matches!(steps.env, Env::Autotools)
-    )
-}
-
+/// パッケージの CFLAGS/LDFLAGS を環境へ出す。`Env::Autotools` の
+/// configure probe 向け剥がしは recipe 側の `sanitize_flags` が担うため、
+/// ここでは常にフルフラグを渡す（make/install が var override で受ける）。
 pub(super) fn linker_env(package: &dyn Package, target: Target) -> Vec<(&'static str, String)> {
     let flags = package.flags(target);
-    let mut env = if sanitizes_flags(package, target) {
-        flags.sanitized().env()
-    } else {
-        flags.env()
-    };
+    let mut env = flags.env();
     if uses_mold(package, target) && mold_artifact_dir().is_none() && build_env_ready() {
         strip_fuse_ld_mold(&mut env);
     }

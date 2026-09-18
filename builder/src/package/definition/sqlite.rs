@@ -33,7 +33,17 @@ impl Package for Sqlite {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+    }
+
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools(&["--prefix=/usr"])
+        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
     }
 }
+
+const PGO_WORKLOAD: &str = r#"./sqlite3 /tmp/pgo.db "CREATE TABLE t(a INTEGER, b TEXT); CREATE INDEX ti ON t(a);"
+for _i in $(seq 1 200); do
+  ./sqlite3 /tmp/pgo.db "INSERT INTO t VALUES($((RANDOM)), 'val'); SELECT count(*), sum(a) FROM t; SELECT a FROM t t1 JOIN t t2 ON t1.a = t2.a LIMIT 100; BEGIN; UPDATE t SET b='x' WHERE a=1; COMMIT;"
+done
+./sqlite3 /tmp/pgo.db "EXPLAIN QUERY PLAN SELECT * FROM t WHERE a > 10 ORDER BY b; VACUUM;""#;
