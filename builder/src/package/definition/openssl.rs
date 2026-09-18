@@ -1,5 +1,5 @@
 use crate::flags::Flag;
-use crate::package::recipe::{BuildContext, Recipe};
+use crate::package::recipe::{BuildContext, Recipe, SYSROOT_ENV};
 use crate::package::{Dependency, Package, Role, Source};
 use crate::target::Target;
 
@@ -53,7 +53,9 @@ impl Package for Openssl {
     }
 
     fn recipe(&self, ctx: &BuildContext) -> Recipe {
-        let mut script = String::from(HEAD);
+        let mut script = String::from("set -euxo pipefail\n");
+        script.push_str(SYSROOT_ENV);
+        script.push_str(HEAD);
         // PGO: ネイティブビルドでのみプロファイルを実行できる
         if ctx.cross() {
             script.push_str("make -j\"$(nproc)\"\n");
@@ -65,10 +67,7 @@ impl Package for Openssl {
     }
 }
 
-const HEAD: &str = concat!(
-    "set -euxo pipefail\n",
-    include_str!("sysroot_env.sh"),
-    r#"
+const HEAD: &str = r#"
 case "$ARCH" in
   amd64) TGT=linux-x86_64 ;;
   arm64) TGT=linux-aarch64 ;;
@@ -86,8 +85,7 @@ configure() {
   "$SOURCE"/Configure "$TGT" --prefix=/usr --openssldir=/etc/ssl --libdir=lib64
 }
 configure
-"#,
-);
+"#;
 
 const PGO: &str = r#"export PGODIR=/tmp/pgo
 rm -rf "$PGODIR"

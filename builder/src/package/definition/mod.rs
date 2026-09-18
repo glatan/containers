@@ -1,6 +1,12 @@
 use crate::error::{Error, Result};
 use crate::package::{Bootstrap, Package};
 
+mod aarch64_linux_gnu_binutils;
+mod aarch64_linux_gnu_gcc;
+mod aarch64_linux_gnu_gcc_stage1;
+mod aarch64_linux_gnu_gcc_stage2;
+mod aarch64_linux_gnu_glibc;
+mod aarch64_linux_gnu_glibc_headers;
 mod bash;
 mod bison;
 mod build_env;
@@ -34,14 +40,38 @@ mod patch;
 mod pcre2;
 mod perl;
 mod pkgconf;
+mod powerpc64le_linux_gnu_binutils;
+mod powerpc64le_linux_gnu_gcc;
+mod powerpc64le_linux_gnu_gcc_stage1;
+mod powerpc64le_linux_gnu_gcc_stage2;
+mod powerpc64le_linux_gnu_glibc;
+mod powerpc64le_linux_gnu_glibc_headers;
 mod python;
 mod qemu;
 mod readline;
+mod riscv64_linux_gnu_binutils;
+mod riscv64_linux_gnu_gcc;
+mod riscv64_linux_gnu_gcc_stage1;
+mod riscv64_linux_gnu_gcc_stage2;
+mod riscv64_linux_gnu_glibc;
+mod riscv64_linux_gnu_glibc_headers;
+mod s390x_linux_gnu_binutils;
+mod s390x_linux_gnu_gcc;
+mod s390x_linux_gnu_gcc_stage1;
+mod s390x_linux_gnu_gcc_stage2;
+mod s390x_linux_gnu_glibc;
+mod s390x_linux_gnu_glibc_headers;
 mod sed;
 mod sqlite;
 mod tar;
 mod texinfo;
 mod toolchain;
+mod x86_64_linux_gnu_binutils;
+mod x86_64_linux_gnu_gcc;
+mod x86_64_linux_gnu_gcc_stage1;
+mod x86_64_linux_gnu_gcc_stage2;
+mod x86_64_linux_gnu_glibc;
+mod x86_64_linux_gnu_glibc_headers;
 mod xz;
 mod zlib;
 mod zlib_ng;
@@ -53,36 +83,36 @@ pub static PACKAGES: &[&dyn Package] = &[
     &openssl::Openssl,
     &zlib::Zlib,
     &zlib_ng::ZlibNg,
-    &toolchain::X86_64_BINUTILS,
-    &toolchain::X86_64_GCC_STAGE1,
-    &toolchain::X86_64_GLIBC_HEADERS,
-    &toolchain::X86_64_GCC_STAGE2,
-    &toolchain::X86_64_GLIBC,
-    &toolchain::X86_64_GCC,
-    &toolchain::AARCH64_BINUTILS,
-    &toolchain::AARCH64_GCC_STAGE1,
-    &toolchain::AARCH64_GLIBC_HEADERS,
-    &toolchain::AARCH64_GCC_STAGE2,
-    &toolchain::AARCH64_GLIBC,
-    &toolchain::AARCH64_GCC,
-    &toolchain::RISCV64_BINUTILS,
-    &toolchain::RISCV64_GCC_STAGE1,
-    &toolchain::RISCV64_GLIBC_HEADERS,
-    &toolchain::RISCV64_GCC_STAGE2,
-    &toolchain::RISCV64_GLIBC,
-    &toolchain::RISCV64_GCC,
-    &toolchain::PPC64LE_BINUTILS,
-    &toolchain::PPC64LE_GCC_STAGE1,
-    &toolchain::PPC64LE_GLIBC_HEADERS,
-    &toolchain::PPC64LE_GCC_STAGE2,
-    &toolchain::PPC64LE_GLIBC,
-    &toolchain::PPC64LE_GCC,
-    &toolchain::S390X_BINUTILS,
-    &toolchain::S390X_GCC_STAGE1,
-    &toolchain::S390X_GLIBC_HEADERS,
-    &toolchain::S390X_GCC_STAGE2,
-    &toolchain::S390X_GLIBC,
-    &toolchain::S390X_GCC,
+    &x86_64_linux_gnu_binutils::X8664LinuxGnuBinutils,
+    &x86_64_linux_gnu_gcc_stage1::X8664LinuxGnuGccStage1,
+    &x86_64_linux_gnu_glibc_headers::X8664LinuxGnuGlibcHeaders,
+    &x86_64_linux_gnu_gcc_stage2::X8664LinuxGnuGccStage2,
+    &x86_64_linux_gnu_glibc::X8664LinuxGnuGlibc,
+    &x86_64_linux_gnu_gcc::X8664LinuxGnuGcc,
+    &aarch64_linux_gnu_binutils::Aarch64LinuxGnuBinutils,
+    &aarch64_linux_gnu_gcc_stage1::Aarch64LinuxGnuGccStage1,
+    &aarch64_linux_gnu_glibc_headers::Aarch64LinuxGnuGlibcHeaders,
+    &aarch64_linux_gnu_gcc_stage2::Aarch64LinuxGnuGccStage2,
+    &aarch64_linux_gnu_glibc::Aarch64LinuxGnuGlibc,
+    &aarch64_linux_gnu_gcc::Aarch64LinuxGnuGcc,
+    &riscv64_linux_gnu_binutils::Riscv64LinuxGnuBinutils,
+    &riscv64_linux_gnu_gcc_stage1::Riscv64LinuxGnuGccStage1,
+    &riscv64_linux_gnu_glibc_headers::Riscv64LinuxGnuGlibcHeaders,
+    &riscv64_linux_gnu_gcc_stage2::Riscv64LinuxGnuGccStage2,
+    &riscv64_linux_gnu_glibc::Riscv64LinuxGnuGlibc,
+    &riscv64_linux_gnu_gcc::Riscv64LinuxGnuGcc,
+    &powerpc64le_linux_gnu_binutils::Powerpc64leLinuxGnuBinutils,
+    &powerpc64le_linux_gnu_gcc_stage1::Powerpc64leLinuxGnuGccStage1,
+    &powerpc64le_linux_gnu_glibc_headers::Powerpc64leLinuxGnuGlibcHeaders,
+    &powerpc64le_linux_gnu_gcc_stage2::Powerpc64leLinuxGnuGccStage2,
+    &powerpc64le_linux_gnu_glibc::Powerpc64leLinuxGnuGlibc,
+    &powerpc64le_linux_gnu_gcc::Powerpc64leLinuxGnuGcc,
+    &s390x_linux_gnu_binutils::S390xLinuxGnuBinutils,
+    &s390x_linux_gnu_gcc_stage1::S390xLinuxGnuGccStage1,
+    &s390x_linux_gnu_glibc_headers::S390xLinuxGnuGlibcHeaders,
+    &s390x_linux_gnu_gcc_stage2::S390xLinuxGnuGccStage2,
+    &s390x_linux_gnu_glibc::S390xLinuxGnuGlibc,
+    &s390x_linux_gnu_gcc::S390xLinuxGnuGcc,
     &gmp::Gmp,
     &mpfr::Mpfr,
     &mpc::Mpc,
@@ -125,12 +155,12 @@ pub static PACKAGES: &[&dyn Package] = &[
 ];
 
 pub static BOOTSTRAP: &[&dyn Bootstrap] = &[
-    &toolchain::X86_64_BINUTILS,
-    &toolchain::X86_64_GCC_STAGE1,
-    &toolchain::X86_64_GLIBC_HEADERS,
-    &toolchain::X86_64_GCC_STAGE2,
-    &toolchain::X86_64_GLIBC,
-    &toolchain::X86_64_GCC,
+    &x86_64_linux_gnu_binutils::X8664LinuxGnuBinutils,
+    &x86_64_linux_gnu_gcc_stage1::X8664LinuxGnuGccStage1,
+    &x86_64_linux_gnu_glibc_headers::X8664LinuxGnuGlibcHeaders,
+    &x86_64_linux_gnu_gcc_stage2::X8664LinuxGnuGccStage2,
+    &x86_64_linux_gnu_glibc::X8664LinuxGnuGlibc,
+    &x86_64_linux_gnu_gcc::X8664LinuxGnuGcc,
     &make::Make,
     &bash::Bash,
     &coreutils::Coreutils,
@@ -148,12 +178,46 @@ pub static BOOTSTRAP: &[&dyn Bootstrap] = &[
     &mold::Mold,
 ];
 
+/// `Bootstrap` を実装するプレフィックス付きツールチェーン全件。
+/// `BOOTSTRAP`（シード経路）とは別に、Bootstrap 依存グラフの対象を列挙する。
+static TOOLCHAIN: &[&dyn Bootstrap] = &[
+    &x86_64_linux_gnu_binutils::X8664LinuxGnuBinutils,
+    &x86_64_linux_gnu_gcc_stage1::X8664LinuxGnuGccStage1,
+    &x86_64_linux_gnu_glibc_headers::X8664LinuxGnuGlibcHeaders,
+    &x86_64_linux_gnu_gcc_stage2::X8664LinuxGnuGccStage2,
+    &x86_64_linux_gnu_glibc::X8664LinuxGnuGlibc,
+    &x86_64_linux_gnu_gcc::X8664LinuxGnuGcc,
+    &aarch64_linux_gnu_binutils::Aarch64LinuxGnuBinutils,
+    &aarch64_linux_gnu_gcc_stage1::Aarch64LinuxGnuGccStage1,
+    &aarch64_linux_gnu_glibc_headers::Aarch64LinuxGnuGlibcHeaders,
+    &aarch64_linux_gnu_gcc_stage2::Aarch64LinuxGnuGccStage2,
+    &aarch64_linux_gnu_glibc::Aarch64LinuxGnuGlibc,
+    &aarch64_linux_gnu_gcc::Aarch64LinuxGnuGcc,
+    &riscv64_linux_gnu_binutils::Riscv64LinuxGnuBinutils,
+    &riscv64_linux_gnu_gcc_stage1::Riscv64LinuxGnuGccStage1,
+    &riscv64_linux_gnu_glibc_headers::Riscv64LinuxGnuGlibcHeaders,
+    &riscv64_linux_gnu_gcc_stage2::Riscv64LinuxGnuGccStage2,
+    &riscv64_linux_gnu_glibc::Riscv64LinuxGnuGlibc,
+    &riscv64_linux_gnu_gcc::Riscv64LinuxGnuGcc,
+    &powerpc64le_linux_gnu_binutils::Powerpc64leLinuxGnuBinutils,
+    &powerpc64le_linux_gnu_gcc_stage1::Powerpc64leLinuxGnuGccStage1,
+    &powerpc64le_linux_gnu_glibc_headers::Powerpc64leLinuxGnuGlibcHeaders,
+    &powerpc64le_linux_gnu_gcc_stage2::Powerpc64leLinuxGnuGccStage2,
+    &powerpc64le_linux_gnu_glibc::Powerpc64leLinuxGnuGlibc,
+    &powerpc64le_linux_gnu_gcc::Powerpc64leLinuxGnuGcc,
+    &s390x_linux_gnu_binutils::S390xLinuxGnuBinutils,
+    &s390x_linux_gnu_gcc_stage1::S390xLinuxGnuGccStage1,
+    &s390x_linux_gnu_glibc_headers::S390xLinuxGnuGlibcHeaders,
+    &s390x_linux_gnu_gcc_stage2::S390xLinuxGnuGccStage2,
+    &s390x_linux_gnu_glibc::S390xLinuxGnuGlibc,
+    &s390x_linux_gnu_gcc::S390xLinuxGnuGcc,
+];
+
 pub fn find_bootstrap(name: &str) -> Option<&'static dyn Bootstrap> {
-    toolchain::TOOLCHAIN
+    TOOLCHAIN
         .iter()
         .copied()
         .find(|package| package.name() == name)
-        .map(|package| package as &dyn Bootstrap)
         .or_else(|| {
             BOOTSTRAP
                 .iter()
@@ -648,5 +712,44 @@ mod tests {
                 .unwrap()
                 .supports(Target::Arm64(Arm64Variant::V8_1))
         );
+    }
+
+    #[test]
+    fn toolchain_definitions_cover_all_thirty() {
+        let toolchain = PACKAGES
+            .iter()
+            .filter(|package| matches!(package.role(), crate::package::Role::Toolchain { .. }))
+            .count();
+        assert_eq!(toolchain, 30);
+        assert_eq!(TOOLCHAIN.len(), 30);
+    }
+
+    #[test]
+    fn env_fragments_render_in_shell_recipes() {
+        let host = crate::target::Target::BUILD_ENV;
+        let arm = crate::target::Target::Arm64(crate::target::Arm64Variant::V8);
+        let perl = find("perl").unwrap().rendered_script(arm);
+        assert!(perl.starts_with("set -euxo pipefail"), "{perl}");
+        assert!(perl.contains("sanitize_flags"), "{perl}");
+        assert!(perl.contains("gl_cv_func_malloc_0_nonnull"), "{perl}");
+        assert!(perl.contains("-idirafter"), "{perl}");
+        let glib = find("glib").unwrap().rendered_script(host);
+        assert!(glib.starts_with("set -euxo pipefail"), "{glib}");
+        assert!(glib.contains("autotools_configure"), "{glib}");
+        assert!(glib.contains("--sysroot=$SYSROOT"), "{glib}");
+        for name in ["openssl", "zlib", "zlib-ng", "mold"] {
+            let script = find(name).unwrap().rendered_script(host);
+            assert!(
+                script.starts_with("set -euxo pipefail\nif [ -d /dep/"),
+                "{name}"
+            );
+            assert!(script.contains("--sysroot=$SYSROOT"), "{name}");
+        }
+        // binutils / 最終 gcc は SYSROOT_ENV が先で、set -euxo はその後に来る
+        for name in ["x86_64-linux-gnu-binutils", "x86_64-linux-gnu-gcc"] {
+            let script = find(name).unwrap().rendered_script(host);
+            assert!(script.starts_with("if [ -d /dep/"), "{name}");
+            assert!(script.contains("\nset -euxo pipefail"), "{name}");
+        }
     }
 }

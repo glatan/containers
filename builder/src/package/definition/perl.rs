@@ -1,3 +1,4 @@
+use crate::package::recipe::{AUTOTOOLS_ENV, BuildContext, Recipe, SYSROOT_ENV};
 use crate::package::{Package, Source};
 use crate::target::Target;
 
@@ -53,10 +54,10 @@ impl Package for Perl {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
-    fn build_script(&self) -> &'static str {
-        concat!(
-            include_str!("autotools_env.sh"),
-            include_str!("sysroot_env.sh"),
+    fn recipe(&self, _ctx: &BuildContext) -> Recipe {
+        let mut script = String::from(AUTOTOOLS_ENV);
+        script.push_str(SYSROOT_ENV);
+        script.push_str(
             r#"if [ -d /dep/libxcrypt/usr/include ]; then
   export CFLAGS="$CFLAGS -I/dep/libxcrypt/usr/include"
   export CPPFLAGS="${CPPFLAGS:-} -I/dep/libxcrypt/usr/include"
@@ -314,6 +315,7 @@ if [ -n "$_perl_so" ]; then
   ln -sfn "$(realpath --relative-to="$OUT/usr/lib" "$_perl_so")" "$OUT/usr/lib/libperl.so"
 fi
 "#,
-        )
+        );
+        Recipe::Shell(script.into())
     }
 }

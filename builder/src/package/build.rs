@@ -1168,7 +1168,7 @@ libdir=/usr/lib
             perl_targets,
             [Target::BUILD_ENV, Target::Arm64(Arm64Variant::V8)]
         );
-        let perl_script = perl.build_script();
+        let perl_script = perl.rendered_script(Target::BUILD_ENV);
         assert!(
             perl_script.contains("-Accflags=\"$CFLAGS\""),
             "{perl_script}"

@@ -1,4 +1,5 @@
 use crate::flags::Flag;
+use crate::package::recipe::{BuildContext, Recipe, SYSROOT_ENV};
 use crate::package::{Dependency, Package, Role, Source};
 use crate::target::Target;
 
@@ -51,10 +52,10 @@ impl Package for ZlibNg {
         crate::flags::Pgo::Custom
     }
 
-    fn build_script(&self) -> &'static str {
-        concat!(
-            "set -euxo pipefail\n",
-            include_str!("sysroot_env.sh"),
+    fn recipe(&self, _ctx: &BuildContext) -> Recipe {
+        let mut script = String::from("set -euxo pipefail\n");
+        script.push_str(SYSROOT_ENV);
+        script.push_str(
             r#"
 CMAKE_CROSS=()
 if [ "$TRIPLE" != "$HOST_TRIPLE" ]; then
@@ -109,6 +110,7 @@ fi
 cmake --build "$BUILD" -j"$(nproc)"
 DESTDIR="$OUT" cmake --install "$BUILD"
 "#,
-        )
+        );
+        Recipe::Shell(script.into())
     }
 }

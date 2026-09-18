@@ -7,7 +7,7 @@
 | ライセンス | LGPL-2.1-or-later |
 | パッケージイメージ | 公開対象（[公開一覧](../../image/packages.md)） |
 | ネットワーク | 不要 |
-| 定義 | [`builder/src/package/definition/toolchain.rs`](../../../builder/src/package/definition/toolchain.rs) |
+| 定義 | [`builder/src/package/definition/aarch64_linux_gnu_glibc.rs`](../../../builder/src/package/definition/aarch64_linux_gnu_glibc.rs) |
 | 共通方針 | [toolchain.md](../toolchain.md) |
 
 ## ソース

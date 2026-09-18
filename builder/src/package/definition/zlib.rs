@@ -1,5 +1,5 @@
 use crate::flags::Flag;
-use crate::package::recipe::{BuildContext, Recipe};
+use crate::package::recipe::{BuildContext, Recipe, SYSROOT_ENV};
 use crate::package::{Dependency, Package, Role, Source};
 use crate::target::Target;
 
@@ -48,7 +48,9 @@ impl Package for Zlib {
     }
 
     fn recipe(&self, ctx: &BuildContext) -> Recipe {
-        let mut script = String::from(HEAD);
+        let mut script = String::from("set -euxo pipefail\n");
+        script.push_str(SYSROOT_ENV);
+        script.push_str(HEAD);
         if ctx.cross() {
             // クロスではプロファイルを実行できない
             script.push_str(
@@ -62,10 +64,7 @@ impl Package for Zlib {
     }
 }
 
-const HEAD: &str = concat!(
-    "set -euxo pipefail\n",
-    include_str!("sysroot_env.sh"),
-    r#"
+const HEAD: &str = r#"
 if [ -n "${SYSROOT:-}" ]; then
   export CC="$CC --sysroot=$SYSROOT"
 fi
@@ -74,8 +73,7 @@ rm -rf "$PGO"
 mkdir -p "$PGO"
 cp -a "$SOURCE"/. "$BUILD"/
 cd "$BUILD"
-"#,
-);
+"#;
 
 const PGO: &str = r#"./configure --prefix=/usr --libdir=/usr/lib64 --shared
 make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-generate=$PGO -fprofile-update=atomic" LDFLAGS="$LDFLAGS -fprofile-generate"

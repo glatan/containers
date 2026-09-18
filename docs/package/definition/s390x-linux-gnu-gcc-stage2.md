@@ -7,7 +7,7 @@
 | ライセンス | GPL-3.0-or-later WITH GCC-exception-3.1 |
 | パッケージイメージ | 公開対象外（ビルド専用中間ステージ） |
 | ネットワーク | 不要 |
-| 定義 | [`builder/src/package/definition/toolchain.rs`](../../../builder/src/package/definition/toolchain.rs) |
+| 定義 | [`builder/src/package/definition/s390x_linux_gnu_gcc_stage2.rs`](../../../builder/src/package/definition/s390x_linux_gnu_gcc_stage2.rs) |
 | 共通方針 | [toolchain.md](../toolchain.md) |
 
 ## ソース

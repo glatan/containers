@@ -7,7 +7,7 @@
 | ライセンス | LGPL-2.1-or-later |
 | パッケージイメージ | 公開対象外（ビルド専用中間ステージ） |
 | ネットワーク | 不要 |
-| 定義 | [`builder/src/package/definition/toolchain.rs`](../../../builder/src/package/definition/toolchain.rs) |
+| 定義 | [`builder/src/package/definition/aarch64_linux_gnu_glibc_headers.rs`](../../../builder/src/package/definition/aarch64_linux_gnu_glibc_headers.rs) |
 | 共通方針 | [toolchain.md](../toolchain.md) |
 
 ## ソース

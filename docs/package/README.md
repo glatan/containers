@@ -2,7 +2,7 @@
 
 パッケージ定義に共通するビルド方針です。段階ごとのコマンドは [build-flow.md](./build-flow.md)、個別設定は [definition/](./definition/)、Host tools の共通前処理は [host-tools.md](./host-tools.md)、プレフィックス付きツールチェーンは [toolchain.md](./toolchain.md) です。公開対象の分類は [image/packages.md](../image/packages.md) です。
 
-`PACKAGES` に載るパッケージは [definition/](./definition/) に `{パッケージ名}.md` を 1 ファイル置きます。索引は [definition/README.md](./definition/README.md) です。実装は [`builder/src/package/definition/`](../../builder/src/package/definition/) です。ハイフンはモジュール名ではアンダースコア `_` です。プレフィックス付きツールチェーンの実装は `toolchain.rs` にまとめ、文書はパッケージ名のまま分けます。
+`PACKAGES` に載るパッケージは [definition/](./definition/) に `{パッケージ名}.md` を 1 ファイル置きます。索引は [definition/README.md](./definition/README.md) です。実装は [`builder/src/package/definition/`](../../builder/src/package/definition/) です。ハイフンはモジュール名ではアンダースコア `_` です。プレフィックス付きツールチェーンも `{パッケージ名}.rs` の 1 ファイル 1 定義で、ステージ共通の実装は `toolchain.rs` に置きます。
 
 パッケージイメージには各パッケージ固有のファイルのみを含めます。実行時に必要となる他のパッケージは `dependencies`、ビルド時のみ必要な依存パッケージは `build-dependencies` として分離して宣言します。`check` コマンドは、この実行時依存の宣言と、パッケージ成果物（`packages/artifacts/`）に含まれる ELF バイナリの動的リンク情報を静的に照合します。
 

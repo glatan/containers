@@ -1,4 +1,5 @@
 use crate::flags::{Flag, Ldflag};
+use crate::package::recipe::{BuildContext, Recipe, SYSROOT_ENV};
 use crate::package::{Bootstrap, Dependency, Package, Source};
 use crate::target::Target;
 
@@ -68,10 +69,10 @@ impl Package for Mold {
         crate::flags::Pgo::Custom
     }
 
-    fn build_script(&self) -> &'static str {
-        concat!(
-            "set -euxo pipefail\n",
-            include_str!("sysroot_env.sh"),
+    fn recipe(&self, _ctx: &BuildContext) -> Recipe {
+        let mut script = String::from("set -euxo pipefail\n");
+        script.push_str(SYSROOT_ENV);
+        script.push_str(
             r#"
 CMAKE_PREFIX=
 for _dep in zlib zstd; do
@@ -143,7 +144,8 @@ else
   cmake --install "$BUILD" --prefix "$OUT/usr"
 fi
 "#,
-        )
+        );
+        Recipe::Shell(script.into())
     }
 }
 

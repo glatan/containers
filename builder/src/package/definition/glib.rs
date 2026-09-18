@@ -1,3 +1,4 @@
+use crate::package::recipe::{BuildContext, LTO_ENV, Recipe, SYSROOT_ENV};
 use crate::package::{Package, Source};
 
 pub struct Glib;
@@ -67,10 +68,10 @@ impl Package for Glib {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
-    fn build_script(&self) -> &'static str {
-        concat!(
-            include_str!("lto_env.sh"),
-            include_str!("sysroot_env.sh"),
+    fn recipe(&self, _ctx: &BuildContext) -> Recipe {
+        let mut script = String::from(LTO_ENV);
+        script.push_str(SYSROOT_ENV);
+        script.push_str(
             r#"mkdir -p "$BUILD"
 cd "$BUILD"
 meson_args=(--prefix=/usr --wrap-mode=nofallback -Dlibmount=disabled -Dnls=disabled -Dtests=false -Dsysprof=disabled -Dintrospection=disabled)
@@ -102,6 +103,7 @@ meson setup "$SOURCE" "${meson_args[@]}"
 meson compile -C . -j "$(nproc)"
 meson install -C . --destdir "$OUT"
 "#,
-        )
+        );
+        Recipe::Shell(script.into())
     }
 }

@@ -286,13 +286,111 @@ impl Recipe {
     }
 }
 
-/// クロスビルド時の `CC_FOR_BUILD` 系（autotools_env.sh/lto_env.sh 共通）。
+/// `Recipe::Shell` 逃げ道向けの共有プリリュード（旧 definition/autotools_env.sh）。
+/// `Env::Autotools` プリリュードの旧仕様版で、sanitized 値が `make` にも残る。
+pub(crate) const AUTOTOOLS_ENV: &str = r#"set -euxo pipefail
+export FORCE_UNSAFE_CONFIGURE=1
+sanitize_flags() {
+  printf '%s' "$1" | sed -E 's/-flto(=full|=auto|=thin)?//g; s/-Werror=[^ ]+//g'
+}
+export CFLAGS="$(sanitize_flags "${CFLAGS:-}") -std=gnu17"
+export CXXFLAGS="$(sanitize_flags "${CXXFLAGS:-}")"
+export LDFLAGS="$(sanitize_flags "${LDFLAGS:-}")"
+# Autoconf 2.72 は AC_RUN_IFELSE の cross 分岐が空だとエラーにする。
+# gnulib は推測値を先に入れているが、実行検査の前に落ちる。
+if [ "${TRIPLE:-}" != "${HOST_TRIPLE:-}" ]; then
+  export CC_FOR_BUILD="${HOST_TRIPLE}-gcc"
+  export CXX_FOR_BUILD="${HOST_TRIPLE}-g++"
+  export BUILD_CC="$CC_FOR_BUILD"
+  export gl_cv_func_strcasecmp_works=yes
+  export gl_cv_func_strncasecmp_works=yes
+  export gl_cv_func_memchr_works=yes
+  export gl_cv_func_working_mktime=yes
+  export gl_cv_func_working_utimes=yes
+  export gl_cv_func_getcwd_null=yes
+  export gl_cv_func_getcwd_path_max=yes
+  export gl_cv_func_getcwd_abort_bug=no
+  export gl_cv_func_chown_follows_symlink=yes
+  export gl_cv_func_fchownat_nofollow_works=yes
+  export gl_cv_func_lstat_dereferences_slashed_symlink=yes
+  export gl_cv_func_stat_file_slash=yes
+  export gl_cv_func_strerror_r_works=yes
+  export gl_cv_func_strerror_0_works=yes
+  export gl_cv_func_strtod_works=yes
+  export gl_cv_func_nanosleep=yes
+  export gl_cv_func_printf_positions=yes
+  export gl_cv_func_printf_infinite=yes
+  export gl_cv_func_printf_enomem=yes
+  export gl_cv_func_malloc_0_nonnull=yes
+  export gl_cv_func_malloc_posix=yes
+  export ac_cv_func_malloc_0_nonnull=yes
+  export ac_cv_func_realloc_0_nonnull=yes
+  export ac_cv_func_memcmp_working=yes
+fi
+autotools_configure() {
+  if ! "$SOURCE"/configure --build="$HOST_TRIPLE" --host="${PACKAGE_HOST:-$TRIPLE}" "$@"; then
+    if [ -f config.log ]; then
+      echo "===== config.log (last 80 lines) ====="
+      tail -n 80 config.log
+    fi
+    return 1
+  fi
+}
+"#;
+
+/// `Recipe::Shell` 逃げ道向けの共有プリリュード（旧 definition/lto_env.sh）。
+/// フルフラグのままの `autotools_configure`（`Env::Lto` の生シェル版）。
+pub(crate) const LTO_ENV: &str = r#"set -euxo pipefail
+export FORCE_UNSAFE_CONFIGURE=1
+if [ "${TRIPLE:-}" != "${HOST_TRIPLE:-}" ]; then
+  export CC_FOR_BUILD="${HOST_TRIPLE}-gcc"
+  export CXX_FOR_BUILD="${HOST_TRIPLE}-g++"
+  export BUILD_CC="$CC_FOR_BUILD"
+fi
+autotools_configure() {
+  "$SOURCE"/configure --build="$HOST_TRIPLE" --host="${PACKAGE_HOST:-$TRIPLE}" "$@"
+}
+"#;
+
+/// `Recipe::Shell` 逃げ道向けの共有プリリュード（旧 definition/sysroot_env.sh）。
+/// `/dep` から sysroot とカーネルヘッダを動的検出して CFLAGS 系へ付与する。
+/// `Steps{sysroot:true}` では wrap_script が同等処理を静的に行う。
+pub(crate) const SYSROOT_ENV: &str = r#"if [ -d /dep/${PACKAGE_HOST:-$TRIPLE}-glibc/usr/${PACKAGE_HOST:-$TRIPLE} ]; then
+  SYSROOT=/dep/${PACKAGE_HOST:-$TRIPLE}-glibc/usr/${PACKAGE_HOST:-$TRIPLE}
+elif [ -d /dep/${TRIPLE}-glibc/usr/${TRIPLE} ]; then
+  SYSROOT=/dep/${TRIPLE}-glibc/usr/${TRIPLE}
+elif [ -d /dep/${PACKAGE_HOST:-$TRIPLE}-glibc ]; then
+  SYSROOT=/dep/${PACKAGE_HOST:-$TRIPLE}-glibc
+elif [ -d /dep/${TRIPLE}-glibc ]; then
+  SYSROOT=/dep/${TRIPLE}-glibc
+fi
+if [ -n "${SYSROOT:-}" ]; then
+  export CFLAGS="${CFLAGS:-} --sysroot=$SYSROOT"
+  export CXXFLAGS="${CXXFLAGS:-} --sysroot=$SYSROOT"
+  export CPPFLAGS="${CPPFLAGS:-} --sysroot=$SYSROOT"
+  export LDFLAGS="${LDFLAGS:-} --sysroot=$SYSROOT"
+fi
+if [ -d /dep/linux-headers/usr/${PACKAGE_HOST:-$TRIPLE}/include ]; then
+  HDR=/dep/linux-headers/usr/${PACKAGE_HOST:-$TRIPLE}/include
+elif [ -d /dep/linux-headers/usr/${TRIPLE}/include ]; then
+  HDR=/dep/linux-headers/usr/${TRIPLE}/include
+elif [ -d /dep/linux-headers/usr/include ]; then
+  HDR=/dep/linux-headers/usr/include
+fi
+if [ -n "${HDR:-}" ]; then
+  export CFLAGS="${CFLAGS:-} -idirafter $HDR"
+  export CXXFLAGS="${CXXFLAGS:-} -idirafter $HDR"
+  export CPPFLAGS="${CPPFLAGS:-} -idirafter $HDR"
+fi
+"#;
+
+/// クロスビルド時の `CC_FOR_BUILD` 系（`AUTOTOOLS_ENV`/`LTO_ENV` 共通）。
 const CROSS_BUILD_CC: &str = r#"export CC_FOR_BUILD="${HOST_TRIPLE}-gcc"
 export CXX_FOR_BUILD="${HOST_TRIPLE}-g++"
 export BUILD_CC="$CC_FOR_BUILD"
 "#;
 
-/// クロスビルド時の gnulib/autoconf 推測値キャッシュ（autotools_env.sh 由来）。
+/// クロスビルド時の gnulib/autoconf 推測値キャッシュ（`AUTOTOOLS_ENV` 由来）。
 /// Autoconf 2.72 は AC_RUN_IFELSE の cross 分岐が空だとエラーにする。
 const CROSS_CACHE: &str = r#"export gl_cv_func_strcasecmp_works=yes
 export gl_cv_func_strncasecmp_works=yes

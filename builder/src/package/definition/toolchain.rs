@@ -1,4 +1,5 @@
 use crate::flags::{Cflag, Flag};
+use crate::package::recipe::{BuildContext, Recipe, SYSROOT_ENV};
 use crate::package::{Bootstrap, Dependency, Package, Role, Source, Stage};
 use crate::target::Target;
 
@@ -36,144 +37,7 @@ pub struct Prefixed {
     pub name: &'static str,
     pub triple: &'static str,
     pub stage: Stage,
-    #[allow(dead_code)]
-    pub gcc_target_flag: &'static str,
 }
-
-impl Prefixed {
-    const fn new(
-        name: &'static str,
-        triple: &'static str,
-        stage: Stage,
-        gcc_target_flag: &'static str,
-    ) -> Self {
-        Self {
-            name,
-            triple,
-            stage,
-            gcc_target_flag,
-        }
-    }
-}
-
-macro_rules! triple_tools {
-    ($triple:literal, $flag:literal,
-        $bin:ident, $s1:ident, $hdr:ident, $s2:ident, $libc:ident, $gcc:ident
-    ) => {
-        pub static $bin: Prefixed = Prefixed::new(
-            concat!($triple, "-binutils"),
-            $triple,
-            Stage::Binutils,
-            $flag,
-        );
-        pub static $s1: Prefixed = Prefixed::new(
-            concat!($triple, "-gcc-stage1"),
-            $triple,
-            Stage::GccStage1,
-            $flag,
-        );
-        pub static $hdr: Prefixed = Prefixed::new(
-            concat!($triple, "-glibc-headers"),
-            $triple,
-            Stage::GlibcHeaders,
-            $flag,
-        );
-        pub static $s2: Prefixed = Prefixed::new(
-            concat!($triple, "-gcc-stage2"),
-            $triple,
-            Stage::GccStage2,
-            $flag,
-        );
-        pub static $libc: Prefixed =
-            Prefixed::new(concat!($triple, "-glibc"), $triple, Stage::Glibc, $flag);
-        pub static $gcc: Prefixed =
-            Prefixed::new(concat!($triple, "-gcc"), $triple, Stage::Gcc, $flag);
-    };
-}
-
-triple_tools!(
-    "x86_64-linux-gnu",
-    "--with-arch=x86-64",
-    X86_64_BINUTILS,
-    X86_64_GCC_STAGE1,
-    X86_64_GLIBC_HEADERS,
-    X86_64_GCC_STAGE2,
-    X86_64_GLIBC,
-    X86_64_GCC
-);
-triple_tools!(
-    "aarch64-linux-gnu",
-    "--with-arch=armv8-a",
-    AARCH64_BINUTILS,
-    AARCH64_GCC_STAGE1,
-    AARCH64_GLIBC_HEADERS,
-    AARCH64_GCC_STAGE2,
-    AARCH64_GLIBC,
-    AARCH64_GCC
-);
-triple_tools!(
-    "riscv64-linux-gnu",
-    "--with-arch=rv64gc --with-abi=lp64d",
-    RISCV64_BINUTILS,
-    RISCV64_GCC_STAGE1,
-    RISCV64_GLIBC_HEADERS,
-    RISCV64_GCC_STAGE2,
-    RISCV64_GLIBC,
-    RISCV64_GCC
-);
-triple_tools!(
-    "powerpc64le-linux-gnu",
-    "--with-cpu=power8",
-    PPC64LE_BINUTILS,
-    PPC64LE_GCC_STAGE1,
-    PPC64LE_GLIBC_HEADERS,
-    PPC64LE_GCC_STAGE2,
-    PPC64LE_GLIBC,
-    PPC64LE_GCC
-);
-triple_tools!(
-    "s390x-linux-gnu",
-    "--with-arch=z900",
-    S390X_BINUTILS,
-    S390X_GCC_STAGE1,
-    S390X_GLIBC_HEADERS,
-    S390X_GCC_STAGE2,
-    S390X_GLIBC,
-    S390X_GCC
-);
-
-pub static TOOLCHAIN: &[&Prefixed] = &[
-    &X86_64_BINUTILS,
-    &X86_64_GCC_STAGE1,
-    &X86_64_GLIBC_HEADERS,
-    &X86_64_GCC_STAGE2,
-    &X86_64_GLIBC,
-    &X86_64_GCC,
-    &AARCH64_BINUTILS,
-    &AARCH64_GCC_STAGE1,
-    &AARCH64_GLIBC_HEADERS,
-    &AARCH64_GCC_STAGE2,
-    &AARCH64_GLIBC,
-    &AARCH64_GCC,
-    &RISCV64_BINUTILS,
-    &RISCV64_GCC_STAGE1,
-    &RISCV64_GLIBC_HEADERS,
-    &RISCV64_GCC_STAGE2,
-    &RISCV64_GLIBC,
-    &RISCV64_GCC,
-    &PPC64LE_BINUTILS,
-    &PPC64LE_GCC_STAGE1,
-    &PPC64LE_GLIBC_HEADERS,
-    &PPC64LE_GCC_STAGE2,
-    &PPC64LE_GLIBC,
-    &PPC64LE_GCC,
-    &S390X_BINUTILS,
-    &S390X_GCC_STAGE1,
-    &S390X_GLIBC_HEADERS,
-    &S390X_GCC_STAGE2,
-    &S390X_GLIBC,
-    &S390X_GCC,
-];
 
 impl Package for Prefixed {
     fn name(&self) -> &'static str {
@@ -331,14 +195,14 @@ impl Package for Prefixed {
         }
     }
 
-    fn build_script(&self) -> &'static str {
+    fn recipe(&self, _ctx: &BuildContext) -> Recipe {
         match self.stage {
-            Stage::Binutils => BINUTILS_SCRIPT,
-            Stage::GccStage1 => GCC_STAGE1_SCRIPT,
-            Stage::GlibcHeaders => GLIBC_HEADERS_SCRIPT,
-            Stage::GccStage2 => GCC_STAGE2_SCRIPT,
-            Stage::Glibc => GLIBC_SCRIPT,
-            Stage::Gcc => GCC_FINAL_SCRIPT,
+            Stage::Binutils => Recipe::Shell(format!("{}{}", SYSROOT_ENV, BINUTILS_SCRIPT).into()),
+            Stage::GccStage1 => Recipe::Shell(GCC_STAGE1_SCRIPT.into()),
+            Stage::GlibcHeaders => Recipe::Shell(GLIBC_HEADERS_SCRIPT.into()),
+            Stage::GccStage2 => Recipe::Shell(GCC_STAGE2_SCRIPT.into()),
+            Stage::Glibc => Recipe::Shell(GLIBC_SCRIPT.into()),
+            Stage::Gcc => Recipe::Shell(format!("{}{}", SYSROOT_ENV, GCC_FINAL_SCRIPT).into()),
         }
     }
 }
@@ -555,9 +419,7 @@ const fn dep(name: &'static str, version: &'static str) -> Dependency {
     Dependency { name, version }
 }
 
-const BINUTILS_SCRIPT: &str = concat!(
-    include_str!("sysroot_env.sh"),
-    r#"set -euxo pipefail
+const BINUTILS_SCRIPT: &str = r#"set -euxo pipefail
 export CC_FOR_BUILD="${HOST_TRIPLE}-gcc"
 export CXX_FOR_BUILD="${HOST_TRIPLE}-g++"
 CET_FLAGS=
@@ -610,8 +472,7 @@ else
   make -j"$(nproc)"
   make install DESTDIR="$OUT"
 fi
-"#,
-);
+"#;
 
 const GCC_STAGE1_SCRIPT: &str = r#"set -euxo pipefail
 export PATH="/dep/${TRIPLE}-binutils/usr/bin:$PATH"
@@ -783,9 +644,7 @@ if [ "$TRIPLE" = "x86_64-linux-gnu" ]; then
 fi
 "#;
 
-const GCC_FINAL_SCRIPT: &str = concat!(
-    include_str!("sysroot_env.sh"),
-    r#"set -euxo pipefail
+const GCC_FINAL_SCRIPT: &str = r#"set -euxo pipefail
 export PATH="/dep/${TRIPLE}-binutils/usr/bin:$PATH"
 export CC_FOR_BUILD="${HOST_TRIPLE}-gcc"
 export CXX_FOR_BUILD="${HOST_TRIPLE}-g++"
@@ -985,5 +844,4 @@ LDFLAGS="${LDFLAGS:-} -fprofile-use" \
 configure_final_gcc
 make -j"$(nproc)"
 make DESTDIR="$OUT" install
-"#,
-);
+"#;

@@ -1308,7 +1308,7 @@ export COMPILER_PATH="{gcc_lib}${{COMPILER_PATH:+:$COMPILER_PATH}}"
     if prep.mold {
         prefix.push_str("export PATH=\"/dep/mold/usr/bin:$PATH\"\n");
     }
-    // sysroot_env.sh 相当: Steps{sysroot:true} のみ。実パス検出は
+    // recipe::SYSROOT_ENV 相当: Steps{sysroot:true} のみ。実パス検出は
     // マウント一覧からホスト側で行う。
     if let Recipe::Steps(steps) = package.recipe(&ctx)
         && steps.sysroot
