@@ -85,6 +85,10 @@ ls / info / tree / targets / env plan  照会系（tree --reverse は逆依存�
 
 ビルドスクリプトへ渡す環境変数と `/dep` へのマウントは [package/README.md](../package/README.md) です。
 `build` は依存パッケージを先にビルドします。ルートが `BOOTSTRAP` に載っている場合、合成済みビルド環境の有無にかかわらずグラフには `Bootstrap` の依存を使います。`own`（合成済みイメージの使用、`pacman` 前置きの有無、ネットワーク遮断）だけを `build_env_ready()` で決めます。成果物ディレクトリが既に存在し空でない場合はそのターゲットのコンパイルをスキップし、ビルド途中で失敗した成果物は不整合を防ぐため自動的に削除します。`podman` の出力は `packages/logs/` の個別ファイルへ tee し、失敗してもログは残します。
+
+コンテナ内で plan を解釈する runner は、ビルドツール自身を `/tmp/runner` にマウントして起動します。マウントするバイナリは `CONTAINERS_BUILDER_RUNNER` 環境変数の明示指定を最優先とし、次に cargo 規約パス `target/x86_64-unknown-linux-musl/<profile>/containers-builder` の musl 静的ビルドを探し、見つからなければ実行中のバイナリを使います。musl 静的ビルドはコンテナ側 libc に依存しないため推奨であり、`rustup target add x86_64-unknown-linux-musl` ののち `cargo build --target x86_64-unknown-linux-musl` で生成します。フォールバック時は、コンテナ側 glibc がホストより古いと runner が起動しない旨の警告を一度だけ出力します。実際にマウントした runner のパスは個別ログの `runner:` 行に記録します。
+
+runner の意味論は bash 描画スクリプトと揃えています。`$(cmd)`・`$(cmd || true)` は失敗時も部分 stdout を保持し（裸の代入 `X=$(f)` のみ errexit で中断）、`ln -sf t dir/` は実在ディレクトリ配下にリンクし、`cp -a` 相当のコピーは symlink・mode・mtime（ディレクトリ含む）を保持し、glob は `*`・`?`・`[...]` クラスと dotfiles 規則、`cd` 後の `PWD` は正規化済みパス、`if cmd` の条件コマンド出力はログへ継承します。`cp -a` の owner 保持だけはコンテナ内で一様に root のため意図的に省略しています。
 LTO や PGO の適用方針はパッケージの種別ごとに異なります。個別の指定内容は [各パッケージのビルド設定](../package/definition/) を参照してください。
 
 ビルド専用のパッケージ定義（`build_only`）は、中間成果物としてのみ扱い、パッケージイメージ化は行いません。これらは他のパッケージの `build-dependencies` にのみ現れます。
