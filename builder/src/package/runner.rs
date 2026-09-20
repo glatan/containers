@@ -77,7 +77,7 @@ pub trait Sandbox {
     ///   `||`/`Cond::Cmd`/`SubstOr` がこれを判定に使う）
     /// - `argv[0]` がシェル builtin（`command`/`sanitize_flags`）なら
     ///   実装側で intercept する（`command -v X` は sandbox の現在
-    ///   PATH から解決して経路を返す／miss は Exit{127}）
+    ///   PATH から解決して経路を返す／miss は Exit{1}）
     /// - `set -x` 相当: 実行 argv を stderr へ `+ argv` 形式で出すと
     ///   bash 経路のログと揃う
     fn exec(
@@ -311,12 +311,6 @@ fn expand_dollar_text(text: &str, sb: &dyn SandboxTrait) -> Result<String, Error
     Ok(out)
 }
 
-/// 代入・リダイレクト・単一値コンテキスト用: `Lit` を展開して
-/// 1 文字列にする（クォートは除去、分割したワードは空白で結合）。
-fn expand_lit(text: &str, sb: &mut dyn SandboxTrait) -> Result<String, Error> {
-    Ok(lit_words(text, sb)?.join(" "))
-}
-
 /// 代入 RHS・リダイレクト先等の単一値コンテキスト: クォート除去と
 /// `$` 展開はするが word split / glob はしない（bash の代入と同じ）。
 fn lit_assign(text: &str, sb: &mut dyn SandboxTrait) -> Result<String, Error> {
@@ -382,9 +376,11 @@ fn eval_assign(arg: &Arg, sb: &mut dyn SandboxTrait) -> Result<String, Error> {
         Arg::Subst(pipe) => Ok(eval_pipe(pipe, sb, None)?
             .trim_end_matches('\n')
             .to_string()),
-        Arg::SubstOr(pipe) => Ok(eval_pipe(pipe, sb, None)
-            .map(|out| out.trim_end_matches('\n').to_string())
-            .unwrap_or_default()),
+        Arg::SubstOr(pipe) => Ok(match eval_pipe(pipe, sb, None) {
+            Ok(out) => out.trim_end_matches('\n').to_string(),
+            Err(Error::Exit { .. }) => String::new(),
+            Err(e) => return Err(e),
+        }),
     }
 }
 
@@ -394,11 +390,23 @@ fn lit_verbatim(text: &str, sb: &mut dyn SandboxTrait) -> Result<String, Error> 
     let mut out = String::new();
     let mut it = text.chars().peekable();
     while let Some(c) = it.next() {
-        if c == '$' {
-            let token = take_dollar(&mut it);
-            out.push_str(&expand_dollar(&token, sb)?);
-        } else {
-            out.push(c);
+        match c {
+            // bash の unquoted heredoc は `\$` `\\` `\`` と
+            // 行継続 `\<newline>` のみエスケープとして処理する
+            '\\' => match it.peek() {
+                Some('$') | Some('`') | Some('\\') => {
+                    out.push(it.next().unwrap());
+                }
+                Some('\n') => {
+                    it.next();
+                }
+                _ => out.push('\\'),
+            },
+            '$' => {
+                let token = take_dollar(&mut it);
+                out.push_str(&expand_dollar(&token, sb)?);
+            }
+            _ => out.push(c),
         }
     }
     Ok(out)
@@ -419,12 +427,11 @@ fn eval_verbatim(arg: &Arg, sb: &mut dyn SandboxTrait) -> Result<String, Error> 
         }
         Arg::Opt(name, value) => Ok(format!("--{name}={}", eval_verbatim(value, sb)?)),
         Arg::Quoted(inner) => Ok(format!("\"{}\"", eval_verbatim(inner, sb)?)),
-        Arg::Subst(pipe) => Ok(eval_pipe(pipe, sb, None)?
-            .trim_end_matches('\n')
-            .to_string()),
-        Arg::SubstOr(pipe) => Ok(eval_pipe(pipe, sb, None)
-            .map(|out| out.trim_end_matches('\n').to_string())
-            .unwrap_or_default()),
+        Arg::Subst(pipe) | Arg::SubstOr(pipe) => Ok(match eval_pipe(pipe, sb, None) {
+            Ok(out) => out.trim_end_matches('\n').to_string(),
+            Err(Error::Exit { .. }) => String::new(),
+            Err(e) => return Err(e),
+        }),
     }
 }
 
@@ -447,18 +454,16 @@ fn eval_value(arg: &Arg, sb: &mut dyn SandboxTrait) -> Result<String, Error> {
         }
         Arg::Opt(name, value) => Ok(format!("--{name}={}", eval_value(value, sb)?)),
         Arg::Quoted(inner) => eval_value(inner, sb),
-        Arg::Subst(pipe) => {
-            // `$( )` は末尾改行を除去する。
-            Ok(eval_pipe(pipe, sb, None)?
-                .trim_end_matches('\n')
-                .to_string())
-        }
-        Arg::SubstOr(pipe) => {
-            // `$(cmd || true)`: 失敗時は空文字。部分出力は Err 経路では
-            // 取れないため空に倒す（Trace/実行系とも）。
-            Ok(eval_pipe(pipe, sb, None)
-                .map(|out| out.trim_end_matches('\n').to_string())
-                .unwrap_or_default())
+        Arg::Subst(pipe) | Arg::SubstOr(pipe) => {
+            // `$( )` は末尾改行を除去する。失敗しても bash は外側の
+            // コマンドを空展開で続行する（ステータスを継承するのは
+            // `X=$(f)` 型の裸の代入だけ。そちらは eval_assign）。
+            // 部分出力は Err 経路では取れないため空に倒す。
+            Ok(match eval_pipe(pipe, sb, None) {
+                Ok(out) => out.trim_end_matches('\n').to_string(),
+                Err(Error::Exit { .. }) => String::new(),
+                Err(e) => return Err(e),
+            })
         }
     }
 }
@@ -504,16 +509,14 @@ fn eval_words(arg: &Arg, sb: &mut dyn SandboxTrait) -> Result<Vec<String>, Error
         }
         Arg::Opt(name, value) => Ok(vec![format!("--{name}={}", eval_value(value, sb)?)]),
         Arg::Quoted(inner) => Ok(vec![eval_value(inner, sb)?]),
-        Arg::Subst(pipe) => {
-            let out = eval_pipe(pipe, sb, None)?;
-            let mut words = Vec::new();
-            for w in split_words(out.trim_end_matches('\n')) {
-                words.extend(glob_word(w, sb));
-            }
-            Ok(words)
-        }
-        Arg::SubstOr(pipe) => {
-            let out = eval_pipe(pipe, sb, None).unwrap_or_default();
+        Arg::Subst(pipe) | Arg::SubstOr(pipe) => {
+            // `$(f)` が失敗しても外側コマンドは空展開で継続する
+            // （bash）。`$UNSET` 等の非 Exit エラーは伝播する。
+            let out = match eval_pipe(pipe, sb, None) {
+                Ok(out) => out,
+                Err(Error::Exit { .. }) => String::new(),
+                Err(e) => return Err(e),
+            };
             let mut words = Vec::new();
             for w in split_words(out.trim_end_matches('\n')) {
                 words.extend(glob_word(w, sb));
@@ -569,16 +572,16 @@ fn eval_pipe(
     let stdin = pipe
         .stdin
         .as_ref()
-        .map(|arg| eval_assign(arg, sb))
+        .map(|arg| eval_value(arg, sb))
         .transpose()?;
     let stdout = match (&pipe.stdout, redirect) {
-        (Some(r), _) => Some((eval_assign(&r.target, sb)?, r.append)),
+        (Some(r), _) => Some((eval_value(&r.target, sb)?, r.append)),
         (None, outer) => outer.map(|(path, append)| (path.to_string(), append)),
     };
     let stderr = pipe
         .stderr
         .as_ref()
-        .map(|arg| eval_assign(arg, sb))
+        .map(|arg| eval_value(arg, sb))
         .transpose()?;
     if stages.is_empty() {
         // 空パイプライン: リダイレクトだけ適用して成功（bash と同じ）
@@ -837,6 +840,32 @@ fn exec_steps(
     Ok(())
 }
 
+/// `||` の側を実行する。bash は `||` 側内で `set -e` が抑制される
+/// ため、途中のコマンド失敗では残りを止めず、側全体の結果は最後の
+/// コマンドの終了コードになる（`UnboundVar` 等の非 Exit エラーは
+/// `set -u` 相当で即時伝播する）。
+fn exec_or_side(
+    steps: &[Step],
+    env: Env,
+    sb: &mut impl Sandbox,
+    redirect: Option<(&str, bool)>,
+) -> Result<(), Error> {
+    let mut result = Ok(());
+    for (i, step) in steps.iter().enumerate() {
+        result = exec_step(step, env, sb, redirect);
+        if let Err(Error::Exit { .. }) = &result
+            && i + 1 < steps.len()
+        {
+            // `||` 側内の途中失敗は続行する
+            continue;
+        }
+        if result.is_err() {
+            return result;
+        }
+    }
+    result
+}
+
 fn exec_step(
     step: &Step,
     env: Env,
@@ -845,10 +874,12 @@ fn exec_step(
 ) -> Result<(), Error> {
     match step {
         Step::Configure(args) => {
-            let expanded = args
-                .iter()
-                .map(|arg| expand_lit(arg, sb))
-                .collect::<Result<Vec<_>, _>>()?;
+            // 生文字列引数は bash と同じく未クォート部分を
+            // word split/glob して複数 argv にする
+            let mut expanded = Vec::new();
+            for arg in args {
+                expanded.extend(lit_words(arg, sb)?);
+            }
             sb.configure(&expanded, env)
         }
         Step::Make { jobs, args } => {
@@ -857,7 +888,7 @@ fn exec_step(
                 argv.push(format!("-j{}", sb.nproc()));
             }
             for arg in args {
-                argv.push(expand_lit(arg, sb)?);
+                argv.extend(lit_words(arg, sb)?);
             }
             // コマンドライン変数（makefile の `CFLAGS = …` を打ち消す）
             // として argv に追加する。env にすると負ける。
@@ -868,30 +899,42 @@ fn exec_step(
             let out = lookup_dyn(sb, "OUT")?;
             let mut argv = vec!["make".to_string(), "install".to_string()];
             for var in vars {
-                argv.push(expand_lit(var, sb)?);
+                argv.extend(lit_words(var, sb)?);
             }
             argv.extend(flag_overrides(sb, env, vars));
             argv.push(format!("DESTDIR={out}"));
             sb.exec(&argv, &[], None, redirect, None, false).map(|_| ())
         }
         Step::Install { src, dst, mode } => {
-            let src = expand_lit(src, sb)?;
-            let dst = expand_lit(dst, sb)?;
-            sb.install(&src, &dst, mode)
+            let src = lit_words(src, sb)?;
+            let dst = lit_words(dst, sb)?;
+            if src.len() != 1 || dst.len() != 1 {
+                return Err(Error::Exit {
+                    argv: vec!["install".to_string()],
+                    code: 1,
+                });
+            }
+            sb.install(&src[0], &dst[0], mode)
         }
         Step::Symlink {
             target,
             link,
             force,
         } => {
-            let target = expand_lit(target, sb)?;
-            let link = expand_lit(link, sb)?;
-            sb.symlink(&target, &link, *force)
+            let target = lit_words(target, sb)?;
+            let link = lit_words(link, sb)?;
+            if target.len() != 1 || link.len() != 1 {
+                return Err(Error::Exit {
+                    argv: vec!["ln".to_string()],
+                    code: 1,
+                });
+            }
+            sb.symlink(&target[0], &link[0], *force)
         }
         Step::Exec { env: vars, pipe } => {
             let overrides = vars
                 .iter()
-                .map(|(name, value)| Ok(((*name).to_string(), eval_assign(value, sb)?)))
+                .map(|(name, value)| Ok(((*name).to_string(), eval_value(value, sb)?)))
                 .collect::<Result<Vec<(String, String)>, Error>>()?;
             sb.push_scope();
             let result = eval_pipe_env(pipe, &overrides, sb, redirect);
@@ -900,11 +943,11 @@ fn exec_step(
         }
         Step::Comment(_) => Ok(()),
         Step::Cd(dir) => {
-            let dir = eval_assign(dir, sb)?;
+            let dir = eval_value(dir, sb)?;
             sb_cd(sb, &dir)
         }
         Step::Export { name, value } => {
-            let value = eval_assign(value, sb)?;
+            let value = eval_value(value, sb)?;
             sb.export(name, &value);
             Ok(())
         }
@@ -943,7 +986,7 @@ fn exec_step(
                     // `done > f` はループ先頭で 1 度だけ開く
                     // （毎反復 truncate しない）。先に truncate してから
                     // 各反復は append 扱いにする。
-                    let path = eval_assign(&r.target, sb)?;
+                    let path = eval_value(&r.target, sb)?;
                     if !r.append {
                         sb.write_file(&path, &[], false)?;
                     }
@@ -965,24 +1008,36 @@ fn exec_step(
             Ok(())
         }
         Step::Or { lhs, rhs } => {
-            // 複数ステップの側は render で ( … ) に包まれるので
-            // 変数/cd の副作用をスコープで閉じる。
-            let scoped = lhs.len() > 1;
-            if scoped {
+            // render の side() 規則: 複数ステップ、または render で
+            // 複数行になる単一ステップ（If/ForEach/Subshell/WriteFile）
+            // は ( … ) に包まれて subshell 化するため、変数/cd の
+            // 副作用をスコープで閉じる。
+            let scoped = |steps: &[Step]| {
+                steps.len() > 1
+                    || matches!(
+                        steps.first(),
+                        Some(
+                            Step::If { .. }
+                                | Step::ForEach { .. }
+                                | Step::Subshell(_)
+                                | Step::WriteFile { .. }
+                        )
+                    )
+            };
+            if scoped(lhs) {
                 sb.push_scope();
             }
-            let result = exec_steps(lhs, env, sb, redirect);
-            if scoped {
+            let result = exec_or_side(lhs, env, sb, redirect);
+            if scoped(lhs) {
                 sb.pop_scope();
             }
             match result {
                 Err(Error::Exit { .. }) => {
-                    let scoped = rhs.len() > 1;
-                    if scoped {
+                    if scoped(rhs) {
                         sb.push_scope();
                     }
-                    let result = exec_steps(rhs, env, sb, redirect);
-                    if scoped {
+                    let result = exec_or_side(rhs, env, sb, redirect);
+                    if scoped(rhs) {
                         sb.pop_scope();
                     }
                     result
@@ -1002,7 +1057,7 @@ fn exec_step(
             append,
             expand,
         } => {
-            let path = eval_assign(path, sb)?;
+            let path = eval_value(path, sb)?;
             let body = lines
                 .iter()
                 .map(|line| {
@@ -1040,16 +1095,16 @@ fn eval_pipe_env(
     let stdin = pipe
         .stdin
         .as_ref()
-        .map(|arg| eval_assign(arg, sb))
+        .map(|arg| eval_value(arg, sb))
         .transpose()?;
     let stdout = match (&pipe.stdout, redirect) {
-        (Some(r), _) => Some((eval_assign(&r.target, sb)?, r.append)),
+        (Some(r), _) => Some((eval_value(&r.target, sb)?, r.append)),
         (None, outer) => outer.map(|(path, append)| (path.to_string(), append)),
     };
     let stderr = pipe
         .stderr
         .as_ref()
-        .map(|arg| eval_assign(arg, sb))
+        .map(|arg| eval_value(arg, sb))
         .transpose()?;
     // 展開結果が空のステージは bash の空コマンド相当で skip
     stages.retain(|argv| !argv.is_empty());
@@ -1089,22 +1144,22 @@ fn eval_pipe_env(
 fn eval_cond(cond: &Cond, sb: &mut impl Sandbox) -> Result<bool, Error> {
     match cond {
         Cond::DirExists(path) => {
-            let path = eval_assign(path, sb)?;
+            let path = eval_value(path, sb)?;
             Ok(sb.dir_exists(&path))
         }
         Cond::FileExists(path) => {
-            let path = eval_assign(path, sb)?;
+            let path = eval_value(path, sb)?;
             Ok(sb.file_exists(&path))
         }
         Cond::Exists(path) => {
-            let path = eval_assign(path, sb)?;
+            let path = eval_value(path, sb)?;
             Ok(sb.path_exists(&path))
         }
         Cond::Executable(path) => {
-            let path = eval_assign(path, sb)?;
+            let path = eval_value(path, sb)?;
             Ok(sb.is_executable(&path))
         }
-        Cond::NonEmpty(value) => Ok(!eval_assign(value, sb)?.is_empty()),
+        Cond::NonEmpty(value) => Ok(!eval_value(value, sb)?.is_empty()),
         Cond::EnvSet(name) => Ok(sb.get(name).is_some_and(|v| !v.is_empty())),
         Cond::Cmd(pipe) => match eval_pipe(pipe, sb, None) {
             Ok(_) => Ok(true),
@@ -1491,6 +1546,96 @@ mod tests {
         trace.results.push_back(Err(1));
         run(&recipe, &ctx(), &mut trace).unwrap();
         assert!(trace.ops.contains(&"exec  echo fallback".to_string()));
+    }
+
+    #[test]
+    fn or_side_continues_after_intermediate_failure() {
+        // bash: `(false; echo ok) || echo fallback` — `||` 側内では
+        // set -e が抑制されるので false の後も echo ok が走り、
+        // 側の結果は最後のコマンドの状態（成功）。rhs は走らない。
+        let recipe = steps(vec![Step::Or {
+            lhs: vec![
+                Step::Exec {
+                    env: Vec::new(),
+                    pipe: pipe(&["false"]),
+                },
+                Step::Exec {
+                    env: Vec::new(),
+                    pipe: pipe(&["echo", "ok"]),
+                },
+            ],
+            rhs: vec![Step::Exec {
+                env: Vec::new(),
+                pipe: pipe(&["echo", "fallback"]),
+            }],
+        }]);
+        let mut trace = Trace::new();
+        trace.results.push_back(Err(1));
+        trace.results.push_back(Ok(String::new()));
+        run(&recipe, &ctx(), &mut trace).unwrap();
+        assert!(trace.ops.contains(&"exec  echo ok".to_string()));
+        assert!(!trace.ops.contains(&"exec  echo fallback".to_string()));
+    }
+
+    #[test]
+    fn or_side_scopes_single_multi_line_step() {
+        // 単一でも複数行に render されるステップ（If/ForEach 等）は
+        // render 側で ( … ) に包まれる → 変数をリークさせない
+        let recipe = steps(vec![
+            Step::Or {
+                lhs: vec![Step::If {
+                    cond: Cond::NonEmpty(Arg::lit("x")),
+                    then: vec![Step::Set {
+                        name: "SCOPED",
+                        value: Arg::lit("1"),
+                    }],
+                    else_: Vec::new(),
+                }],
+                rhs: vec![Step::Exec {
+                    env: Vec::new(),
+                    pipe: pipe(&["true"]),
+                }],
+            },
+            Step::Exec {
+                env: Vec::new(),
+                pipe: Pipe::cmd(vec![Arg::lit("echo"), Arg::Var("SCOPED")]),
+            },
+        ]);
+        let mut trace = Trace::new();
+        let err = run(&recipe, &ctx(), &mut trace).unwrap_err();
+        assert!(matches!(err, Error::UnboundVar(name) if name == "SCOPED"));
+    }
+
+    #[test]
+    fn failing_subst_in_args_expands_empty() {
+        // bash: `echo "$(false)"` — $( ) の失敗は外側を止めず
+        // 空文字に展開される
+        let recipe = steps(vec![Step::Exec {
+            env: Vec::new(),
+            pipe: Pipe::cmd(vec![
+                Arg::lit("echo"),
+                Arg::quoted(Arg::Subst(Box::new(pipe(&["false"])))),
+            ]),
+        }]);
+        let mut trace = Trace::new();
+        trace.results.push_back(Err(1));
+        run(&recipe, &ctx(), &mut trace).unwrap();
+        // argv = ["echo", ""]（空文字 1 ワード = bash の "$(f)" と同じ）
+        assert!(trace.ops.contains(&"exec  echo ".to_string()));
+    }
+
+    #[test]
+    fn failing_subst_in_set_propagates_exit() {
+        // bash: `X=$(false)` — 裸の代入は $( ) の終了コードを継承し
+        // set -e で中断する
+        let recipe = steps(vec![Step::Set {
+            name: "X",
+            value: Arg::Subst(Box::new(pipe(&["false"]))),
+        }]);
+        let mut trace = Trace::new();
+        trace.results.push_back(Err(1));
+        let err = run(&recipe, &ctx(), &mut trace).unwrap_err();
+        assert!(matches!(err, Error::Exit { code: 1, .. }));
     }
 
     #[test]

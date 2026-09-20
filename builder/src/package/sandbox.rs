@@ -78,7 +78,7 @@ impl ContainerSandbox {
         match argv.first().map(String::as_str) {
             Some("command") => {
                 let rest = &argv[1..];
-                if rest.first().map(String::as_str) == Some("-v") {
+                if matches!(rest.first().map(String::as_str), Some("-v") | Some("-V")) {
                     let mut out = Vec::new();
                     let mut code = 0;
                     for name in &rest[1..] {
@@ -107,12 +107,14 @@ impl ContainerSandbox {
     /// `command -v` 相当: sandbox の現在 PATH から実行可能ファイルを探す。
     fn which(&self, name: &str) -> Option<String> {
         if name.contains('/') {
-            return is_exec(Path::new(name)).then(|| name.to_string());
+            return is_exec_file(Path::new(name)).then(|| name.to_string());
         }
         let path = self.get("PATH").unwrap_or_default();
         for dir in path.split(':') {
+            // POSIX: 空の PATH 要素はカレントディレクトリ
+            let dir = if dir.is_empty() { "." } else { dir };
             let candidate = format!("{dir}/{name}");
-            if is_exec(Path::new(&candidate)) {
+            if is_exec_file(Path::new(&candidate)) {
                 return Some(candidate);
             }
         }
@@ -131,13 +133,30 @@ fn is_exec(path: &Path) -> bool {
     fs::metadata(path).is_ok_and(|m| m.permissions().mode() & 0o111 != 0)
 }
 
+/// `command -v` 用: 実行ビットを持つ通常ファイルのみ
+/// （dir は `command -v` のヒット対象にならない）。
+fn is_exec_file(path: &Path) -> bool {
+    fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+}
+
+/// `command [-p|-V] cmd …` を `cmd …` へ書き換える
+/// （builtin 経由の function bypass。`-v`/`-V` は builtin 側で処理）。
+fn strip_command(argv: &[String]) -> &[String] {
+    if argv.first().map(String::as_str) == Some("command") {
+        match argv.get(1).map(String::as_str) {
+            Some("-v") | Some("-V") => argv,
+            Some("-p") => &argv[2..],
+            _ => &argv[1..],
+        }
+    } else {
+        argv
+    }
+}
+
 /// `sanitize_flags()` の sed 相当: `-flto*`・LTO 系 `-Werror=*`・
 /// `-f{,no-}hardened` を左から順に除去する（最長一致優先）。
 fn sanitize_flags(value: &str) -> String {
     const PATTERNS: &[&str] = &[
-        "-flto=full",
-        "-flto=auto",
-        "-flto=thin",
         "-flto",
         "-Werror=lto-type-mismatch",
         "-Werror=strict-aliasing",
@@ -148,11 +167,17 @@ fn sanitize_flags(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
     let mut rest = value;
     while let Some(ch) = rest.chars().next() {
-        if ch == '-'
-            && let Some(pat) = PATTERNS.iter().find(|p| rest.starts_with(**p))
-        {
-            rest = &rest[pat.len()..];
-            continue;
+        if ch == '-' {
+            if let Some(rem) = rest.strip_prefix("-flto=") {
+                // -flto=jobserver 等の未知の値も =値 全体を落とす
+                let len = rem.find(char::is_whitespace).unwrap_or(rem.len());
+                rest = &rem[len..];
+                continue;
+            }
+            if let Some(pat) = PATTERNS.iter().find(|p| rest.starts_with(**p)) {
+                rest = &rest[pat.len()..];
+                continue;
+            }
         }
         out.push(ch);
         rest = &rest[ch.len_utf8()..];
@@ -164,7 +189,11 @@ fn sanitize_flags(value: &str) -> String {
 /// あればファイルへ、どちらも無ければ継承 stdout へ出す。
 fn emit(output: Vec<u8>, stdout: Option<(&str, bool)>, capture: bool) -> Result<String, Error> {
     if let Some((path, append)) = stdout {
-        write_lines(Path::new(path), &[output], append)?;
+        // builtin 出力は末尾改行込みの完成形なので行単位ではなく
+        // そのまま書く（write_lines だと改行が重複する）
+        let mut file = open_redirect(path, append)?;
+        file.write_all(&output)
+            .map_err(|e| fs_exit("write", Path::new(path), e))?;
         return Ok(String::new());
     }
     if capture {
@@ -202,18 +231,29 @@ fn write_lines(path: &Path, lines: &[Vec<u8>], append: bool) -> Result<(), Error
         .truncate(!append)
         .append(append)
         .open(path)
-        .map_err(|e| exit_io("write", path, e))?;
+        .map_err(|e| fs_exit("write", path, e))?;
     for line in lines {
         file.write_all(line)
             .and_then(|()| file.write_all(b"\n"))
-            .map_err(|e| exit_io("write", path, e))?;
+            .map_err(|e| fs_exit("write", path, e))?;
     }
     Ok(())
 }
 
-/// fs 操作失敗を bash の exit 1 相当にする。
+/// fs 操作失敗（spawn/wait 等の内部エラー）。
 fn exit_io(op: &str, path: &Path, e: std::io::Error) -> Error {
     Error::Io(format!("{op} {}: {e}", path.display()))
+}
+
+/// bash で同名コマンドが失敗する fs 操作を `Exit{1}` にする
+/// （`||`/`Cond::Cmd`/workload の catch に乗せるため `Io` ではなく
+/// `Exit` にする。`cd` と同じ規則）。
+fn fs_exit(op: &str, path: &Path, e: std::io::Error) -> Error {
+    let _ = e;
+    Error::Exit {
+        argv: vec![format!("{op} {}", path.display())],
+        code: 1,
+    }
 }
 
 /// コマンドの exit code（シグナルは bash と同じく 128+signo）。
@@ -226,6 +266,11 @@ fn exit_code(status: std::process::ExitStatus) -> i32 {
 /// `cp -a src/. dst/` 相当の再帰コピー（symlink 保存・perm 維持）。
 fn copy_tree(src: &Path, dst: &Path) -> std::io::Result<()> {
     fs::create_dir_all(dst)?;
+    // `cp -a` parity: ディレクトリの mode も保持する
+    // （create_dir_all は umask 既定になる）
+    if let Ok(meta) = fs::metadata(src) {
+        let _ = fs::set_permissions(dst, meta.permissions());
+    }
     for entry in fs::read_dir(src)? {
         let entry = entry?;
         let ty = entry.file_type()?;
@@ -349,13 +394,15 @@ impl Sandbox for ContainerSandbox {
 
     fn reexport(&mut self, name: &str) {
         self.removed.last_mut().unwrap().remove(name);
-        if let Some((_, exported)) = self
-            .scopes
-            .iter_mut()
-            .rev()
-            .find_map(|scope| scope.get_mut(name))
-        {
-            *exported = true;
+        // subshell 内の `export X` は継承値を複製して現スコープで
+        // マークする（外側スコープの export フラグを立てると
+        // pop_scope 後に漏れる）
+        if let Some((value, _)) = self.resolve(name) {
+            let value = value.clone();
+            self.scopes
+                .last_mut()
+                .unwrap()
+                .insert(name.to_string(), (value, true));
         }
     }
 
@@ -393,6 +440,7 @@ impl Sandbox for ContainerSandbox {
         stderr: Option<&str>,
         capture: bool,
     ) -> Result<String, Error> {
+        let argv = strip_command(argv);
         if argv.is_empty() {
             return Ok(String::new());
         }
@@ -415,7 +463,11 @@ impl Sandbox for ContainerSandbox {
             cmd.env(name, value);
         }
         if let Some(path) = stdin {
-            let file = File::open(path).map_err(|e| exit_io("open", Path::new(path), e))?;
+            // `<file` の open 失敗は bash ではそのコマンドの exit 1
+            let file = File::open(path).map_err(|_| Error::Exit {
+                argv: vec![format!("< {path}")],
+                code: 1,
+            })?;
             cmd.stdin(Stdio::from(file));
         }
         let capture_stdout = capture && stdout.is_none();
@@ -433,6 +485,13 @@ impl Sandbox for ContainerSandbox {
                 return Err(Error::Exit {
                     argv: argv.to_vec(),
                     code: 127,
+                });
+            }
+            // EACCES（実行ビットなし）は bash の 126
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                return Err(Error::Exit {
+                    argv: argv.to_vec(),
+                    code: 126,
                 });
             }
             Err(e) => return Err(exit_io("spawn", Path::new(&argv[0]), e)),
@@ -479,15 +538,36 @@ impl Sandbox for ContainerSandbox {
         let mut prev: Option<Stdio> = None;
         // builtin ステージの出力（次ステージの stdin へ書き込む）
         let mut feed: Option<Vec<u8>> = None;
+        // 末尾が builtin の場合の emit 結果（capture 用）
+        let mut last_builtin_out: Option<String> = None;
         for (i, stage) in stages.iter().enumerate() {
+            let stage = strip_command(stage);
+            if stage.is_empty() {
+                // 裸の `command` — no-op 成功
+                feed = Some(Vec::new());
+                codes[i] = Some(0);
+                children.push(None);
+                prev = None;
+                continue;
+            }
             if let Some(result) = self.run_builtin(stage) {
                 match result {
                     Ok(bytes) => {
-                        feed = Some(bytes);
+                        if i == last {
+                            // 末尾 builtin の出力は redirect/capture/
+                            // inherit へ出す（feed には乗らない）
+                            last_builtin_out = Some(emit(bytes, stdout, capture)?);
+                        } else {
+                            feed = Some(bytes);
+                        }
                         codes[i] = Some(0);
                     }
                     Err(code) => {
-                        feed = Some(Vec::new());
+                        if i == last {
+                            last_builtin_out = Some(emit(Vec::new(), stdout, capture)?);
+                        } else {
+                            feed = Some(Vec::new());
+                        }
                         codes[i] = Some(code);
                     }
                 }
@@ -500,6 +580,12 @@ impl Sandbox for ContainerSandbox {
             for (name, value) in self.child_env() {
                 cmd.env(name, value);
             }
+            // `A=1 c1 | c2` の env 前置は先頭ステージにだけ付く
+            if i == 0 {
+                for (name, value) in env {
+                    cmd.env(name, value);
+                }
+            }
             // stdin: builtin feed > 前ステージ stdout > i==0 の <file
             let feed_bytes = feed.take();
             if feed_bytes.is_some() {
@@ -509,7 +595,10 @@ impl Sandbox for ContainerSandbox {
             } else if i == 0
                 && let Some(path) = stdin
             {
-                let file = File::open(path).map_err(|e| exit_io("open", Path::new(path), e))?;
+                let file = File::open(path).map_err(|_| Error::Exit {
+                    argv: vec![format!("< {path}")],
+                    code: 1,
+                })?;
                 cmd.stdin(Stdio::from(file));
             }
             // stdout: 末尾のみ redirect/capture/inherit、中間は piped
@@ -529,8 +618,14 @@ impl Sandbox for ContainerSandbox {
             let mut child = match cmd.spawn() {
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                     return Err(Error::Exit {
-                        argv: stage.clone(),
+                        argv: stage.to_vec(),
                         code: 127,
+                    });
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                    return Err(Error::Exit {
+                        argv: stage.to_vec(),
+                        code: 126,
                     });
                 }
                 Err(e) => return Err(exit_io("spawn", Path::new(&stage[0]), e)),
@@ -566,6 +661,7 @@ impl Sandbox for ContainerSandbox {
                 codes[i] = Some(exit_code(status));
             }
         }
+        let output = last_builtin_out.unwrap_or(output);
         // pipefail: 最右の非ゼロコードを返す
         if let Some((i, code)) = codes
             .iter()
@@ -587,11 +683,11 @@ impl Sandbox for ContainerSandbox {
     }
 
     fn mkdir_p(&mut self, path: &str) -> Result<(), Error> {
-        fs::create_dir_all(path).map_err(|e| exit_io("mkdir -p", Path::new(path), e))
+        fs::create_dir_all(path).map_err(|e| fs_exit("mkdir -p", Path::new(path), e))
     }
 
     fn copy_into(&mut self, src: &str, dst: &str) -> Result<(), Error> {
-        copy_tree(Path::new(src), Path::new(dst)).map_err(|e| exit_io("cp -a", Path::new(src), e))
+        copy_tree(Path::new(src), Path::new(dst)).map_err(|e| fs_exit("cp -a", Path::new(src), e))
     }
 
     fn cd(&mut self, path: &str) -> Result<(), Error> {
@@ -608,27 +704,31 @@ impl Sandbox for ContainerSandbox {
     fn remove_dir(&mut self, path: &str) -> Result<(), Error> {
         match fs::remove_dir_all(path) {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            result => result.map_err(|e| exit_io("rm -rf", Path::new(path), e)),
+            result => result.map_err(|e| fs_exit("rm -rf", Path::new(path), e)),
         }
     }
 
     fn install(&mut self, src: &str, dst: &str, mode: &str) -> Result<(), Error> {
         let dst = Path::new(dst);
         if let Some(parent) = dst.parent() {
-            fs::create_dir_all(parent).map_err(|e| exit_io("install -D", parent, e))?;
+            fs::create_dir_all(parent).map_err(|e| fs_exit("install -D", parent, e))?;
         }
-        fs::copy(src, dst).map_err(|e| exit_io("install -D", dst, e))?;
-        let mode = u32::from_str_radix(mode, 8).unwrap_or(0o755);
+        fs::copy(src, dst).map_err(|e| fs_exit("install -D", dst, e))?;
+        // 不正な mode は bash の `install` 同様に失敗させる
+        let mode = u32::from_str_radix(mode, 8).map_err(|_| Error::Exit {
+            argv: vec![format!("install -D -m {mode}")],
+            code: 1,
+        })?;
         fs::set_permissions(dst, fs::Permissions::from_mode(mode))
-            .map_err(|e| exit_io("install -D", dst, e))
+            .map_err(|e| fs_exit("install -D", dst, e))
     }
 
     fn symlink(&mut self, target: &str, link: &str, force: bool) -> Result<(), Error> {
         let link = Path::new(link);
         if force && link.symlink_metadata().is_ok() {
-            fs::remove_file(link).map_err(|e| exit_io("ln -sf", link, e))?;
+            fs::remove_file(link).map_err(|e| fs_exit("ln -sf", link, e))?;
         }
-        std::os::unix::fs::symlink(target, link).map_err(|e| exit_io("ln -s", link, e))
+        std::os::unix::fs::symlink(target, link).map_err(|e| fs_exit("ln -s", link, e))
     }
 
     fn dir_exists(&self, path: &str) -> bool {
@@ -894,6 +994,63 @@ mod tests {
             .pipeline(&stages, &[], None, None, None, true)
             .unwrap_err();
         assert!(matches!(err, Error::Exit { .. }));
+    }
+
+    #[test]
+    fn pipeline_builtin_last_stage_captures() {
+        // `producer | command -v sh` — 末尾 builtin の出力を拾う
+        let mut sb = ContainerSandbox::new();
+        let stages = vec![argv(&["echo", "x"]), argv(&["command", "-v", "sh"])];
+        let out = sb.pipeline(&stages, &[], None, None, None, true).unwrap();
+        assert!(out.ends_with("/sh\n"));
+    }
+
+    #[test]
+    fn pipeline_builtin_last_stage_reports_exit() {
+        // `command -v` の miss は bash と同じく exit 1
+        let mut sb = ContainerSandbox::new();
+        let stages = vec![argv(&["echo", "x"]), argv(&["command", "-v", "nope-xyz"])];
+        let err = sb
+            .pipeline(&stages, &[], None, None, None, true)
+            .unwrap_err();
+        assert!(matches!(err, Error::Exit { code: 1, .. }));
+    }
+
+    #[test]
+    fn pipeline_env_applies_to_first_stage_only() {
+        // `FOO=bar c1 | c2` — env 前置は先頭ステージにだけ付く
+        let env = vec![("FOO".to_string(), "bar".to_string())];
+        let mut sb = ContainerSandbox::new();
+        let stages = vec![argv(&["sh", "-c", "echo $FOO"]), argv(&["cat"])];
+        let out = sb.pipeline(&stages, &env, None, None, None, true).unwrap();
+        assert_eq!(out, "bar\n");
+        let stages = vec![argv(&["echo", "x"]), argv(&["sh", "-c", "echo \"$FOO\""])];
+        let out = sb.pipeline(&stages, &env, None, None, None, true).unwrap();
+        assert_eq!(out, "\n");
+    }
+
+    #[test]
+    fn command_dispatches_to_real_command() {
+        // `command foo …` は function bypass 相当で実コマンドを呼ぶ
+        let mut sb = ContainerSandbox::new();
+        let out = sb
+            .exec(
+                &argv(&["command", "echo", "hi"]),
+                &[],
+                None,
+                None,
+                None,
+                true,
+            )
+            .unwrap();
+        assert_eq!(out, "hi\n");
+    }
+
+    #[test]
+    fn sanitize_flags_strips_arbitrary_flto_values() {
+        // `-flto=jobserver` 等の未知の値も `=値` 全体を落とす
+        assert_eq!(sanitize_flags("-O2 -flto=jobserver -g"), "-O2  -g");
+        assert_eq!(sanitize_flags("-flto=thin -O2"), " -O2");
     }
 
     #[test]

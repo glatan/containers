@@ -485,7 +485,12 @@ impl Cond {
                 .map(Cond::render)
                 .collect::<Vec<_>>()
                 .join(" && "),
-            Self::Not(cond) => format!("! {}", cond.render()),
+            // `! a && b` は `(! a) && b` にパースされるため、
+            // And の否定は `! ( … )` に包む
+            Self::Not(inner) => match inner.as_ref() {
+                Self::And(_) => format!("! ( {} )", inner.render()),
+                _ => format!("! {}", inner.render()),
+            },
         }
     }
 }
@@ -992,7 +997,7 @@ fn cross_cache_script() -> String {
 /// `-flto*`・LTO 系 `-Werror=*`・`-f{,no-}hardened` を落とす。
 /// `-Werror=format-security` は残す（Fedora と同じ）。
 const SANITIZE_FLAGS: &str = r#"sanitize_flags() {
-  printf '%s' "$1" | sed -E 's/-flto(=full|=auto|=thin)?//g; s/-Werror=(odr|lto-type-mismatch|strict-aliasing)//g; s/-f(no-)?hardened//g'
+  printf '%s' "$1" | sed -E 's/-flto(=[^[:space:]]*)?//g; s/-Werror=(odr|lto-type-mismatch|strict-aliasing)//g; s/-f(no-)?hardened//g'
 }
 "#;
 
