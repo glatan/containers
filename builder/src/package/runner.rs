@@ -2139,4 +2139,80 @@ mod tests {
             trace.ops
         );
     }
+
+    #[test]
+    fn or_side_lax_propagates_into_nested_if() {
+        // `||` 側内の set -e 抑制はネストした If にも伝播する:
+        // `(if true; then false; echo survived; fi) || echo fallback`
+        // — false で If 本体が中断せず echo survived まで走る。
+        let recipe = steps(vec![Step::Or {
+            lhs: vec![Step::If {
+                cond: Cond::Cmd(pipe(&["true"])),
+                then: vec![
+                    Step::Exec {
+                        env: Vec::new(),
+                        pipe: pipe(&["false"]),
+                    },
+                    Step::Exec {
+                        env: Vec::new(),
+                        pipe: pipe(&["echo", "survived"]),
+                    },
+                ],
+                else_: vec![],
+            }],
+            rhs: vec![Step::Exec {
+                env: Vec::new(),
+                pipe: pipe(&["echo", "fallback"]),
+            }],
+        }]);
+        let mut trace = Trace::new();
+        trace.results.push_back(Ok(String::new())); // cond: true
+        trace.results.push_back(Err(1)); // false
+        trace.results.push_back(Ok(String::new())); // echo survived
+        run(&recipe, &ctx(), &mut trace).unwrap();
+        assert!(
+            trace.ops.contains(&"exec  echo survived".to_string()),
+            "{:?}",
+            trace.ops
+        );
+        assert!(!trace.ops.contains(&"exec  echo fallback".to_string()));
+    }
+
+    #[test]
+    fn cond_cmd_failure_selects_else_branch() {
+        // `if cmd; then A; else B` — cmd の Exit は else 選択であって
+        // エラー伝播ではない
+        let recipe = steps(vec![Step::If {
+            cond: Cond::Cmd(pipe(&["missing-cmd"])),
+            then: vec![Step::Exec {
+                env: Vec::new(),
+                pipe: pipe(&["echo", "then"]),
+            }],
+            else_: vec![Step::Exec {
+                env: Vec::new(),
+                pipe: pipe(&["echo", "else"]),
+            }],
+        }]);
+        let mut trace = Trace::new();
+        trace.results.push_back(Err(1)); // cond 失敗
+        run(&recipe, &ctx(), &mut trace).unwrap();
+        assert!(trace.ops.contains(&"exec  echo else".to_string()));
+        assert!(!trace.ops.contains(&"exec  echo then".to_string()));
+    }
+
+    #[test]
+    fn exec_env_prefix_reaches_sandbox() {
+        // `FOO=bar cmd` の一時 env override が sandbox へ渡る
+        let recipe = steps(vec![Step::Exec {
+            env: vec![("FOO", Arg::lit("bar"))],
+            pipe: pipe(&["cmd"]),
+        }]);
+        let mut trace = Trace::new();
+        run(&recipe, &ctx(), &mut trace).unwrap();
+        assert!(
+            trace.ops.contains(&"exec FOO=bar cmd".to_string()),
+            "{:?}",
+            trace.ops
+        );
+    }
 }

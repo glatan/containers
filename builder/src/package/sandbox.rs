@@ -12,11 +12,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs::{self, File, OpenOptions};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, ChildStdout, Command, Stdio};
 
 use super::recipe::{CROSS_CACHE_VARS, Env, Std};
 use super::runner::{Error, Sandbox, glob_match};
@@ -187,6 +187,18 @@ fn sanitize_flags(value: &str) -> String {
 
 /// builtin 出力の吐き先。`capture` なら返り値、stdout リダイレクトが
 /// あればファイルへ、どちらも無ければ継承 stdout へ出す。
+/// builtin/空ステージが消費しない上流パイプの read end を drain する。
+/// bash では builtin の subshell 終了時に read end が閉じて書き手は
+/// SIGPIPE になる。ここでは drain 中は read end を開いたままにして
+/// 書き手に猶予を与え、パイプバッファ相当量（64KiB）を超えたら閉じる
+/// — 小さい producer は成功し、巨大/無限 producer は SIGPIPE で
+/// 打ち止められてハングしない。
+fn drain_pipe(out: ChildStdout) {
+    std::thread::spawn(move || {
+        let _ = out.take(64 * 1024).read_to_end(&mut Vec::new());
+    });
+}
+
 fn emit(output: Vec<u8>, stdout: Option<(&str, bool)>, capture: bool) -> Result<String, Error> {
     if let Some((path, append)) = stdout {
         // builtin 出力は末尾改行込みの完成形なので行単位ではなく
@@ -535,13 +547,9 @@ impl Sandbox for ContainerSandbox {
         let mut codes: Vec<Option<i32>> = vec![None; stages.len()];
         let mut children: Vec<Option<Child>> = Vec::new();
         // 前ステージの stdout（次ステージの stdin へ繋ぐ）
-        let mut prev: Option<Stdio> = None;
+        let mut prev: Option<ChildStdout> = None;
         // builtin ステージの出力（次ステージの stdin へ書き込む）
         let mut feed: Option<Vec<u8>> = None;
-        // builtin/空ステージが消費しない上流の read end を保持する。
-        // drop すると書き手に SIGPIPE が飛ぶが、bash では builtin の
-        // subshell 終了まで read end が開いたままなので揃える。
-        let mut held: Vec<Stdio> = Vec::new();
         // 末尾が builtin の場合の emit 結果（capture 用）
         let mut last_builtin_out: Option<String> = None;
         for (i, stage) in stages.iter().enumerate() {
@@ -551,8 +559,8 @@ impl Sandbox for ContainerSandbox {
                 feed = Some(Vec::new());
                 codes[i] = Some(0);
                 children.push(None);
-                if let Some(stdio) = prev.take() {
-                    held.push(stdio);
+                if let Some(out) = prev.take() {
+                    drain_pipe(out);
                 }
                 continue;
             }
@@ -578,8 +586,8 @@ impl Sandbox for ContainerSandbox {
                     }
                 }
                 children.push(None);
-                if let Some(stdio) = prev.take() {
-                    held.push(stdio);
+                if let Some(out) = prev.take() {
+                    drain_pipe(out);
                 }
                 continue;
             }
@@ -645,7 +653,7 @@ impl Sandbox for ContainerSandbox {
                 let _ = pipe.write_all(&bytes);
             }
             if i < last {
-                prev = child.stdout.take().map(Stdio::from);
+                prev = child.stdout.take();
             }
             children.push(Some(child));
         }
@@ -1130,5 +1138,97 @@ mod tests {
         let mut sb = ContainerSandbox::new();
         runner::run(&recipe, &ctx, &mut sb).unwrap();
         assert_eq!(fs::read_to_string(&marker).unwrap(), "ok\n");
+    }
+
+    #[test]
+    fn pipeline_large_producer_to_builtin_gets_sigpipe() {
+        // パイプバッファ（64KiB）超の producer | builtin — drain が
+        // 打ち切られて書き手は SIGPIPE（pipefail で 141）。
+        // ハングしないことも兼ねて検証する。
+        let mut sb = ContainerSandbox::new();
+        let stages = vec![
+            argv(&["seq", "1", "100000"]),
+            argv(&["command", "-v", "sh"]),
+        ];
+        let err = sb
+            .pipeline(&stages, &[], None, None, None, true)
+            .unwrap_err();
+        assert!(matches!(err, Error::Exit { code: 141, .. }));
+    }
+
+    #[test]
+    fn eacces_maps_to_exit_126() {
+        // 実行ビットの無いファイルの spawn は bash と同じく 126
+        let dir = tempdir("eacces");
+        let path = dir.join("noexec.sh");
+        fs::write(&path, "echo hi\n").unwrap();
+        let mut perms = fs::metadata(&path).unwrap().permissions();
+        perms.set_mode(0o644);
+        fs::set_permissions(&path, perms).unwrap();
+        let mut sb = ContainerSandbox::new();
+        let err = sb
+            .exec(
+                &[path.to_str().unwrap().to_string()],
+                &[],
+                None,
+                None,
+                None,
+                false,
+            )
+            .unwrap_err();
+        assert!(matches!(err, Error::Exit { code: 126, .. }));
+    }
+
+    #[test]
+    fn bare_command_dispatches_real_command() {
+        // `command foo …` は function bypass 相当で実コマンドを実行する
+        // （"command" 自体を spawn して 127 にならない）
+        let mut sb = ContainerSandbox::new();
+        let out = sb
+            .exec(
+                &argv(&["command", "echo", "hi"]),
+                &[],
+                None,
+                None,
+                None,
+                true,
+            )
+            .unwrap();
+        assert_eq!(out, "hi\n");
+    }
+
+    #[test]
+    fn pipeline_writes_stdout_redirect() {
+        // `cmd1 | cmd2 > file` — 末尾ステージのリダイレクト
+        let dir = tempdir("redirect");
+        let out_path = dir.join("out.txt");
+        let mut sb = ContainerSandbox::new();
+        sb.pipeline(
+            &vec![argv(&["echo", "hi"]), argv(&["cat"])],
+            &[],
+            None,
+            Some((out_path.to_str().unwrap(), false)),
+            None,
+            false,
+        )
+        .unwrap();
+        assert_eq!(fs::read_to_string(&out_path).unwrap(), "hi\n");
+    }
+
+    #[test]
+    fn redirect_open_failure_is_exit_1() {
+        // `cmd > /nonexistent/dir/f` — bash と同じく exit 1
+        let mut sb = ContainerSandbox::new();
+        let err = sb
+            .pipeline(
+                &vec![argv(&["echo", "hi"]), argv(&["cat"])],
+                &[],
+                None,
+                Some(("/nonexistent-dir-xyz/f", false)),
+                None,
+                false,
+            )
+            .unwrap_err();
+        assert!(matches!(err, Error::Exit { code: 1, .. }));
     }
 }

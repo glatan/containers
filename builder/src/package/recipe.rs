@@ -1726,4 +1726,47 @@ mod tests {
         assert!(out.contains("\nbody\nEOF\n"), "{out}");
         assert!(out.lines().any(|line| line == "EOF"), "{out}");
     }
+
+    #[test]
+    fn validate_rejects_runner_unsupported_syntax() {
+        // 外部コマンドの無い純粋 builtin の argv[0] は runner で
+        // 実行不能なので拒否する
+        let builtin = Steps::new(Env::None).step(Step::Exec {
+            env: Vec::new(),
+            pipe: Pipe::cmd(vec![Arg::lit("eval"), Arg::lit("true")]),
+        });
+        let errors = Recipe::Steps(builtin).validate();
+        assert!(errors.iter().any(|e| e.contains("builtin")), "{errors:?}");
+
+        // 裸の特殊変数は runner 未対応（bash とは別の意味になる）
+        for text in ["echo $?", "echo $$", "echo $1", "echo $@"] {
+            let s = Steps::new(Env::None).step(Step::Exec {
+                env: Vec::new(),
+                pipe: Pipe::cmd(vec![Arg::lit("echo"), Arg::lit(text)]),
+            });
+            let errors = Recipe::Steps(s).validate();
+            assert!(
+                errors.iter().any(|e| e.contains("特殊変数")),
+                "{text}: {errors:?}"
+            );
+        }
+
+        // `${VAR%…}` `${VAR#…}` `${#VAR}` 等は `}` `:-` `:+` のみ許可
+        for text in ["${X%/*}", "${X#*/}", "${#X}"] {
+            let s = Steps::new(Env::None).step(Step::Exec {
+                env: Vec::new(),
+                pipe: Pipe::cmd(vec![Arg::lit("echo"), Arg::lit(text)]),
+            });
+            let errors = Recipe::Steps(s).validate();
+            assert!(!errors.is_empty(), "{text} を拒否できていない");
+        }
+
+        // Lit 内の `$(`・バッククォートは Arg::Subst を使う
+        let subst = Steps::new(Env::None).step(Step::Exec {
+            env: Vec::new(),
+            pipe: Pipe::cmd(vec![Arg::lit("echo"), Arg::lit("$(id)")]),
+        });
+        let errors = Recipe::Steps(subst).validate();
+        assert!(errors.iter().any(|e| e.contains("Subst")), "{errors:?}");
+    }
 }

@@ -117,6 +117,31 @@ fn plans_deserialize_roundtrip() {
     }
 }
 
+/// `run-recipe` が実際に読む `BuildPlan`（prelude+recipe）の
+/// wire format 往復を prelude golden で検証する。
+#[test]
+fn build_plans_deserialize_roundtrip() {
+    use containers_builder::package::recipe::BuildPlan;
+    let dir = golden_dir().join("prelude");
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let entry = entry.unwrap();
+        let name = entry.file_name().into_string().unwrap();
+        if !name.ends_with(".json") {
+            continue;
+        }
+        let original = std::fs::read_to_string(entry.path()).unwrap();
+        let leaked: &'static str = Box::leak(original.clone().into_boxed_str());
+        let plan: BuildPlan = serde_json::from_str(leaked)
+            .unwrap_or_else(|e| panic!("{name} のデシリアライズに失敗: {e}"));
+        let value = serde_json::to_value(&plan).unwrap();
+        let again = format!("{}\n", serde_json::to_string_pretty(&value).unwrap());
+        assert_eq!(
+            original, again,
+            "{name} の BuildPlan ラウンドトリップが不一致"
+        );
+    }
+}
+
 /// 計画 JSON がラウンドトリップで安定であること（正準形式として
 /// 2 度シリアライズして一致するか）を検証する。
 #[test]

@@ -823,28 +823,32 @@ mod tests {
 
     #[test]
     fn reports_completed_nodes_before_later_error() {
+        // 1 ノード目は成果物済みで skip 報告、2 ノード目はスタブ失敗。
+        // 実ネットワーク/podman を介さず失敗理由まで検証する。
         let (_keep, source, artifacts) = empty_dirs();
-        let target = Target::Amd64(Amd64Variant::V1);
+        let done = Target::Amd64(Amd64Variant::V1);
+        let fail = Target::S390x(crate::target::S390xVariant::Z17);
         let package = fake("cached", &[], &[], source, artifacts);
-        let dir = package.artifact_dir(target);
+        let dir = package.artifact_dir(done);
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("kept"), "ok").unwrap();
-        let packages = [&package];
-        let find = lookup(&packages);
+        let order: Vec<(&dyn Package, Target)> = vec![(&package, done), (&package, fail)];
         let mut log = Vec::new();
-        let error = build_package_with(
-            &package,
-            &[target, Target::S390x(crate::target::S390xVariant::Z17)],
+        let error = walk_nodes(
+            &order,
             false,
-            &find,
+            false,
+            &BTreeSet::new(),
+            false,
             &mut |line| log.push(line),
+            &mut |_, _| Err(Error::message("注入した失敗")),
         )
         .unwrap_err();
         assert!(
             log.iter().any(|line| line.contains("ビルド済み")),
             "{log:?}"
         );
-        assert!(!error.to_string().is_empty());
+        assert!(error.to_string().contains("注入した失敗"), "{error}");
     }
 
     #[test]
