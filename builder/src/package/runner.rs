@@ -26,8 +26,6 @@ pub enum Error {
     Exit { argv: Vec<String>, code: i32 },
     /// 未定義変数の参照（`set -u` 相当）。
     UnboundVar(String),
-    /// sandbox がその操作を持たない。
-    Unsupported(&'static str),
     /// ファイル・プロセス操作の失敗。
     Io(String),
 }
@@ -37,7 +35,6 @@ impl fmt::Display for Error {
         match self {
             Self::Exit { argv, code } => write!(f, "{argv:?} が終了コード {code}"),
             Self::UnboundVar(name) => write!(f, "未定義変数 ${name}"),
-            Self::Unsupported(what) => write!(f, "sandbox が {what} をサポートしない"),
             Self::Io(msg) => write!(f, "{msg}"),
         }
     }
@@ -1254,6 +1251,10 @@ pub struct Trace {
     pub files: BTreeMap<String, String>,
     /// 現在の作業ディレクトリ（`cd` で記録）。
     pub cwd: Option<String>,
+    /// 失敗させる fs 操作名（`"cd"`/`"write"`/`"install"` 等）。
+    /// 実 sandbox 側のエラー経路を runner テストで検証するための
+    /// 失敗注入ポイント。
+    pub fail_ops: BTreeSet<&'static str>,
     pub nproc: usize,
     vars: Vec<BTreeMap<String, (String, bool)>>,
     /// スコープ毎の unset 済み名（外側スコープの同名を shadow）。
@@ -1414,8 +1415,10 @@ impl Sandbox for Trace {
         let cap = if capture { " capture" } else { "" };
         self.ops.push(format!("pipeline {env} {pipe}{io}{cap}"));
         match self.results.pop_front() {
+            // pipefail は最右の非ゼロコードを返すので、注入された
+            // 失敗は末尾ステージの argv として報告する
             Some(Err(code)) => Err(Error::Exit {
-                argv: stages[0].clone(),
+                argv: stages.last().cloned().unwrap_or_default(),
                 code,
             }),
             Some(Ok(out)) => Ok(out),
@@ -1425,6 +1428,12 @@ impl Sandbox for Trace {
 
     fn write_file(&mut self, path: &str, lines: &[String], append: bool) -> Result<(), Error> {
         self.ops.push(format!("write {path} ({}行)", lines.len()));
+        if self.fail_ops.contains("write") {
+            return Err(Error::Exit {
+                argv: vec!["write".to_string(), path.to_string()],
+                code: 1,
+            });
+        }
         let body = if lines.is_empty() {
             String::new()
         } else {
@@ -1454,6 +1463,12 @@ impl Sandbox for Trace {
 
     fn cd(&mut self, path: &str) -> Result<(), Error> {
         self.ops.push(format!("cd {path}"));
+        if self.fail_ops.contains("cd") {
+            return Err(Error::Exit {
+                argv: vec!["cd".to_string(), path.to_string()],
+                code: 1,
+            });
+        }
         self.cwd = Some(path.to_string());
         Ok(())
     }
@@ -1466,6 +1481,12 @@ impl Sandbox for Trace {
 
     fn install(&mut self, src: &str, dst: &str, mode: &str) -> Result<(), Error> {
         self.ops.push(format!("install -D -m {mode} {src} {dst}"));
+        if self.fail_ops.contains("install") {
+            return Err(Error::Exit {
+                argv: vec!["install".to_string(), dst.to_string()],
+                code: 1,
+            });
+        }
         self.present_files.insert(dst.to_string());
         Ok(())
     }
@@ -1741,15 +1762,27 @@ mod tests {
             .with_var("BUILD", "/build")
             .with_var("OUT", "/out");
         run(&recipe, &ctx(), &mut trace).unwrap();
-        let ops = trace.ops.join("\n");
+        let ops = &trace.ops;
         // configure → generate → make → workload → distclean →
         // use → configure → make → install の順で記録される。
-        let configure = ops.match_indices("configure").count();
-        let makes = ops.match_indices("make -j8").count();
-        assert_eq!(configure, 2, "{ops}");
-        assert_eq!(makes, 2, "{ops}");
-        assert!(ops.contains("pgo-workload-cmd"), "{ops}");
-        assert!(ops.contains("CFLAGS"), "{ops}");
+        let pos = |needle: &str, from: usize| -> usize {
+            ops.iter()
+                .enumerate()
+                .skip(from)
+                .find(|(_, op)| op.contains(needle))
+                .map(|(i, _)| i)
+                .unwrap_or_else(|| panic!("{needle} が見つからない: {ops:?}"))
+        };
+        let cfg1 = pos("configure Autotools", 0);
+        let gen_ = pos("-fprofile-generate", cfg1);
+        let make1 = pos("exec  make -j8", gen_);
+        let workload = pos("pgo-workload-cmd", make1);
+        let clean = pos("exec  make distclean", workload);
+        let use_ = pos("-fprofile-use", clean);
+        let cfg2 = pos("configure Autotools", use_);
+        let make2 = pos("exec  make -j8", cfg2);
+        let install = pos("exec  make install", make2);
+        assert!(install > make2, "{ops:?}");
     }
 
     #[test]
@@ -2214,5 +2247,23 @@ mod tests {
             "{:?}",
             trace.ops
         );
+    }
+
+    #[test]
+    fn cd_failure_aborts_recipe() {
+        // bash: `cd /nonexistent` は exit 1 で set -e 中断。
+        // fail_ops で fs 操作の失敗を注入する。
+        let recipe = steps(vec![
+            Step::Cd(Arg::lit("/nonexistent")),
+            Step::Exec {
+                env: Vec::new(),
+                pipe: pipe(&["echo", "unreachable"]),
+            },
+        ]);
+        let mut trace = Trace::new();
+        trace.fail_ops.insert("cd");
+        let err = run(&recipe, &ctx(), &mut trace).unwrap_err();
+        assert!(matches!(err, Error::Exit { code: 1, .. }));
+        assert!(!trace.ops.contains(&"exec  echo unreachable".to_string()));
     }
 }

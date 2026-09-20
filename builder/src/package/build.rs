@@ -823,16 +823,18 @@ mod tests {
 
     #[test]
     fn reports_completed_nodes_before_later_error() {
-        // 1 ノード目は成果物済みで skip 報告、2 ノード目はスタブ失敗。
-        // 実ネットワーク/podman を介さず失敗理由まで検証する。
+        // skip 済み・ビルド成功・スタブ失敗の 3 ノードを通し、
+        // 完了ノードの報告が後続エラー伝播前に出ることを検証する。
         let (_keep, source, artifacts) = empty_dirs();
         let done = Target::Amd64(Amd64Variant::V1);
+        let built = Target::Amd64(Amd64Variant::V4);
         let fail = Target::S390x(crate::target::S390xVariant::Z17);
         let package = fake("cached", &[], &[], source, artifacts);
         let dir = package.artifact_dir(done);
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("kept"), "ok").unwrap();
-        let order: Vec<(&dyn Package, Target)> = vec![(&package, done), (&package, fail)];
+        let order: Vec<(&dyn Package, Target)> =
+            vec![(&package, done), (&package, built), (&package, fail)];
         let mut log = Vec::new();
         let error = walk_nodes(
             &order,
@@ -841,11 +843,21 @@ mod tests {
             &BTreeSet::new(),
             false,
             &mut |line| log.push(line),
-            &mut |_, _| Err(Error::message("注入した失敗")),
+            &mut |_, target| {
+                if target == fail {
+                    Err(Error::message("注入した失敗"))
+                } else {
+                    Ok(())
+                }
+            },
         )
         .unwrap_err();
         assert!(
             log.iter().any(|line| line.contains("ビルド済み")),
+            "{log:?}"
+        );
+        assert!(
+            log.iter().any(|line| line.contains("ビルドしました")),
             "{log:?}"
         );
         assert!(error.to_string().contains("注入した失敗"), "{error}");
@@ -1016,19 +1028,11 @@ mod tests {
         }
     }
 
-    #[test]
-    fn seed_cmake_installs_arch_mold_and_exposes_prefixed_gcc() {
+    /// ツールチェーン mount fixture: dep 一式を `tmp` 下に作る。
+    /// aarch64 クロス gcc/binutils/glibc + ホスト binutils/gcc +
+    /// pkgconf/meson/python/mold/zlib の最小構成。
+    fn toolchain_fixture(tmp: &tempfile::TempDir) -> Vec<Mount> {
         use std::os::unix::fs::PermissionsExt;
-        let cmake = crate::package::find("cmake").unwrap();
-        let script = wrap_script(cmake, true, Target::BUILD_ENV, &[], &Prep::default());
-        assert!(script.contains("pacman -Sy --noconfirm mold"), "{script}");
-        assert!(script.contains("/tmp/la-overlay"), "{script}");
-        assert!(script.contains("/tmp/pc-overlay"), "{script}");
-        // /dep/pkgconf が無い場合は command -v フォールバックが残る
-        assert!(script.contains("/tmp/pkg-config-bin"), "{script}");
-
-        // ツールチェーン一式をマウントした場合の Prep と生成スクリプト
-        let tmp = tempfile::tempdir().unwrap();
         let mk = |name: &str| {
             let dir = tmp.path().join(name);
             fs::create_dir_all(&dir).unwrap();
@@ -1089,7 +1093,7 @@ libdir=/usr/lib
         .unwrap();
         let cc_glibc = mk("aarch64-linux-gnu-glibc");
         fs::create_dir_all(cc_glibc.join("usr/aarch64-linux-gnu/lib")).unwrap();
-        let mounts: Vec<Mount> = [
+        [
             ("aarch64-linux-gnu-gcc", &cc_gcc),
             ("aarch64-linux-gnu-binutils", &cc_bu),
             ("x86_64-linux-gnu-binutils", &t_bu),
@@ -1106,8 +1110,33 @@ libdir=/usr/lib
             name: name.to_owned(),
             dir: dir.clone(),
         })
-        .collect();
+        .collect()
+    }
 
+    #[test]
+    fn seed_cmake_prelude_installs_tools() {
+        let cmake = crate::package::find("cmake").unwrap();
+        let script = wrap_script(cmake, true, Target::BUILD_ENV, &[], &Prep::default());
+        assert!(script.contains("pacman -Sy --noconfirm mold"), "{script}");
+        assert!(script.contains("/tmp/la-overlay"), "{script}");
+        assert!(script.contains("/tmp/pc-overlay"), "{script}");
+        // /dep/pkgconf が無い場合は command -v フォールバックが残る
+        assert!(script.contains("/tmp/pkg-config-bin"), "{script}");
+        assert!(allow_network(cmake, Target::BUILD_ENV, false));
+        assert!(!allow_network(cmake, Target::BUILD_ENV, true));
+        assert!(
+            cmake
+                .rendered_script(Target::BUILD_ENV)
+                .contains("CMAKE_DISABLE_FIND_PACKAGE_Libidn2"),
+            "{}",
+            cmake.rendered_script(Target::BUILD_ENV)
+        );
+    }
+
+    #[test]
+    fn stage_generated_detects_mounted_toolchain() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mounts = toolchain_fixture(&tmp);
         let binutils = crate::package::find("x86_64-linux-gnu-binutils").unwrap();
         let gen_dir = tmp.path().join("gen");
         let prep =
@@ -1128,7 +1157,28 @@ libdir=/usr/lib
             meson_out.starts_with("#!/dep/python/usr/bin/python3\n"),
             "{meson_out}"
         );
+        // 実際のラッパファイルが生成される
+        let strip = fs::read_link(gen_dir.join("host-strip/strip")).unwrap();
+        assert_eq!(
+            strip,
+            Path::new("/dep/aarch64-linux-gnu-binutils/usr/bin/aarch64-linux-gnu-strip")
+        );
+        let ar = fs::read_to_string(gen_dir.join("lto-binutils/aarch64-linux-gnu-ar")).unwrap();
+        assert!(ar.contains("--plugin"), "{ar}");
+    }
 
+    #[test]
+    fn wrap_script_injects_toolchain_wrappers() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mounts = toolchain_fixture(&tmp);
+        let binutils = crate::package::find("x86_64-linux-gnu-binutils").unwrap();
+        let prep = stage_generated(
+            binutils,
+            &mounts,
+            &tmp.path().join("gen"),
+            Target::Arm64(Arm64Variant::V8),
+        )
+        .unwrap();
         let bu_script = wrap_script(
             binutils,
             false,
@@ -1156,16 +1206,13 @@ libdir=/usr/lib
         ] {
             assert!(bu_script.contains(needle), "{needle} not in {bu_script}");
         }
-        // 実際のラッパファイルが生成される
-        let strip = fs::read_link(gen_dir.join("host-strip/strip")).unwrap();
-        assert_eq!(
-            strip,
-            Path::new("/dep/aarch64-linux-gnu-binutils/usr/bin/aarch64-linux-gnu-strip")
-        );
-        let ar = fs::read_to_string(gen_dir.join("lto-binutils/aarch64-linux-gnu-ar")).unwrap();
-        assert!(ar.contains("--plugin"), "{ar}");
+    }
 
+    #[test]
+    fn gcc_and_glibc_skip_specs_injection() {
         // gcc/glibc は triple gcc specs 注入対象外（gcc-b/lto-binutils を生成しない）
+        let tmp = tempfile::tempdir().unwrap();
+        let mounts = toolchain_fixture(&tmp);
         let gcc = crate::package::find("x86_64-linux-gnu-gcc").unwrap();
         let gcc_prep = stage_generated(
             gcc,
@@ -1195,15 +1242,6 @@ libdir=/usr/lib
         assert!(
             glibc_script.contains("LD=\"${TRIPLE}-ld\""),
             "{glibc_script}"
-        );
-        assert!(allow_network(cmake, Target::BUILD_ENV, false));
-        assert!(!allow_network(cmake, Target::BUILD_ENV, true));
-        assert!(
-            cmake
-                .rendered_script(Target::BUILD_ENV)
-                .contains("CMAKE_DISABLE_FIND_PACKAGE_Libidn2"),
-            "{}",
-            cmake.rendered_script(Target::BUILD_ENV)
         );
     }
 

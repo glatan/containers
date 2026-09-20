@@ -123,12 +123,14 @@ fn plans_deserialize_roundtrip() {
 fn build_plans_deserialize_roundtrip() {
     use containers_builder::package::recipe::BuildPlan;
     let dir = golden_dir().join("prelude");
+    let mut count = 0;
     for entry in std::fs::read_dir(&dir).unwrap() {
         let entry = entry.unwrap();
         let name = entry.file_name().into_string().unwrap();
         if !name.ends_with(".json") {
             continue;
         }
+        count += 1;
         let original = std::fs::read_to_string(entry.path()).unwrap();
         let leaked: &'static str = Box::leak(original.clone().into_boxed_str());
         let plan: BuildPlan = serde_json::from_str(leaked)
@@ -140,6 +142,7 @@ fn build_plans_deserialize_roundtrip() {
             "{name} の BuildPlan ラウンドトリップが不一致"
         );
     }
+    assert!(count > 0, "prelude golden が 0 件（vacuous pass）");
 }
 
 /// 計画 JSON がラウンドトリップで安定であること（正準形式として

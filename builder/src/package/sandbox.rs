@@ -187,6 +187,17 @@ fn sanitize_flags(value: &str) -> String {
 
 /// builtin 出力の吐き先。`capture` なら返り値、stdout リダイレクトが
 /// あればファイルへ、どちらも無ければ継承 stdout へ出す。
+/// パイプライン構築中の早期エラーで spawn 済みの子プロセスを回収する
+/// （wait されない Child は zombie になる）。
+fn reap_children(children: &mut Vec<Option<Child>>) {
+    for slot in children.iter_mut() {
+        if let Some(mut child) = slot.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
 /// builtin/空ステージが消費しない上流パイプの read end を drain する。
 /// bash では builtin の subshell 終了時に read end が閉じて書き手は
 /// SIGPIPE になる。ここでは drain 中は read end を開いたままにして
@@ -552,6 +563,18 @@ impl Sandbox for ContainerSandbox {
         let mut feed: Option<Vec<u8>> = None;
         // 末尾が builtin の場合の emit 結果（capture 用）
         let mut last_builtin_out: Option<String> = None;
+        // spawn 途中のエラーは spawn 済みの子を reap してから返す
+        macro_rules! try_reap {
+            ($e:expr) => {
+                match $e {
+                    Ok(value) => value,
+                    Err(error) => {
+                        reap_children(&mut children);
+                        return Err(error);
+                    }
+                }
+            };
+        }
         for (i, stage) in stages.iter().enumerate() {
             let stage = strip_command(stage);
             if stage.is_empty() {
@@ -611,21 +634,23 @@ impl Sandbox for ContainerSandbox {
             } else if i == 0
                 && let Some(path) = stdin
             {
-                let file = File::open(path).map_err(|_| Error::Exit {
+                let file = try_reap!(File::open(path).map_err(|_| Error::Exit {
                     argv: vec![format!("< {path}")],
                     code: 1,
-                })?;
+                }));
                 cmd.stdin(Stdio::from(file));
             }
             // stdout: 末尾のみ redirect/capture/inherit、中間は piped
             if i == last {
                 match stdout {
-                    Some((path, append)) => cmd.stdout(Stdio::from(open_redirect(path, append)?)),
+                    Some((path, append)) => {
+                        cmd.stdout(Stdio::from(try_reap!(open_redirect(path, append))))
+                    }
                     None if capture => cmd.stdout(Stdio::piped()),
                     None => cmd.stdout(Stdio::inherit()),
                 };
                 match stderr {
-                    Some(path) => cmd.stderr(Stdio::from(open_redirect(path, false)?)),
+                    Some(path) => cmd.stderr(Stdio::from(try_reap!(open_redirect(path, false)))),
                     None => cmd.stderr(Stdio::inherit()),
                 };
             } else {
@@ -633,18 +658,24 @@ impl Sandbox for ContainerSandbox {
             }
             let mut child = match cmd.spawn() {
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    reap_children(&mut children);
                     return Err(Error::Exit {
                         argv: stage.to_vec(),
                         code: 127,
                     });
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                    reap_children(&mut children);
                     return Err(Error::Exit {
                         argv: stage.to_vec(),
                         code: 126,
                     });
                 }
-                Err(e) => return Err(exit_io("spawn", Path::new(&stage[0]), e)),
+                Err(e) => {
+                    let error = exit_io("spawn", Path::new(&stage[0]), e);
+                    reap_children(&mut children);
+                    return Err(error);
+                }
                 Ok(child) => child,
             };
             if let Some(bytes) = feed_bytes
@@ -663,17 +694,21 @@ impl Sandbox for ContainerSandbox {
                 continue;
             };
             if i == last {
-                let out = child
-                    .wait_with_output()
-                    .map_err(|e| exit_io("wait", Path::new(&stages[i][0]), e))?;
+                let out = try_reap!(child.wait_with_output().map_err(|e| exit_io(
+                    "wait",
+                    Path::new(&stages[i][0]),
+                    e
+                )));
                 if capture && stdout.is_none() {
                     output = String::from_utf8_lossy(&out.stdout).into_owned();
                 }
                 codes[i] = Some(exit_code(out.status));
             } else {
-                let status = child
-                    .wait()
-                    .map_err(|e| exit_io("wait", Path::new(&stages[i][0]), e))?;
+                let status = try_reap!(child.wait().map_err(|e| exit_io(
+                    "wait",
+                    Path::new(&stages[i][0]),
+                    e
+                )));
                 codes[i] = Some(exit_code(status));
             }
         }
@@ -878,11 +913,9 @@ mod tests {
         words.iter().map(|w| w.to_string()).collect()
     }
 
-    fn tempdir(tag: &str) -> PathBuf {
-        let dir = env::temp_dir().join(format!("sandbox-test-{}-{tag}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        dir
+    fn tempdir(_tag: &str) -> tempfile::TempDir {
+        // TempDir は drop で自動削除される（/tmp に残骸を残さない）
+        tempfile::tempdir().unwrap()
     }
 
     #[test]
@@ -1072,6 +1105,7 @@ mod tests {
     #[test]
     fn glob_expands_and_sorts() {
         let dir = tempdir("glob");
+        let dir = dir.path();
         fs::write(dir.join("b.o"), "").unwrap();
         fs::write(dir.join("a.o"), "").unwrap();
         fs::write(dir.join("c.txt"), "").unwrap();
@@ -1092,6 +1126,7 @@ mod tests {
     #[test]
     fn write_file_and_append() {
         let dir = tempdir("write");
+        let dir = dir.path();
         let path = format!("{}/f", dir.display());
         let mut sb = ContainerSandbox::new();
         sb.write_file(&path, &["a".to_string()], false).unwrap();
@@ -1114,6 +1149,7 @@ mod tests {
     fn recipe_runs_end_to_end() {
         // run() 経由で WriteFile が実 FS と結合することを確認
         let dir = tempdir("e2e");
+        let dir = dir.path();
         let marker = dir.join("marker");
         let recipe = Recipe::Steps(Steps {
             env: Env::None,
@@ -1160,6 +1196,7 @@ mod tests {
     fn eacces_maps_to_exit_126() {
         // 実行ビットの無いファイルの spawn は bash と同じく 126
         let dir = tempdir("eacces");
+        let dir = dir.path();
         let path = dir.join("noexec.sh");
         fs::write(&path, "echo hi\n").unwrap();
         let mut perms = fs::metadata(&path).unwrap().permissions();
@@ -1180,27 +1217,10 @@ mod tests {
     }
 
     #[test]
-    fn bare_command_dispatches_real_command() {
-        // `command foo …` は function bypass 相当で実コマンドを実行する
-        // （"command" 自体を spawn して 127 にならない）
-        let mut sb = ContainerSandbox::new();
-        let out = sb
-            .exec(
-                &argv(&["command", "echo", "hi"]),
-                &[],
-                None,
-                None,
-                None,
-                true,
-            )
-            .unwrap();
-        assert_eq!(out, "hi\n");
-    }
-
-    #[test]
     fn pipeline_writes_stdout_redirect() {
         // `cmd1 | cmd2 > file` — 末尾ステージのリダイレクト
         let dir = tempdir("redirect");
+        let dir = dir.path();
         let out_path = dir.join("out.txt");
         let mut sb = ContainerSandbox::new();
         sb.pipeline(
@@ -1230,5 +1250,68 @@ mod tests {
             )
             .unwrap_err();
         assert!(matches!(err, Error::Exit { code: 1, .. }));
+    }
+
+    #[test]
+    fn pipeline_mid_stage_enoent_is_127() {
+        // 中間ステージの command-not-found も bash と同じく 127
+        let mut sb = ContainerSandbox::new();
+        let stages = vec![
+            argv(&["echo", "x"]),
+            argv(&["nope-xyz-missing"]),
+            argv(&["cat"]),
+        ];
+        let err = sb
+            .pipeline(&stages, &[], None, None, None, true)
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            Error::Exit { code: 127, ref argv } if argv[0] == "nope-xyz-missing"
+        ));
+    }
+
+    #[test]
+    fn command_v_flag_resolves_path() {
+        // `command -V` も -v と同じく PATH から解決する
+        let mut sb = ContainerSandbox::new();
+        let out = sb
+            .exec(&argv(&["command", "-V", "sh"]), &[], None, None, None, true)
+            .unwrap();
+        assert!(out.trim_end().ends_with("/sh"), "{out}");
+    }
+
+    #[test]
+    fn pipeline_reads_stdin_redirect() {
+        // `cmd < file | cmd2` — 先頭ステージの stdin リダイレクト
+        let dir = tempdir("stdin");
+        let in_path = dir.path().join("in.txt");
+        fs::write(&in_path, "hello\n").unwrap();
+        let mut sb = ContainerSandbox::new();
+        let out = sb
+            .pipeline(
+                &vec![argv(&["cat"]), argv(&["cat"])],
+                &[],
+                Some(in_path.to_str().unwrap()),
+                None,
+                None,
+                true,
+            )
+            .unwrap();
+        assert_eq!(out, "hello\n");
+    }
+
+    #[test]
+    fn pipeline_mid_builtin_feeds_next_stage() {
+        // 中間 builtin の出力が次ステージの stdin を駆動する:
+        // `sanitize_flags "$X" | cat`
+        let mut sb = ContainerSandbox::new();
+        let stages = vec![
+            argv(&["sanitize_flags", "-O2 -flto=auto -g"]),
+            argv(&["cat"]),
+        ];
+        let out = sb.pipeline(&stages, &[], None, None, None, true).unwrap();
+        assert!(out.contains("-O2"), "{out}");
+        assert!(!out.contains("flto"), "{out}");
+        assert!(out.contains("-g"), "{out}");
     }
 }
