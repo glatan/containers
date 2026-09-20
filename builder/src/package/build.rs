@@ -242,10 +242,12 @@ fn run_order(
     let own = build_env_ready();
     walk_nodes(
         order,
-        skip_unsupported,
-        continue_on_error,
-        force_roots,
-        true,
+        &WalkOpts {
+            skip_unsupported,
+            continue_on_error,
+            fetch: true,
+            force_roots,
+        },
         report,
         &mut |defined, target| {
             container::build_target(
@@ -256,6 +258,7 @@ fn run_order(
                 combined.clone(),
             )
         },
+        &|name| package::find(name),
     )
 }
 
@@ -476,15 +479,28 @@ fn visit<'a>(
     Ok(())
 }
 
-fn walk_nodes(
-    order: &[(&dyn Package, Target)],
+/// `walk_nodes` の動作フラグ（引数過多を避けるため束ねる）。
+#[derive(Clone, Copy)]
+struct WalkOpts<'a> {
     skip_unsupported: bool,
     continue_on_error: bool,
-    force_roots: &BTreeSet<&'static str>,
     fetch: bool,
+    force_roots: &'a BTreeSet<&'static str>,
+}
+
+fn walk_nodes<'a>(
+    order: &[(&'a dyn Package, Target)],
+    opts: &WalkOpts,
     report: &mut dyn FnMut(String),
     compile: &mut dyn FnMut(&dyn Package, Target) -> Result<()>,
+    lookup: &dyn Fn(&str) -> Result<&'a dyn Package>,
 ) -> Result<Vec<String>> {
+    let WalkOpts {
+        skip_unsupported,
+        continue_on_error,
+        fetch,
+        force_roots,
+    } = *opts;
     let own = build_env_ready();
     let mut blocked = BTreeSet::new();
     let mut failed = Vec::new();
@@ -517,7 +533,7 @@ fn walk_nodes(
                 defined.name(),
                 defined.version()
             ));
-            if let Some(reason) = blocked_reason(defined, target, &blocked) {
+            if let Some(reason) = blocked_reason(defined, target, &blocked, lookup) {
                 report(format!(
                     "スキップ: {} {} ({}/{}): {reason}",
                     defined.name(),
@@ -525,7 +541,7 @@ fn walk_nodes(
                     target.architecture(),
                     target.variant()
                 ));
-                blocked.insert(defined.name());
+                blocked.insert((defined.name(), target));
                 continue;
             }
         }
@@ -538,7 +554,7 @@ fn walk_nodes(
                 }
                 Err(error) if continue_on_error => {
                     report(format!("{} の取得に失敗しました: {error}", defined.name()));
-                    blocked.insert(defined.name());
+                    blocked.insert((defined.name(), target));
                     failed.push(defined.name().to_string());
                     continue;
                 }
@@ -568,7 +584,7 @@ fn walk_nodes(
                     target.architecture(),
                     target.variant()
                 ));
-                blocked.insert(defined.name());
+                blocked.insert((defined.name(), target));
                 failed.push(defined.name().to_string());
             }
             Err(error) => return Err(error),
@@ -577,20 +593,28 @@ fn walk_nodes(
     Ok(failed)
 }
 
-fn blocked_reason(
+fn blocked_reason<'a>(
     package: &dyn Package,
     target: Target,
-    blocked: &BTreeSet<&str>,
+    blocked: &BTreeSet<(&'static str, Target)>,
+    lookup: &dyn Fn(&str) -> Result<&'a dyn Package>,
 ) -> Option<String> {
     let (runtime, build) = graph_deps(package, target);
     for dependency in runtime.iter().chain(build.iter()) {
-        if blocked.contains(dependency.name) {
-            return Some(format!("依存が失敗しています: {}", dependency.name));
-        }
-        let Some(found) = package::find(dependency.name).ok() else {
+        let Ok(found) = lookup(dependency.name) else {
             return Some(format!("依存パッケージがありません: {}", dependency.name));
         };
+        // 依存が実際にマウントされるターゲットで失敗した場合だけブロックする
+        // （同名パッケージの別ターゲットの失敗で過剰ブロックしない）
         let mounted = artifact_target(found, target);
+        if blocked.contains(&(dependency.name, mounted)) {
+            return Some(format!(
+                "依存が失敗しています: {} ({}/{})",
+                dependency.name,
+                mounted.architecture(),
+                mounted.variant()
+            ));
+        }
         if !workspace::artifact_ready(&found.artifact_dir(mounted)) {
             return Some(format!("依存パッケージがありません: {}", dependency.name));
         }
@@ -602,7 +626,7 @@ fn blocked_reason(
 mod tests {
     use super::container::{
         Mount, Prep, allow_network, build_plan, compiler_cc, dep_paths, extra_host_tool_names,
-        stage_generated, wrap_script,
+        resolve_runner, stage_generated, wrap_script,
     };
     use super::*;
     use crate::package::{Dependency, Role, Source};
@@ -838,10 +862,12 @@ mod tests {
         let mut log = Vec::new();
         let error = walk_nodes(
             &order,
-            false,
-            false,
-            &BTreeSet::new(),
-            false,
+            &WalkOpts {
+                skip_unsupported: false,
+                continue_on_error: false,
+                fetch: false,
+                force_roots: &BTreeSet::new(),
+            },
             &mut |line| log.push(line),
             &mut |_, target| {
                 if target == fail {
@@ -850,6 +876,7 @@ mod tests {
                     Ok(())
                 }
             },
+            &lookup(&[&package]),
         )
         .unwrap_err();
         assert!(
@@ -1266,10 +1293,12 @@ libdir=/usr/lib
         let mut log = Vec::new();
         let failed = walk_nodes(
             &order,
-            false,
-            true,
-            &BTreeSet::new(),
-            false,
+            &WalkOpts {
+                skip_unsupported: false,
+                continue_on_error: true,
+                fetch: false,
+                force_roots: &BTreeSet::new(),
+            },
             &mut |line| log.push(line),
             &mut |package, _target| {
                 compiled.push(package.name());
@@ -1279,6 +1308,7 @@ libdir=/usr/lib
                     Ok(())
                 }
             },
+            &lookup(&[&a, &b, &c]),
         )
         .unwrap();
         assert_eq!(failed, ["a"]);
@@ -1291,6 +1321,62 @@ libdir=/usr/lib
         assert!(
             log.iter()
                 .any(|line| line.contains("c") && line.contains("ビルドしました")),
+            "{log:?}"
+        );
+    }
+
+    #[test]
+    fn blocked_is_scoped_to_mounted_target() {
+        // dep が amd64/v4 で失敗しても、arm64/v8 で成功した dep に依存する
+        // user (arm64/v8) はブロックされない（同名パッケージの別ターゲット
+        // 失敗による過剰ブロックの回帰テスト）
+        let (_keep, source, artifacts) = empty_dirs();
+        let host = Target::BUILD_ENV;
+        let arm64 = Target::Arm64(Arm64Variant::V8);
+        // Fake の artifact_dir は `<root>/<arch>-<variant>` で名前を含まないため
+        // パッケージごとに別 root を渡す
+        let dep = fake("dep", &[], &[], source.clone(), artifacts.join("dep"));
+        let user = fake(
+            "user",
+            &[Dependency {
+                name: "dep",
+                version: "1",
+            }],
+            &[],
+            source,
+            artifacts.join("user"),
+        );
+        let order: Vec<(&dyn Package, Target)> =
+            vec![(&dep, host), (&dep, arm64), (&user, arm64)];
+        let mut compiled = Vec::new();
+        let mut log = Vec::new();
+        let failed = walk_nodes(
+            &order,
+            &WalkOpts {
+                skip_unsupported: false,
+                continue_on_error: true,
+                fetch: false,
+                force_roots: &BTreeSet::new(),
+            },
+            &mut |line| log.push(line),
+            &mut |package, target| {
+                compiled.push((package.name(), target));
+                if package.name() == "dep" && target == host {
+                    return Err(Error::message("dep amd64/v4 が失敗"));
+                }
+                // 成功したビルドは artifact_ready が真になる成果物を置く
+                let dir = package.artifact_dir(target);
+                fs::create_dir_all(&dir).unwrap();
+                fs::write(dir.join("f"), "").unwrap();
+                Ok(())
+            },
+            &lookup(&[&dep, &user]),
+        )
+        .unwrap();
+        assert_eq!(failed, ["dep"]);
+        assert_eq!(
+            compiled,
+            [("dep", host), ("dep", arm64), ("user", arm64)],
             "{log:?}"
         );
     }
@@ -1501,5 +1587,64 @@ includedir=/usr/include
         let zlib = crate::package::find("zlib").unwrap();
         let (runtime, _) = super::graph_deps(zlib, Target::Arm64(Arm64Variant::V8));
         assert!(runtime.iter().any(|d| d.name == "aarch64-linux-gnu-glibc"));
+    }
+
+    #[test]
+    fn runner_resolution_prefers_musl_static_build() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target_dir = tmp.path().join("target");
+        // `target/<profile>/<name>` レイアウト
+        let exe = target_dir.join("debug").join("containers-builder");
+        let musl = target_dir
+            .join("x86_64-unknown-linux-musl")
+            .join("debug")
+            .join("containers-builder");
+        fs::create_dir_all(musl.parent().unwrap()).unwrap();
+        fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        fs::write(&exe, "host").unwrap();
+        fs::write(&musl, "musl").unwrap();
+        assert_eq!(resolve_runner(None, &exe).unwrap(), musl);
+        // `target/<triple>/<profile>/<name>` レイアウトでも発見する
+        let exe = target_dir
+            .join("x86_64-unknown-linux-gnu")
+            .join("release")
+            .join("containers-builder");
+        let musl = target_dir
+            .join("x86_64-unknown-linux-musl")
+            .join("release")
+            .join("containers-builder");
+        fs::create_dir_all(musl.parent().unwrap()).unwrap();
+        fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        fs::write(&exe, "host").unwrap();
+        fs::write(&musl, "musl").unwrap();
+        assert_eq!(resolve_runner(None, &exe).unwrap(), musl);
+    }
+
+    #[test]
+    fn runner_resolution_falls_back_and_validates_override() {
+        let tmp = tempfile::tempdir().unwrap();
+        let exe = tmp.path().join("debug").join("containers-builder");
+        fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        fs::write(&exe, "host").unwrap();
+        // musl 静的ビルドが無ければホストバイナリのまま
+        assert_eq!(resolve_runner(None, &exe).unwrap(), exe);
+        // 明示指定（CONTAINERS_BUILDER_RUNNER 相当）は musl より優先する
+        let musl = tmp
+            .path()
+            .join("x86_64-unknown-linux-musl")
+            .join("debug")
+            .join("containers-builder");
+        fs::create_dir_all(musl.parent().unwrap()).unwrap();
+        fs::write(&musl, "musl").unwrap();
+        let custom = tmp.path().join("custom-runner");
+        fs::write(&custom, "x").unwrap();
+        assert_eq!(
+            resolve_runner(Some(custom.as_os_str()), &exe).unwrap(),
+            fs::canonicalize(&custom).unwrap()
+        );
+        // 存在しない明示指定はエラー（タイポを黙ってフォールバックしない）
+        assert!(
+            resolve_runner(Some(tmp.path().join("missing").as_os_str()), &exe).is_err()
+        );
     }
 }

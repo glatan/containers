@@ -1,6 +1,7 @@
+use std::ffi::OsStr;
 use std::fs::{self, File};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 
@@ -271,11 +272,9 @@ pub(super) fn build_target(
     command
         .args(["-v"])
         .arg(format!("{}:/tmp/plan.json:ro", plan_path.display()));
-    // runner 自身をコンテナへマウント（バイナリ互換はイメージ側 glibc
-    // に依存する）
-    let exe = std::env::current_exe()
-        .and_then(fs::canonicalize)
-        .map_err(|source| Error::message(format!("current_exe: {source}")))?;
+    // runner 自身をコンテナへマウント。musl 静的ビルドがあればそれを使い、
+    // 無ければホストバイナリを使う（イメージ側 glibc との後方互換が必要）。
+    let exe = runner_exe()?;
     command
         .args(["-v"])
         .arg(format!("{}:/tmp/runner:ro", exe.display()));
@@ -293,11 +292,12 @@ pub(super) fn build_target(
     let mut log = File::create(&log_path).map_err(|source| Error::io(&log_path, source))?;
     writeln!(
         log,
-        "package: {} {}\ntarget: {}/{}\nimage: {image}\nstarted: {}\n",
+        "package: {} {}\ntarget: {}/{}\nimage: {image}\nrunner: {}\nstarted: {}\n",
         package.name(),
         package.version(),
         architecture,
         variant,
+        exe.display(),
         util::timestamp()
     )
     .map_err(|source| Error::io(&log_path, source))?;
@@ -308,11 +308,12 @@ pub(super) fn build_target(
         if let Some(combined) = combined.as_mut() {
             let _ = writeln!(
                 combined,
-                "package: {} {}\ntarget: {}/{}\nimage: {image}\nstarted: {}\n",
+                "package: {} {}\ntarget: {}/{}\nimage: {image}\nrunner: {}\nstarted: {}\n",
                 package.name(),
                 package.version(),
                 architecture,
                 variant,
+                exe.display(),
                 util::timestamp()
             );
         }
@@ -1632,6 +1633,64 @@ pub(super) fn own_image_ref() -> Result<String> {
         workspace::compose_current_link(workspace::BUILD_ENV_NAME, workspace::BUILD_ENV_ARCH);
     let path = fs::canonicalize(&current).map_err(|source| Error::io(&current, source))?;
     Ok(format!("oci:{}", path.display()))
+}
+
+/// コンテナ内で `run-recipe` を実行する runner バイナリを解決する。
+///
+/// 優先順:
+/// 1. `CONTAINERS_BUILDER_RUNNER`（明示指定。存在しないパスはエラー）
+/// 2. cargo 規約の musl 静的ビルド
+///    `target/x86_64-unknown-linux-musl/<profile>/<name>`
+///    （完全静的でコンテナ側 libc に依存しない）
+/// 3. ホストバイナリ自身（フォールバック。ホスト glibc がコンテナ側より
+///    新しいとコンテナ内で起動しない）
+fn runner_exe() -> Result<PathBuf> {
+    let exe = std::env::current_exe()
+        .and_then(fs::canonicalize)
+        .map_err(|source| Error::message(format!("current_exe: {source}")))?;
+    let override_path = std::env::var_os("CONTAINERS_BUILDER_RUNNER");
+    let runner = resolve_runner(override_path.as_deref(), &exe)?;
+    if override_path.is_none() && runner == exe {
+        static WARNED: std::sync::Once = std::sync::Once::new();
+        WARNED.call_once(|| {
+            eprintln!(
+                "警告: musl 静的 runner が見つかりません。ホストバイナリをマウントします\
+                 （コンテナ側 glibc がホストより古いと起動しません）。\
+                 `cargo build --target x86_64-unknown-linux-musl` で生成できます"
+            );
+        });
+    }
+    Ok(runner)
+}
+
+pub(super) fn resolve_runner(override_path: Option<&OsStr>, exe: &Path) -> Result<PathBuf> {
+    if let Some(path) = override_path {
+        let path = PathBuf::from(path);
+        if !path.is_file() {
+            return Err(Error::message(format!(
+                "CONTAINERS_BUILDER_RUNNER が存在しません: {}",
+                path.display()
+            )));
+        }
+        return fs::canonicalize(&path).map_err(|source| Error::io(&path, source));
+    }
+    Ok(musl_runner_candidate(exe).unwrap_or_else(|| exe.to_path_buf()))
+}
+
+/// `exe` が `target/[<triple>/]<profile>/<name>` にあるとき、同じ target dir の
+/// `x86_64-unknown-linux-musl/<profile>/<name>` を返す。
+fn musl_runner_candidate(exe: &Path) -> Option<PathBuf> {
+    let profile = exe.parent()?.file_name()?;
+    let name = exe.file_name()?;
+    exe.ancestors()
+        .skip(2)
+        .take(2)
+        .map(|dir| {
+            dir.join("x86_64-unknown-linux-musl")
+                .join(profile)
+                .join(name)
+        })
+        .find(|candidate| candidate.is_file())
 }
 
 pub(super) fn allow_network(package: &dyn Package, target: Target, own: bool) -> bool {
