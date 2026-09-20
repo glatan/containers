@@ -538,6 +538,10 @@ impl Sandbox for ContainerSandbox {
         let mut prev: Option<Stdio> = None;
         // builtin ステージの出力（次ステージの stdin へ書き込む）
         let mut feed: Option<Vec<u8>> = None;
+        // builtin/空ステージが消費しない上流の read end を保持する。
+        // drop すると書き手に SIGPIPE が飛ぶが、bash では builtin の
+        // subshell 終了まで read end が開いたままなので揃える。
+        let mut held: Vec<Stdio> = Vec::new();
         // 末尾が builtin の場合の emit 結果（capture 用）
         let mut last_builtin_out: Option<String> = None;
         for (i, stage) in stages.iter().enumerate() {
@@ -547,7 +551,9 @@ impl Sandbox for ContainerSandbox {
                 feed = Some(Vec::new());
                 codes[i] = Some(0);
                 children.push(None);
-                prev = None;
+                if let Some(stdio) = prev.take() {
+                    held.push(stdio);
+                }
                 continue;
             }
             if let Some(result) = self.run_builtin(stage) {
@@ -572,7 +578,9 @@ impl Sandbox for ContainerSandbox {
                     }
                 }
                 children.push(None);
-                prev = None;
+                if let Some(stdio) = prev.take() {
+                    held.push(stdio);
+                }
                 continue;
             }
             let mut cmd = Command::new(&stage[0]);

@@ -215,8 +215,11 @@ fn clean_package(
         if skip_unsupported && !defined.supports(*target) {
             continue;
         }
+        let artifact = workspace::artifact_dir(defined.name(), defined.version(), *target);
         for path in [
-            workspace::artifact_dir(defined.name(), defined.version(), *target),
+            artifact.clone(),
+            // 中断したビルドの atomic publish 残骸
+            PathBuf::from(format!("{}.tmp", artifact.display())),
             workspace::build_dir(defined.name(), defined.version(), *target),
             workspace::log_path(defined.name(), defined.version(), *target),
         ] {

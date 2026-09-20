@@ -554,44 +554,84 @@ fn strip_escapes(text: &str) -> String {
     out
 }
 
-fn validate_arg(arg: &Arg, sysroot_defined: bool, errors: &mut Vec<String>, what: &str) {
+/// `Arg::Lit`・生文字列ステップ引数に共通するテキスト検査。
+/// `heredoc` が真なら unquoted heredoc 意味論（`'…'` はクォートに
+/// ならない）で、偽ならコマンドラインワード意味論（`'…'` の内側は
+/// 展開対象外）で検査する。
+fn check_lit_text(text: &str, heredoc: bool, errors: &mut Vec<String>, what: &str) {
+    // `'…'` の内側と `\X` エスケープはシェル展開対象外（sed 式中の
+    // `$(CC)` や `"…\`…\`…"` のエスケープ済みバッククォートは
+    // そのままコマンドへ渡る字面）。heredoc では `'…'` はクォート
+    // にならないので除去しない。
+    let unquoted = if heredoc {
+        strip_escapes(text)
+    } else {
+        strip_escapes(&strip_single_quotes(text))
+    };
+    if unquoted.contains("$(") {
+        errors.push(format!("{what}: `$(...)` は `Arg::Subst` を使う"));
+    }
+    if unquoted.contains('`') {
+        errors.push(format!("{what}: バッククォートは `Arg::Subst` を使う"));
+    }
+    // `${VAR}` / `${VAR:-x}` / `${VAR:+x}` のみサポート。`#` `%` `/` `!`
+    // `@` `^` `,` `[` 等の演算子・`${#}`・位置パラメータは runner が
+    // 未対応なので拒否する。
+    let mut rest = unquoted.as_str();
+    while let Some(i) = rest.find("${") {
+        rest = &rest[i + 2..];
+        let name_len = rest
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+            .unwrap_or(rest.len());
+        let name = &rest[..name_len];
+        let after = &rest[name_len..];
+        let bad = if name.is_empty() || name.starts_with(|c: char| c.is_ascii_digit()) {
+            true
+        } else {
+            match after.chars().next() {
+                Some('}') => false,
+                Some(':') => !matches!(after.chars().nth(1), Some('-') | Some('+')),
+                _ => true,
+            }
+        };
+        if bad {
+            errors.push(format!(
+                "{what}: 未対応の `${{…}}` 形式（`${{VAR}}` / `:-` / `:+` のみサポート）"
+            ));
+        }
+    }
+    // 裸の特殊変数 `$?` `$$` `$#` `$!` `$@` `$*` `$-` `$0-9` と
+    // `$'…'`/`$"…"`（ANSI-C/ロケールクォート）は runner 未対応で
+    // bash とは別の意味になるため拒否する。
+    for window in unquoted.as_bytes().windows(2) {
+        if window[0] != b'$' {
+            continue;
+        }
+        let c = window[1];
+        if matches!(c, b'?' | b'$' | b'#' | b'!' | b'@' | b'*' | b'-')
+            || c.is_ascii_digit()
+            || c == b'\''
+            || c == b'"'
+        {
+            errors.push(format!(
+                "{what}: 未対応の特殊変数 `$…`（IR で表現してください）"
+            ));
+            break;
+        }
+    }
+}
+
+fn validate_arg(
+    arg: &Arg,
+    sysroot_defined: bool,
+    errors: &mut Vec<String>,
+    what: &str,
+    heredoc: bool,
+) {
     match arg {
         Arg::Lit(text) => {
             check_sysroot(text, sysroot_defined, errors, what);
-            // `'…'` の内側と `\X` エスケープはシェル展開対象外（sed 式中の
-            // `$(CC)` や `"…\`…\`…"` のエスケープ済みバッククォートは
-            // そのままコマンドへ渡る字面）。
-            let unquoted = strip_escapes(&strip_single_quotes(text));
-            if unquoted.contains("$(") {
-                errors.push(format!(
-                    "{what}: `Lit` 内の `$(...)` は `Arg::Subst` を使う"
-                ));
-            }
-            if unquoted.contains('`') {
-                errors.push(format!(
-                    "{what}: `Lit` 内のバッククォートは `Arg::Subst` を使う"
-                ));
-            }
-            // `${VAR-op}` は `:-` / `:+` のみサポート。
-            // `-` / `=` / `?` / `:?` / `:=` 等は runner が未対応なので拒否。
-            let mut rest = unquoted.as_str();
-            while let Some(i) = rest.find("${") {
-                rest = &rest[i + 2..];
-                let name_len = rest
-                    .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
-                    .unwrap_or(rest.len());
-                let after = &rest[name_len..];
-                let bad = match after.chars().next() {
-                    Some(':') => !matches!(after.chars().nth(1), Some('-') | Some('+')),
-                    Some('-') | Some('=') | Some('?') => true,
-                    _ => false,
-                };
-                if bad {
-                    errors.push(format!(
-                        "{what}: 未対応の `${{VAR-op}}` 形式（`:-` / `:+` のみサポート）"
-                    ));
-                }
-            }
+            check_lit_text(text, heredoc, errors, what);
         }
         Arg::Var(name) => {
             if name.is_empty() {
@@ -606,16 +646,16 @@ fn validate_arg(arg: &Arg, sysroot_defined: bool, errors: &mut Vec<String>, what
                 errors.push(format!("{what}: `Arg::Concat` が空"));
             }
             for part in parts {
-                validate_arg(part, sysroot_defined, errors, what);
+                validate_arg(part, sysroot_defined, errors, what, heredoc);
             }
         }
         Arg::Opt(name, value) => {
             if name.is_empty() {
                 errors.push(format!("{what}: `Opt` の名前が空"));
             }
-            validate_arg(value, sysroot_defined, errors, what);
+            validate_arg(value, sysroot_defined, errors, what, heredoc);
         }
-        Arg::Quoted(inner) => validate_arg(inner, sysroot_defined, errors, what),
+        Arg::Quoted(inner) => validate_arg(inner, sysroot_defined, errors, what, heredoc),
         Arg::Subst(pipe) | Arg::SubstOr(pipe) => validate_pipe(pipe, sysroot_defined, errors, what),
     }
 }
@@ -624,22 +664,38 @@ fn validate_pipe(pipe: &Pipe, sysroot_defined: bool, errors: &mut Vec<String>, w
     if pipe.stages.is_empty() {
         errors.push(format!("{what}: `Pipe` のステージが空"));
     }
+    // 外部コマンドとして存在しない純粋シェル builtin。
+    // runner が spawn を試みて ENOENT=127 になるため plan 時に拒否する。
+    // `command`/`sanitize_flags` は runner builtin として処理され、
+    // `true`/`false`/`echo`/`printf`/`[` 等は外部バイナリが存在する。
+    const PURE_BUILTINS: &[&str] = &[
+        ".", ":", "break", "cd", "continue", "declare", "dirs", "eval", "exec", "exit", "export",
+        "local", "popd", "pushd", "read", "readonly", "return", "set", "shift", "shopt", "source",
+        "trap", "typeset", "umask", "unset", "wait",
+    ];
     for stage in &pipe.stages {
         if stage.is_empty() {
             errors.push(format!("{what}: `Pipe` に空の argv ステージがある"));
         }
+        if let Some(Arg::Lit(cmd)) = stage.first()
+            && PURE_BUILTINS.contains(&cmd.as_ref())
+        {
+            errors.push(format!(
+                "{what}: `{cmd}` は外部コマンドが存在しないシェル builtin（runner で実行不可）"
+            ));
+        }
         for arg in stage {
-            validate_arg(arg, sysroot_defined, errors, what);
+            validate_arg(arg, sysroot_defined, errors, what, false);
         }
     }
     if let Some(arg) = &pipe.stdin {
-        validate_arg(arg, sysroot_defined, errors, what);
+        validate_arg(arg, sysroot_defined, errors, what, false);
     }
     if let Some(redirect) = &pipe.stdout {
-        validate_arg(&redirect.target, sysroot_defined, errors, what);
+        validate_arg(&redirect.target, sysroot_defined, errors, what, false);
     }
     if let Some(arg) = &pipe.stderr {
-        validate_arg(arg, sysroot_defined, errors, what);
+        validate_arg(arg, sysroot_defined, errors, what, false);
     }
 }
 
@@ -649,7 +705,7 @@ fn validate_cond(cond: &Cond, sysroot_defined: bool, errors: &mut Vec<String>) {
         | Cond::FileExists(arg)
         | Cond::Exists(arg)
         | Cond::Executable(arg)
-        | Cond::NonEmpty(arg) => validate_arg(arg, sysroot_defined, errors, "Cond"),
+        | Cond::NonEmpty(arg) => validate_arg(arg, sysroot_defined, errors, "Cond", false),
         Cond::EnvSet(name) => {
             if name.is_empty() {
                 errors.push("`EnvSet` の変数名が空".to_string());
@@ -671,7 +727,12 @@ fn validate_cond(cond: &Cond, sysroot_defined: bool, errors: &mut Vec<String>) {
 /// `sysroot_defined`: この位置で `SYSROOT` が定義済みか。
 /// `Set`/`Export` は同じシェルなので後続へ伝播するが、`Subshell`・
 /// `If` ブランチ内での定義は外へ伝播しない（bash のスコープ規則に一致）。
-fn validate_steps(steps: &[Step], env: Env, sysroot_defined: &mut bool, errors: &mut Vec<String>) {
+pub(crate) fn validate_steps(
+    steps: &[Step],
+    env: Env,
+    sysroot_defined: &mut bool,
+    errors: &mut Vec<String>,
+) {
     for step in steps {
         match step {
             Step::Configure(args) => {
@@ -684,43 +745,53 @@ fn validate_steps(steps: &[Step], env: Env, sysroot_defined: &mut bool, errors: 
                 }
                 for arg in args {
                     check_sysroot(arg, *sysroot_defined, errors, "Configure");
+                    check_lit_text(arg, false, errors, "Configure");
                 }
             }
             Step::Make { args, .. } => {
                 for arg in args {
                     check_sysroot(arg, *sysroot_defined, errors, "Make");
+                    check_lit_text(arg, false, errors, "Make");
                 }
             }
             Step::MakeInstall { vars } => {
                 for var in vars {
                     check_sysroot(var, *sysroot_defined, errors, "MakeInstall");
+                    check_lit_text(var, false, errors, "MakeInstall");
                 }
             }
-            Step::Install { src, dst, .. } => {
+            Step::Install { src, dst, mode } => {
                 check_sysroot(src, *sysroot_defined, errors, "Install");
                 check_sysroot(dst, *sysroot_defined, errors, "Install");
+                check_lit_text(src, false, errors, "Install");
+                check_lit_text(dst, false, errors, "Install");
+                if mode.is_empty() || !mode.chars().all(|c| matches!(c, '0'..='7')) {
+                    errors.push("`Install` の mode が 8 進数ではない".to_string());
+                }
             }
             Step::Symlink { target, link, .. } => {
                 check_sysroot(target, *sysroot_defined, errors, "Symlink");
                 check_sysroot(link, *sysroot_defined, errors, "Symlink");
+                check_lit_text(target, false, errors, "Symlink");
+                check_lit_text(link, false, errors, "Symlink");
             }
             Step::Exec { env: vars, pipe } => {
                 for (name, value) in vars {
                     if name.is_empty() {
                         errors.push("`Exec` の env 名が空".to_string());
                     }
-                    validate_arg(value, *sysroot_defined, errors, "Exec");
+                    validate_arg(value, *sysroot_defined, errors, "Exec", false);
                 }
                 validate_pipe(pipe, *sysroot_defined, errors, "Exec");
             }
             Step::Cd(dir) => {
-                validate_arg(dir, *sysroot_defined, errors, "Cd");
+                validate_arg(dir, *sysroot_defined, errors, "Cd", false);
             }
             Step::Export { name, value } | Step::Set { name, value } => {
                 if name.is_empty() {
                     errors.push("変数名が空".to_string());
                 }
-                validate_arg(value, *sysroot_defined, errors, "Export/Set");
+                validate_arg(value, *sysroot_defined, errors, "Export/Set", false);
                 if *name == "SYSROOT" {
                     *sysroot_defined = true;
                 }
@@ -729,8 +800,10 @@ fn validate_steps(steps: &[Step], env: Env, sysroot_defined: &mut bool, errors: 
                 if name.is_empty() {
                     errors.push("変数名が空".to_string());
                 }
-                if *name == "SYSROOT" && matches!(step, Step::ExportBare(_)) {
-                    *sysroot_defined = true;
+                // `export SYSROOT` は変数を作らない（値は未定義のまま）、
+                // `unset SYSROOT` は未定義に戻す
+                if *name == "SYSROOT" && matches!(step, Step::Unset(_)) {
+                    *sysroot_defined = false;
                 }
             }
             Step::If { cond, then, else_ } => {
@@ -752,11 +825,14 @@ fn validate_steps(steps: &[Step], env: Env, sysroot_defined: &mut bool, errors: 
                 validate_steps(else_, env, &mut else_state, errors);
             }
             Step::ForEach {
+                var,
                 items,
                 body,
                 stdout,
-                ..
             } => {
+                if var.is_empty() {
+                    errors.push("`ForEach` の変数名が空".to_string());
+                }
                 if items.is_empty() {
                     errors.push("`ForEach` の items が空".to_string());
                 }
@@ -764,12 +840,12 @@ fn validate_steps(steps: &[Step], env: Env, sysroot_defined: &mut bool, errors: 
                     errors.push("`ForEach` の body が空".to_string());
                 }
                 for item in items {
-                    validate_arg(item, *sysroot_defined, errors, "ForEach");
+                    validate_arg(item, *sysroot_defined, errors, "ForEach", false);
                 }
                 // body は同じシェルで走るため定義は伝播する。
                 validate_steps(body, env, sysroot_defined, errors);
                 if let Some(redirect) = stdout {
-                    validate_arg(&redirect.target, *sysroot_defined, errors, "ForEach");
+                    validate_arg(&redirect.target, *sysroot_defined, errors, "ForEach", false);
                 }
             }
             Step::Or { lhs, rhs } => {
@@ -797,14 +873,14 @@ fn validate_steps(steps: &[Step], env: Env, sysroot_defined: &mut bool, errors: 
                 expand,
                 ..
             } => {
-                validate_arg(path, *sysroot_defined, errors, "WriteFile");
+                validate_arg(path, *sysroot_defined, errors, "WriteFile", false);
                 for line in lines {
                     if matches!(line, Arg::Lit(text) if text.trim_end() == "EOF") {
                         errors.push("`WriteFile` の行が heredoc デリミタ `EOF` と衝突".to_string());
                     }
                     // `expand: false`（<<'EOF'）の行はシェル評価されない。
                     if *expand {
-                        validate_arg(line, *sysroot_defined, errors, "WriteFile");
+                        validate_arg(line, *sysroot_defined, errors, "WriteFile", true);
                     }
                 }
             }

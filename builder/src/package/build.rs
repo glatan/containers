@@ -403,9 +403,22 @@ pub(crate) fn artifact_target(package: &dyn Package, depender: Target) -> Target
     {
         return target;
     }
-    Target::all()
+    let fallback = Target::all()
         .find(|target| package.supports(*target))
-        .unwrap_or(Target::BUILD_ENV)
+        .unwrap_or(Target::BUILD_ENV);
+    // depender/baseline 以外への降下は別アーキテクチャの成果物を
+    // 拾い得るため警告を出す
+    if fallback != depender && fallback != depender.baseline() {
+        eprintln!(
+            "警告: {} の成果物を {}/{} 用に見つけられないため {}/{} のものを使います",
+            package.name(),
+            depender.architecture(),
+            depender.variant(),
+            fallback.architecture(),
+            fallback.variant(),
+        );
+    }
+    fallback
 }
 
 fn visit<'a>(

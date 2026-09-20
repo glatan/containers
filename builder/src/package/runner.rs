@@ -253,10 +253,20 @@ fn take_dollar(it: &mut std::iter::Peekable<std::str::Chars>) -> String {
     let mut token = "$".to_string();
     if it.peek() == Some(&'{') {
         token.push(it.next().unwrap());
+        // `${X:-${Y}-sfx}` のようなネストを正しく読むため
+        // `{`/`}` の深さを数えて対応する `}` まで取る
+        let mut depth = 1;
         for c in it.by_ref() {
             token.push(c);
-            if c == '}' {
-                break;
+            match c {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                _ => {}
             }
         }
     } else {
@@ -624,7 +634,7 @@ pub fn run(recipe: &Recipe, ctx: &BuildContext, sb: &mut impl Sandbox) -> Result
 /// スキップする近似）。`recipe` 本体は strict に実行する。
 pub fn run_plan(plan: &BuildPlan, ctx: &BuildContext, sb: &mut impl Sandbox) -> Result<(), Error> {
     for step in &plan.prelude {
-        let _ = exec_step(step, Env::None, sb, None);
+        let _ = exec_step(step, Env::None, sb, None, true);
     }
     run(&plan.recipe, ctx, sb)
 }
@@ -655,7 +665,7 @@ fn run_decl(steps: &Steps, ctx: &BuildContext, sb: &mut impl Sandbox) -> Result<
             pgo_prelude(sb)?;
             run_pgo_make(steps, workload, sb)
         }
-        _ => exec_steps(&steps.steps, steps.env, sb, None),
+        _ => exec_steps(&steps.steps, steps.env, sb, None, false),
     }
 }
 
@@ -736,7 +746,7 @@ fn make_clean(
 fn run_workload(steps: &Steps, workload: &[Step], sb: &mut impl Sandbox) {
     sb.push_scope();
     for step in workload {
-        match exec_step(step, steps.env, sb, None) {
+        match exec_step(step, steps.env, sb, None, true) {
             // `( … ) || true` 内では set -e が効かないので Exit は継続。
             // 一方 set -u は有効なので UnboundVar 等は subshell を abort
             // する（残りステップを飛ばすのが bash の挙動）。
@@ -756,7 +766,7 @@ fn run_pgo_autotools(steps: &Steps, workload: &[Step], sb: &mut impl Sandbox) ->
         .iter()
         .position(|step| matches!(step, Step::Configure(_)))
     else {
-        return exec_steps(&steps.steps, steps.env, sb, None);
+        return exec_steps(&steps.steps, steps.env, sb, None, false);
     };
     let first_make = steps
         .steps
@@ -769,26 +779,50 @@ fn run_pgo_autotools(steps: &Steps, workload: &[Step], sb: &mut impl Sandbox) ->
         .position(|step| matches!(step, Step::MakeInstall { .. }))
         .unwrap_or(steps.steps.len());
     if configure + 1 > first_make || first_make > install {
-        return exec_steps(&steps.steps, steps.env, sb, None);
+        return exec_steps(&steps.steps, steps.env, sb, None, false);
     }
-    exec_steps(&steps.steps[..configure], steps.env, sb, None)?;
+    exec_steps(&steps.steps[..configure], steps.env, sb, None, false)?;
     if matches!(steps.env, Env::Lto) {
         pgo_generate(sb);
     }
-    exec_step(&steps.steps[configure], steps.env, sb, None)?;
-    exec_steps(&steps.steps[configure + 1..first_make], steps.env, sb, None)?;
+    exec_step(&steps.steps[configure], steps.env, sb, None, false)?;
+    exec_steps(
+        &steps.steps[configure + 1..first_make],
+        steps.env,
+        sb,
+        None,
+        false,
+    )?;
     if matches!(steps.env, Env::Autotools) {
         pgo_generate(sb);
     }
-    exec_steps(&steps.steps[first_make..install], steps.env, sb, None)?;
+    exec_steps(
+        &steps.steps[first_make..install],
+        steps.env,
+        sb,
+        None,
+        false,
+    )?;
     sb.pgo_ld_library_path()?;
     run_workload(steps, workload, sb);
     make_clean(sb, "distclean", "clean")?;
     pgo_use(sb);
-    exec_step(&steps.steps[configure], steps.env, sb, None)?;
-    exec_steps(&steps.steps[configure + 1..first_make], steps.env, sb, None)?;
-    exec_steps(&steps.steps[first_make..install], steps.env, sb, None)?;
-    exec_steps(&steps.steps[install..], steps.env, sb, None)
+    exec_step(&steps.steps[configure], steps.env, sb, None, false)?;
+    exec_steps(
+        &steps.steps[configure + 1..first_make],
+        steps.env,
+        sb,
+        None,
+        false,
+    )?;
+    exec_steps(
+        &steps.steps[first_make..install],
+        steps.env,
+        sb,
+        None,
+        false,
+    )?;
+    exec_steps(&steps.steps[install..], steps.env, sb, None, false)
 }
 
 /// テンプレート B: instrumented make → workload → clean →
@@ -800,13 +834,13 @@ fn run_pgo_make(steps: &Steps, workload: &[Step], sb: &mut impl Sandbox) -> Resu
         .position(|step| matches!(step, Step::MakeInstall { .. }))
         .unwrap_or(steps.steps.len());
     pgo_generate(sb);
-    exec_steps(&steps.steps[..install], steps.env, sb, None)?;
+    exec_steps(&steps.steps[..install], steps.env, sb, None, false)?;
     sb.pgo_ld_library_path()?;
     run_workload(steps, workload, sb);
     make_clean(sb, "clean", "distclean")?;
     pgo_use(sb);
-    exec_steps(&steps.steps[..install], steps.env, sb, None)?;
-    exec_steps(&steps.steps[install..], steps.env, sb, None)
+    exec_steps(&steps.steps[..install], steps.env, sb, None, false)?;
+    exec_steps(&steps.steps[install..], steps.env, sb, None, false)
 }
 
 /// `Env::Autotools` が make 系に付与する変数上書きを argv 語
@@ -833,9 +867,15 @@ fn exec_steps(
     env: Env,
     sb: &mut impl Sandbox,
     redirect: Option<(&str, bool)>,
+    lax: bool,
 ) -> Result<(), Error> {
     for step in steps {
-        exec_step(step, env, sb, redirect)?;
+        match exec_step(step, env, sb, redirect, lax) {
+            // `||`・workload・prelude 等の set -e 抑制コンテキストでは
+            // コマンド失敗で残りを止めない（非 Exit エラーは伝播）
+            Err(Error::Exit { .. }) if lax => continue,
+            result => result?,
+        }
     }
     Ok(())
 }
@@ -852,7 +892,9 @@ fn exec_or_side(
 ) -> Result<(), Error> {
     let mut result = Ok(());
     for (i, step) in steps.iter().enumerate() {
-        result = exec_step(step, env, sb, redirect);
+        // `||` 側内は set -e 抑制コンテキスト（ネストした If/ForEach/
+        // Subshell 内も抑制される）
+        result = exec_step(step, env, sb, redirect, true);
         if let Err(Error::Exit { .. }) = &result
             && i + 1 < steps.len()
         {
@@ -871,6 +913,7 @@ fn exec_step(
     env: Env,
     sb: &mut impl Sandbox,
     redirect: Option<(&str, bool)>,
+    lax: bool,
 ) -> Result<(), Error> {
     match step {
         Step::Configure(args) => {
@@ -966,9 +1009,9 @@ fn exec_step(
         }
         Step::If { cond, then, else_ } => {
             if eval_cond(cond, sb)? {
-                exec_steps(then, env, sb, redirect)
+                exec_steps(then, env, sb, redirect, lax)
             } else {
-                exec_steps(else_, env, sb, redirect)
+                exec_steps(else_, env, sb, redirect, lax)
             }
         }
         Step::ForEach {
@@ -1003,6 +1046,7 @@ fn exec_step(
                     inner_redirect
                         .as_ref()
                         .map(|(path, append)| (path.as_str(), *append)),
+                    lax,
                 )?;
             }
             Ok(())
@@ -1047,7 +1091,7 @@ fn exec_step(
         }
         Step::Subshell(body) => {
             sb.push_scope();
-            let result = exec_steps(body, env, sb, redirect);
+            let result = exec_steps(body, env, sb, redirect, lax);
             sb.pop_scope();
             result
         }

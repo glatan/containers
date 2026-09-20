@@ -1,5 +1,6 @@
 use std::fs::{self, File};
 use std::io::Write;
+use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 
@@ -42,16 +43,41 @@ pub(super) fn build_target(
     let variant = target.variant();
     let build_dir = workspace::build_dir(package.name(), package.version(), target);
     let out_dir = package.artifact_dir(target);
+    // 同一 (name, target) の同時ビルドを flock で直列化する
+    // （artifact_ready チェック〜削除〜作成の TOCTOU を防ぐ。
+    // flock はプロセス終了時に自動解放される）。
+    let lock_dir = PathBuf::from("packages/artifacts/.locks");
+    fs::create_dir_all(&lock_dir).map_err(|source| Error::io(&lock_dir, source))?;
+    let lock_path = lock_dir.join(format!(
+        "{}-{}-{}-{}.lock",
+        package.name(),
+        package.version(),
+        architecture,
+        variant
+    ));
+    let lock_file = File::create(&lock_path).map_err(|source| Error::io(&lock_path, source))?;
+    let mut build_lock = fd_lock::RwLock::new(lock_file);
+    let _build_guard = build_lock
+        .write()
+        .map_err(|source| Error::io(&lock_path, source))?;
+    // ロック待ちの間に別プロセスがビルドを終えていれば skip
+    if workspace::artifact_ready(&out_dir) {
+        return Ok(());
+    }
+    // 成果物は `<name>.tmp` に構築してから rename で公開する
+    // （中断残骸が artifact_ready を騙るのを防ぐ atomic publish。
+    // 失敗したリビルドで既存成果物が失われることもない）。
+    let tmp_dir = PathBuf::from(format!("{}.tmp", out_dir.display()));
     if build_dir.exists() {
         fs::remove_dir_all(&build_dir).map_err(|source| Error::io(&build_dir, source))?;
     }
-    if out_dir.exists() {
-        fs::remove_dir_all(&out_dir).map_err(|source| Error::io(&out_dir, source))?;
+    if tmp_dir.exists() {
+        fs::remove_dir_all(&tmp_dir).map_err(|source| Error::io(&tmp_dir, source))?;
     }
     fs::create_dir_all(&build_dir).map_err(|source| Error::io(&build_dir, source))?;
-    fs::create_dir_all(&out_dir).map_err(|source| Error::io(&out_dir, source))?;
+    fs::create_dir_all(&tmp_dir).map_err(|source| Error::io(&tmp_dir, source))?;
     let build_dir = fs::canonicalize(&build_dir).map_err(|source| Error::io(&build_dir, source))?;
-    let out_dir = fs::canonicalize(&out_dir).map_err(|source| Error::io(&out_dir, source))?;
+    let out_dir_mnt = fs::canonicalize(&tmp_dir).map_err(|source| Error::io(&tmp_dir, source))?;
     let (runtime, build) = graph_deps(package, target);
     let mut mounts: Vec<Mount> = Vec::new();
     let mut command = Command::new("podman");
@@ -72,7 +98,7 @@ pub(super) fn build_target(
         let found = package::find(dependency.name)?;
         let mounted = artifact_target(found, target);
         let dep_dir = found.artifact_dir(mounted);
-        if !dep_dir.is_dir() {
+        if !workspace::artifact_ready(&dep_dir) {
             return Err(Error::message(format!(
                 "依存パッケージがありません: {} (build を実行してください)",
                 dep_dir.display()
@@ -202,7 +228,7 @@ pub(super) fn build_target(
         .args(["-v"])
         .arg(format!("{}:/build", build_dir.display()))
         .args(["-v"])
-        .arg(format!("{}:/out", out_dir.display()))
+        .arg(format!("{}:/out", out_dir_mnt.display()))
         .args(["-e"])
         .arg(format!("SOURCE=/src/{}", package.source().subdir))
         .args(["-e", "BUILD=/build"])
@@ -299,9 +325,14 @@ pub(super) fn build_target(
         )
     };
     if result.is_err() {
-        let _ = fs::remove_dir_all(&out_dir);
+        let _ = fs::remove_dir_all(&tmp_dir);
+        return result;
     }
-    result
+    // 成功したら tmp を rename して公開する（既存成果物はここで差し替え）
+    if out_dir.exists() {
+        fs::remove_dir_all(&out_dir).map_err(|source| Error::io(&out_dir, source))?;
+    }
+    fs::rename(&tmp_dir, &out_dir).map_err(|source| Error::io(&out_dir, source))
 }
 
 pub(super) fn build_context(package: &dyn Package, target: Target) -> BuildContext {
@@ -1556,6 +1587,20 @@ pub(crate) fn build_plan(
             });
         }
     }
+    // prelude も recipe と同じ不変条件で検査する
+    let mut errors = Vec::new();
+    let mut sysroot_defined = false;
+    crate::package::recipe::validate_steps(
+        &steps,
+        crate::package::recipe::Env::None,
+        &mut sysroot_defined,
+        &mut errors,
+    );
+    assert!(
+        errors.is_empty(),
+        "{} の prelude が不変条件違反: {errors:?}",
+        package.name()
+    );
     BuildPlan {
         prelude: steps,
         recipe,

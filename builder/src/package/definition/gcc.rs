@@ -807,7 +807,6 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
                 jobs: false,
                 args: vec!["DESTDIR=\"$OUT\"".to_string(), "install".to_string()],
             },
-            cmd(vec![Arg::lit("exit"), Arg::lit("0")]),
         ]);
         let mut s = Steps::new(Env::None).sysroot(true).workdir(Workdir::None);
         s.steps = steps;
