@@ -189,7 +189,7 @@ fn sanitize_flags(value: &str) -> String {
 /// あればファイルへ、どちらも無ければ継承 stdout へ出す。
 /// パイプライン構築中の早期エラーで spawn 済みの子プロセスを回収する
 /// （wait されない Child は zombie になる）。
-fn reap_children(children: &mut Vec<Option<Child>>) {
+fn reap_children(children: &mut [Option<Child>]) {
     for slot in children.iter_mut() {
         if let Some(mut child) = slot.take() {
             let _ = child.kill();

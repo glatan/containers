@@ -887,22 +887,19 @@ fn exec_or_side(
     sb: &mut impl Sandbox,
     redirect: Option<(&str, bool)>,
 ) -> Result<(), Error> {
-    let mut result = Ok(());
     for (i, step) in steps.iter().enumerate() {
         // `||` 側内は set -e 抑制コンテキスト（ネストした If/ForEach/
         // Subshell 内も抑制される）
-        result = exec_step(step, env, sb, redirect, true);
+        let result = exec_step(step, env, sb, redirect, true);
         if let Err(Error::Exit { .. }) = &result
             && i + 1 < steps.len()
         {
             // `||` 側内の途中失敗は続行する
             continue;
         }
-        if result.is_err() {
-            return result;
-        }
+        result?;
     }
-    result
+    Ok(())
 }
 
 fn exec_step(

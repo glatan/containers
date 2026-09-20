@@ -98,7 +98,7 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
         Arg::lit("--with-system-zlib"),
         Arg::lit("--with-isl"),
     ];
-    argv.extend(arch_flags.iter().map(|f| Arg::lit(*f)));
+    argv.extend(arch_flags.iter().map(|f| Arg::lit(f)));
     argv.extend(
         [
             "--without-headers",
@@ -123,7 +123,7 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
             "--enable-checking=release",
         ]
         .iter()
-        .map(|f| Arg::lit(*f)),
+        .map(|f| Arg::lit(f)),
     );
 
     Steps::new(Env::None)

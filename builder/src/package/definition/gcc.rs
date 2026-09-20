@@ -216,7 +216,7 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
                 ]),
                 real_path,
             ];
-            argv.extend(flags.iter().map(|f| Arg::lit(*f)));
+            argv.extend(flags.iter().map(|f| Arg::lit(f)));
             cmd(argv)
         };
         vec![
@@ -408,7 +408,7 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
                 "--disable-multilib",
             ]
             .iter()
-            .map(|f| Arg::lit(*f)),
+            .map(|f| Arg::lit(f)),
         );
         if !sanitizer.is_empty() {
             argv.push(Arg::lit(sanitizer));
@@ -434,7 +434,7 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
                 "--enable-host-bind-now",
             ]
             .iter()
-            .map(|f| Arg::lit(*f)),
+            .map(|f| Arg::lit(f)),
         );
         argv.push(Arg::Opt(
             "with-specs",
@@ -877,7 +877,7 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
         var: "_opt",
         items: ["-O0", "-O1", "-O2", "-O3", "-Os"]
             .iter()
-            .map(|o| Arg::lit(*o))
+            .map(|o| Arg::lit(o))
             .collect(),
         body: vec![Step::Or {
             lhs: vec![Step::Exec {

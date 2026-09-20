@@ -110,7 +110,7 @@ const AWK_TRY_TRUE: &str = r#"'
     { print }
   '"#;
 
-fn exec(pipe: Pipe) -> Step {
+const fn exec(pipe: Pipe) -> Step {
     Step::Exec { env: vec![], pipe }
 }
 
@@ -661,7 +661,7 @@ impl Package for Perl {
             ];
             steps.steps.push(Step::If {
                 cond: Cond::FileExists(Arg::lit("config.sh")),
-                then: patch.drain(..).collect(),
+                then: std::mem::take(&mut patch),
                 else_: vec![],
             });
 
@@ -770,7 +770,7 @@ impl Package for Perl {
             ];
             steps.steps.push(Step::If {
                 cond: Cond::FileExists(Arg::lit("config.h")),
-                then: inject.drain(..).collect(),
+                then: std::mem::take(&mut inject),
                 else_: vec![],
             });
         }

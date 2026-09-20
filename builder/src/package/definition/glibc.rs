@@ -301,13 +301,7 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
                 "libresolv.so.2",
             ]
             .iter()
-            .map(|name| {
-                Arg::Concat(vec![
-                    Arg::Var("SYSROOT"),
-                    Arg::lit("/lib/"),
-                    Arg::lit(*name),
-                ])
-            })
+            .map(|name| Arg::Concat(vec![Arg::Var("SYSROOT"), Arg::lit("/lib/"), Arg::lit(name)]))
             .collect(),
             body: vec![Step::If {
                 cond: Cond::FileExists(Arg::Var("so")),

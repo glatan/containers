@@ -103,7 +103,7 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
         Arg::lit("--with-system-zlib"),
         Arg::lit("--with-isl"),
     ];
-    argv.extend(arch_flags.iter().map(|f| Arg::lit(*f)));
+    argv.extend(arch_flags.iter().map(|f| Arg::lit(f)));
     argv.extend(
         [
             "--disable-nls",
@@ -132,7 +132,7 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
             "--enable-initfini-array",
         ]
         .iter()
-        .map(|f| Arg::lit(*f)),
+        .map(|f| Arg::lit(f)),
     );
 
     let glibc_headers = Arg::Concat(vec![

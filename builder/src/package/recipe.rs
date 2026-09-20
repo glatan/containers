@@ -307,11 +307,11 @@ impl Arg {
         Arg::Concat(vec![Arg::lit(prefix), Self::nproc()])
     }
 
-    pub fn lit(text: &'static str) -> Self {
+    pub const fn lit(text: &'static str) -> Self {
         Self::Lit(std::borrow::Cow::Borrowed(text))
     }
 
-    pub fn owned(text: String) -> Self {
+    pub const fn owned(text: String) -> Self {
         Self::Lit(std::borrow::Cow::Owned(text))
     }
 
@@ -382,7 +382,7 @@ impl Pipe {
     }
 
     /// 複数コマンドのパイプライン。
-    pub fn new(stages: Vec<Vec<Arg>>) -> Self {
+    pub const fn new(stages: Vec<Vec<Arg>>) -> Self {
         Self {
             stages,
             stdin: None,
