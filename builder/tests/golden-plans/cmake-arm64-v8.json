@@ -1,0 +1,81 @@
+{
+  "Steps": {
+    "env": "Autotools",
+    "pgo": null,
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Concat": [
+                    {
+                      "Quoted": {
+                        "Var": "SOURCE"
+                      }
+                    },
+                    {
+                      "Lit": "/bootstrap"
+                    }
+                  ]
+                },
+                {
+                  "Lit": "--prefix=/usr"
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "--parallel="
+                    },
+                    {
+                      "Subst": {
+                        "stages": [
+                          [
+                            {
+                              "Lit": "nproc"
+                            }
+                          ]
+                        ],
+                        "stderr": null,
+                        "stdin": null,
+                        "stdout": null
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Lit": "--"
+                },
+                {
+                  "Lit": "-DCMAKE_USE_OPENSSL=OFF"
+                },
+                {
+                  "Lit": "-DCMAKE_DISABLE_FIND_PACKAGE_Libidn2=ON"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

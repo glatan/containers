@@ -1,0 +1,129 @@
+{
+  "Steps": {
+    "env": "Autotools",
+    "pgo": {
+      "Autotools": [
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "./sqlite3"
+                  },
+                  {
+                    "Lit": "/tmp/pgo.db"
+                  },
+                  {
+                    "Lit": "\"CREATE TABLE t(a INTEGER, b TEXT); CREATE INDEX ti ON t(a);\""
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "ForEach": {
+            "body": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "./sqlite3"
+                        },
+                        {
+                          "Lit": "/tmp/pgo.db"
+                        },
+                        {
+                          "Lit": "\"INSERT INTO t VALUES(${_i}, 'val'); SELECT count(*), sum(a) FROM t; SELECT a FROM t t1 JOIN t t2 ON t1.a = t2.a LIMIT 100; BEGIN; UPDATE t SET b='x' WHERE a=1; COMMIT;\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              }
+            ],
+            "items": [
+              {
+                "Subst": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "seq"
+                      },
+                      {
+                        "Lit": "1"
+                      },
+                      {
+                        "Lit": "200"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            ],
+            "stdout": null,
+            "var": "_i"
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "./sqlite3"
+                  },
+                  {
+                    "Lit": "/tmp/pgo.db"
+                  },
+                  {
+                    "Lit": "\"EXPLAIN QUERY PLAN SELECT * FROM t WHERE a > 10 ORDER BY b; VACUUM;\""
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        }
+      ]
+    },
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Configure": [
+          "--prefix=/usr"
+        ]
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

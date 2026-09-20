@@ -1,0 +1,188 @@
+use crate::flags::Flag;
+use crate::package::recipe::{
+    Arg, BuildContext, Cond, Env, Pipe, Recipe, Step, Steps, Workdir, args, argv,
+};
+use crate::package::{Dependency, Package, Role, Source};
+use crate::target::Target;
+
+pub struct Openssl;
+
+impl Package for Openssl {
+    fn name(&self) -> &'static str {
+        "openssl"
+    }
+
+    fn version(&self) -> &'static str {
+        "4.0.2"
+    }
+
+    fn license(&self) -> &'static str {
+        "Apache-2.0"
+    }
+
+    fn role(&self) -> Role {
+        Role::Catalog
+    }
+
+    fn source(&self) -> Source {
+        Source {
+            url: "https://github.com/openssl/openssl/releases/download/openssl-4.0.2/openssl-4.0.2.tar.gz",
+            sha3_512: "a7d86c8609e98dea12cab18f22724439a1fda43ef9a45a6440a201a6d9e616fe29dcf83dbffbc5c303cc5f43a1c92f5d222adb29f03a30b1e0b578af0a47dc4b",
+            blake3: "ef5af5011e1ee875521ed63331cf35d16e82167042b37f361a630b10f5bf2f999fad90fcc972bc02a0d83e2972af48040140d4e78279311b46a7c1557c206d7a",
+            subdir: "openssl-4.0.2",
+        }
+    }
+
+    fn dependencies(&self, target: Target) -> Vec<Dependency> {
+        crate::package::with_libc(target, &[])
+    }
+
+    fn build_dependencies(&self, _target: Target) -> Vec<Dependency> {
+        let mut dependencies = crate::package::headers_dep();
+        dependencies.push(Dependency {
+            name: "perl",
+            version: "5.42.3",
+        });
+        dependencies
+    }
+
+    fn flags(&self, target: Target) -> Flag {
+        crate::flags::tool_flags(target)
+    }
+
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Custom
+    }
+
+    fn recipe(&self, ctx: &BuildContext) -> Recipe {
+        // case "$ARCH" の TGT 解決を Rust 側へ移す。
+        let tgt = match ctx.target.architecture() {
+            "amd64" => "linux-x86_64",
+            "arm64" => "linux-aarch64",
+            "riscv64" => "linux64-riscv64",
+            "ppc64le" => "linux-ppc64le",
+            "s390x" => "linux64-s390x",
+            arch => panic!("未対応の architecture です: {arch}"),
+        };
+        // sysroot:true デフォルト（検出・CFLAGS 付与は wrap_script が注入）。
+        // openssl の Configure は $CC を直接使うため CC 側にも反映する。
+        let mut steps = Steps::new(Env::None)
+            .workdir(Workdir::Build)
+            .step(Step::If {
+                cond: Cond::EnvSet("SYSROOT"),
+                then: vec![Step::Export {
+                    name: "CC",
+                    value: Arg::quoted(Arg::Concat(vec![
+                        Arg::Var("CC"),
+                        Arg::lit(" --sysroot="),
+                        Arg::Var("SYSROOT"),
+                    ])),
+                }],
+                else_: vec![],
+            })
+            .step(Step::Exec {
+                env: vec![],
+                pipe: Pipe::cmd(vec![
+                    Arg::quoted(Arg::Concat(vec![
+                        Arg::Var("SOURCE"),
+                        Arg::lit("/Configure"),
+                    ])),
+                    Arg::lit(tgt),
+                    Arg::lit("--prefix=/usr"),
+                    Arg::lit("--openssldir=/etc/ssl"),
+                    Arg::lit("--libdir=lib64"),
+                ]),
+            });
+        if ctx.cross() {
+            steps = steps.step(Step::make(&[]));
+        } else {
+            // ネイティブのみ PGO。OPENSSL_MODULES が無いと EVP 系
+            // アルゴリズムが実行できずプロファイルが空になる。
+            steps = steps
+                .step(Step::Export {
+                    name: "PGODIR",
+                    value: Arg::lit("/tmp/pgo"),
+                })
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("rm"),
+                        Arg::lit("-rf"),
+                        Arg::quoted(Arg::Var("PGODIR")),
+                    ]),
+                })
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("mkdir"),
+                        Arg::lit("-p"),
+                        Arg::quoted(Arg::Var("PGODIR")),
+                    ]),
+                })
+                .step(Step::Make {
+                    jobs: true,
+                    args: args(&[
+                        "CFLAGS=\"$CFLAGS -fprofile-generate=$PGODIR -fprofile-update=atomic\"",
+                        "LDFLAGS=\"$LDFLAGS -fprofile-generate\"",
+                    ]),
+                })
+                .step(Step::Export {
+                    name: "LD_LIBRARY_PATH",
+                    value: Arg::quoted(Arg::Concat(vec![
+                        Arg::Var("PWD"),
+                        Arg::lit("${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"),
+                    ])),
+                })
+                .step(Step::Export {
+                    name: "OPENSSL_MODULES",
+                    value: Arg::quoted(Arg::Concat(vec![
+                        Arg::Var("PWD"),
+                        Arg::lit("/providers"),
+                    ])),
+                })
+                .step(Step::Export {
+                    name: "OPENSSL_CONF",
+                    value: Arg::lit("/dev/null"),
+                })
+                .step(Step::Or {
+                    lhs: [
+                        "./apps/openssl speed -seconds 1 rsa2048 ecdsap256 ed25519",
+                        "./apps/openssl speed -seconds 1 -evp aes-128-gcm -evp aes-256-gcm -evp chacha20-poly1305 -evp sha256 -evp sha512",
+                        "./apps/openssl speed -seconds 1 aes-128-cbc aes-256-cbc sha256 sha512",
+                    ]
+                    .iter()
+                    .map(|line| Step::Exec {
+                        env: vec![],
+                        pipe: Pipe::cmd(argv(
+                            &line.split(' ').collect::<Vec<_>>(),
+                        )),
+                    })
+                    .collect(),
+                    rhs: vec![Step::Exec {
+                        env: vec![],
+                        pipe: Pipe::cmd(argv(&["true"])),
+                    }],
+                })
+                .step(Step::Make {
+                    jobs: false,
+                    args: args(&["clean"]),
+                })
+                .step(Step::Make {
+                    jobs: true,
+                    args: args(&[
+                        "CFLAGS=\"$CFLAGS -fprofile-use=$PGODIR -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch\"",
+                        "LDFLAGS=\"$LDFLAGS -fprofile-use\"",
+                    ]),
+                });
+        }
+        steps = steps.step(Step::Exec {
+            env: vec![],
+            pipe: Pipe::cmd(vec![
+                Arg::lit("make"),
+                Arg::lit("install_sw"),
+                Arg::Concat(vec![Arg::lit("DESTDIR="), Arg::quoted(Arg::Var("OUT"))]),
+            ]),
+        });
+        Recipe::Steps(steps)
+    }
+}

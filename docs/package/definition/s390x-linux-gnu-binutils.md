@@ -1,0 +1,45 @@
+# s390x-linux-gnu-binutils
+
+| 項目 | 値 |
+|-|-|
+| パッケージ名 | `s390x-linux-gnu-binutils` |
+| バージョン | 2.47 |
+| ライセンス | GPL-3.0-or-later |
+| パッケージイメージ | 公開対象（[公開一覧](../../image/packages.md)） |
+| ネットワーク | 不要 |
+| 定義 | [`builder/src/package/definition/s390x_linux_gnu_binutils.rs`](../../../builder/src/package/definition/s390x_linux_gnu_binutils.rs) |
+| 共通方針 | [toolchain.md](../toolchain.md) |
+
+## ソース
+
+binutils 2.47。URL とハッシュは [toolchain.md](../toolchain.md) です。
+
+## 依存
+
+### dependencies
+
+| パッケージ | バージョン | 用途 |
+|-|-|-|
+| [`s390x-linux-gnu-glibc`](./s390x-linux-gnu-glibc.md) | 2.44 | 実行時 libc。Package グラフではこの glibc を引く |
+| [zlib](./zlib.md) | 1.3.2 | 圧縮 |
+| [zstd](./zstd.md) | 1.5.7 | 圧縮 |
+
+### build-dependencies
+
+| パッケージ | バージョン | 用途 |
+|-|-|-|
+| [linux-headers](./linux-headers.md) | 6.18.33 | カーネルヘッダ |
+| [zlib](./zlib.md) | 1.3.2 | seed 完了後 |
+| [zstd](./zstd.md) | 1.5.7 | seed 完了後 |
+
+### ビルド環境
+
+| 名前 | 用途 |
+|-|-|
+| 共通の[ビルド環境イメージ](../README.md) | `build` によるコンパイル |
+
+## ビルド設定
+
+configure は `--build=$HOST_TRIPLE --host=$HOST_TRIPLE --target=s390x-linux-gnu` です。ステージ順とプレフィックスは [toolchain.md](../toolchain.md) です。
+
+`supports` は `Target::all()` です。製品キューは [toolchain.md](../toolchain.md)。このパッケージでは HOST と、architecture `s390x` の variant（z900 から z17）です。

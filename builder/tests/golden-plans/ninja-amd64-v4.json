@@ -1,0 +1,345 @@
+{
+  "Steps": {
+    "env": "Autotools",
+    "pgo": null,
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Export": {
+          "name": "PGODIR",
+          "value": {
+            "Lit": "/tmp/pgo"
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "rm"
+                },
+                {
+                  "Lit": "-rf"
+                },
+                {
+                  "Quoted": {
+                    "Var": "PGODIR"
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "mkdir"
+                },
+                {
+                  "Lit": "-p"
+                },
+                {
+                  "Quoted": {
+                    "Var": "PGODIR"
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Export": {
+          "name": "_PGO_CXXFLAGS",
+          "value": {
+            "Quoted": {
+              "Lit": "${CXXFLAGS:-}"
+            }
+          }
+        }
+      },
+      {
+        "Export": {
+          "name": "_PGO_LDFLAGS",
+          "value": {
+            "Quoted": {
+              "Lit": "${LDFLAGS:-}"
+            }
+          }
+        }
+      },
+      {
+        "Export": {
+          "name": "CXXFLAGS",
+          "value": {
+            "Quoted": {
+              "Concat": [
+                {
+                  "Var": "_PGO_CXXFLAGS"
+                },
+                {
+                  "Lit": " -fprofile-generate=${PGODIR} -fprofile-update=atomic"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "Export": {
+          "name": "LDFLAGS",
+          "value": {
+            "Quoted": {
+              "Concat": [
+                {
+                  "Var": "_PGO_LDFLAGS"
+                },
+                {
+                  "Lit": " -fprofile-generate"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "python3"
+                },
+                {
+                  "Lit": "configure.py"
+                },
+                {
+                  "Lit": "--bootstrap"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Or": {
+          "lhs": [
+            {
+              "Exec": {
+                "env": [],
+                "pipe": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "./ninja"
+                      },
+                      {
+                        "Lit": "--version"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            },
+            {
+              "Exec": {
+                "env": [],
+                "pipe": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "rm"
+                      },
+                      {
+                        "Lit": "-f"
+                      },
+                      {
+                        "Lit": "build/*.o"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            },
+            {
+              "Exec": {
+                "env": [],
+                "pipe": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "./ninja"
+                      },
+                      {
+                        "Concat": [
+                          {
+                            "Lit": "-j"
+                          },
+                          {
+                            "Subst": {
+                              "stages": [
+                                [
+                                  {
+                                    "Lit": "nproc"
+                                  }
+                                ]
+                              ],
+                              "stderr": null,
+                              "stdin": null,
+                              "stdout": null
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "Lit": "ninja"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            }
+          ],
+          "rhs": [
+            {
+              "Exec": {
+                "env": [],
+                "pipe": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "true"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "rm"
+                },
+                {
+                  "Lit": "-rf"
+                },
+                {
+                  "Lit": "build"
+                },
+                {
+                  "Lit": "ninja"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Export": {
+          "name": "CXXFLAGS",
+          "value": {
+            "Quoted": {
+              "Concat": [
+                {
+                  "Var": "_PGO_CXXFLAGS"
+                },
+                {
+                  "Lit": " -fprofile-use=${PGODIR} -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "Export": {
+          "name": "LDFLAGS",
+          "value": {
+            "Quoted": {
+              "Concat": [
+                {
+                  "Var": "_PGO_LDFLAGS"
+                },
+                {
+                  "Lit": " -fprofile-use"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "python3"
+                },
+                {
+                  "Lit": "configure.py"
+                },
+                {
+                  "Lit": "--bootstrap"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Install": {
+          "dst": "\"$OUT\"/usr/bin/ninja",
+          "mode": "755",
+          "src": "ninja"
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "InSource"
+  }
+}

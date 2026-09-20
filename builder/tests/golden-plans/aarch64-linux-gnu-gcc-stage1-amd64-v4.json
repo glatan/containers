@@ -1,0 +1,560 @@
+{
+  "Steps": {
+    "env": "None",
+    "pgo": null,
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Unset": "CPP"
+      },
+      {
+        "Export": {
+          "name": "PATH",
+          "value": {
+            "Quoted": {
+              "Concat": [
+                {
+                  "Lit": "/dep/"
+                },
+                {
+                  "Var": "TRIPLE"
+                },
+                {
+                  "Lit": "-binutils/usr/bin:"
+                },
+                {
+                  "Var": "PATH"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "Set": {
+          "name": "PREFIX",
+          "value": {
+            "Concat": [
+              {
+                "Lit": "/usr/lib/cross/"
+              },
+              {
+                "Var": "TRIPLE"
+              },
+              {
+                "Lit": "/stage1"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "Set": {
+          "name": "SYSROOT",
+          "value": {
+            "Concat": [
+              {
+                "Lit": "/usr/"
+              },
+              {
+                "Var": "TRIPLE"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "mkdir"
+                },
+                {
+                  "Lit": "-p"
+                },
+                {
+                  "Concat": [
+                    {
+                      "Var": "SYSROOT"
+                    },
+                    {
+                      "Lit": "/include"
+                    }
+                  ]
+                },
+                {
+                  "Var": "BUILD"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Set": {
+          "name": "HDR",
+          "value": {
+            "Concat": [
+              {
+                "Lit": "/dep/linux-headers/usr/"
+              },
+              {
+                "Var": "TRIPLE"
+              },
+              {
+                "Lit": "/include"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "Or": {
+          "lhs": [
+            {
+              "Exec": {
+                "env": [],
+                "pipe": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "["
+                      },
+                      {
+                        "Lit": "-d"
+                      },
+                      {
+                        "Var": "HDR"
+                      },
+                      {
+                        "Lit": "]"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            }
+          ],
+          "rhs": [
+            {
+              "Set": {
+                "name": "HDR",
+                "value": {
+                  "Lit": "/dep/linux-headers/usr/include"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "cp"
+                },
+                {
+                  "Lit": "-a"
+                },
+                {
+                  "Concat": [
+                    {
+                      "Var": "HDR"
+                    },
+                    {
+                      "Lit": "/."
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Var": "SYSROOT"
+                    },
+                    {
+                      "Lit": "/include/"
+                    }
+                  ]
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "ln"
+                },
+                {
+                  "Lit": "-sfn"
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "/dep/"
+                    },
+                    {
+                      "Var": "TRIPLE"
+                    },
+                    {
+                      "Lit": "-binutils/usr/bin/"
+                    },
+                    {
+                      "Var": "TRIPLE"
+                    },
+                    {
+                      "Lit": "-as"
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "/usr/bin/"
+                    },
+                    {
+                      "Var": "TRIPLE"
+                    },
+                    {
+                      "Lit": "-as"
+                    }
+                  ]
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "ln"
+                },
+                {
+                  "Lit": "-sfn"
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "/dep/"
+                    },
+                    {
+                      "Var": "TRIPLE"
+                    },
+                    {
+                      "Lit": "-binutils/usr/bin/"
+                    },
+                    {
+                      "Var": "TRIPLE"
+                    },
+                    {
+                      "Lit": "-ld"
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "/usr/bin/"
+                    },
+                    {
+                      "Var": "TRIPLE"
+                    },
+                    {
+                      "Lit": "-ld"
+                    }
+                  ]
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Cd": {
+          "Var": "BUILD"
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Concat": [
+                    {
+                      "Var": "SOURCE"
+                    },
+                    {
+                      "Lit": "/configure"
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "build",
+                    {
+                      "Var": "HOST_TRIPLE"
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "host",
+                    {
+                      "Var": "HOST_TRIPLE"
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "target",
+                    {
+                      "Var": "TRIPLE"
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "program-prefix",
+                    {
+                      "Concat": [
+                        {
+                          "Var": "TRIPLE"
+                        },
+                        {
+                          "Lit": "-"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "prefix",
+                    {
+                      "Concat": [
+                        {
+                          "Lit": "/usr/lib/cross/"
+                        },
+                        {
+                          "Var": "TRIPLE"
+                        },
+                        {
+                          "Lit": "/stage1"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "with-sysroot",
+                    {
+                      "Concat": [
+                        {
+                          "Lit": "/usr/"
+                        },
+                        {
+                          "Var": "TRIPLE"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "with-build-sysroot",
+                    {
+                      "Concat": [
+                        {
+                          "Lit": "/usr/"
+                        },
+                        {
+                          "Var": "TRIPLE"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Lit": "--with-native-system-header-dir=/include"
+                },
+                {
+                  "Opt": [
+                    "with-as",
+                    {
+                      "Concat": [
+                        {
+                          "Lit": "/usr/bin/"
+                        },
+                        {
+                          "Var": "TRIPLE"
+                        },
+                        {
+                          "Lit": "-as"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "with-ld",
+                    {
+                      "Concat": [
+                        {
+                          "Lit": "/usr/bin/"
+                        },
+                        {
+                          "Var": "TRIPLE"
+                        },
+                        {
+                          "Lit": "-ld"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "--infodir=/usr/share/info/"
+                    },
+                    {
+                      "Var": "TRIPLE"
+                    }
+                  ]
+                },
+                {
+                  "Lit": "--with-system-zlib"
+                },
+                {
+                  "Lit": "--with-isl"
+                },
+                {
+                  "Lit": "--with-arch=armv8-a"
+                },
+                {
+                  "Lit": "--without-headers"
+                },
+                {
+                  "Lit": "--with-newlib"
+                },
+                {
+                  "Lit": "--disable-shared"
+                },
+                {
+                  "Lit": "--disable-threads"
+                },
+                {
+                  "Lit": "--disable-werror"
+                },
+                {
+                  "Lit": "--disable-libatomic"
+                },
+                {
+                  "Lit": "--disable-libsanitizer"
+                },
+                {
+                  "Lit": "--disable-libssp"
+                },
+                {
+                  "Lit": "--disable-libquadmath"
+                },
+                {
+                  "Lit": "--disable-libgomp"
+                },
+                {
+                  "Lit": "--disable-libstdcxx"
+                },
+                {
+                  "Lit": "--disable-libvtv"
+                },
+                {
+                  "Lit": "--disable-bootstrap"
+                },
+                {
+                  "Lit": "--disable-multilib"
+                },
+                {
+                  "Lit": "--enable-languages=c"
+                },
+                {
+                  "Lit": "--enable-lto"
+                },
+                {
+                  "Lit": "--enable-plugin"
+                },
+                {
+                  "Lit": "--enable-default-pie"
+                },
+                {
+                  "Lit": "--enable-default-ssp"
+                },
+                {
+                  "Lit": "--enable-checking=release"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Make": {
+          "args": [
+            "all-gcc",
+            "all-target-libgcc"
+          ],
+          "jobs": true
+        }
+      },
+      {
+        "Make": {
+          "args": [
+            "DESTDIR=\"$OUT\"",
+            "install-gcc",
+            "install-target-libgcc"
+          ],
+          "jobs": false
+        }
+      }
+    ],
+    "sysroot": false,
+    "workdir": "None"
+  }
+}

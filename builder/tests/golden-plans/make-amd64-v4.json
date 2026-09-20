@@ -1,0 +1,214 @@
+{
+  "Steps": {
+    "env": "Autotools",
+    "pgo": {
+      "Autotools": [
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "mkdir"
+                  },
+                  {
+                    "Lit": "-p"
+                  },
+                  {
+                    "Lit": "/tmp/mk-work"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "WriteFile": {
+            "append": false,
+            "expand": false,
+            "lines": [
+              {
+                "Lit": "SRCS := $(wildcard *.c)"
+              },
+              {
+                "Lit": "OBJS := $(SRCS:.c=.o)"
+              },
+              {
+                "Lit": "all: $(OBJS)"
+              },
+              {
+                "Lit": "\t@echo done $(words $(OBJS))"
+              },
+              {
+                "Lit": "%.o: %.c"
+              },
+              {
+                "Lit": "\t@echo cc $<"
+              },
+              {
+                "Lit": "clean:"
+              },
+              {
+                "Lit": "\t@rm -f *.o"
+              }
+            ],
+            "path": {
+              "Lit": "/tmp/mk-work/Makefile"
+            }
+          }
+        },
+        {
+          "ForEach": {
+            "body": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "echo"
+                        },
+                        {
+                          "Lit": "\"int f$_i(void){return $_i;}\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": {
+                      "append": false,
+                      "target": {
+                        "Concat": [
+                          {
+                            "Lit": "/tmp/mk-work/f"
+                          },
+                          {
+                            "Var": "_i"
+                          },
+                          {
+                            "Lit": ".c"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "items": [
+              {
+                "Lit": "1"
+              },
+              {
+                "Lit": "2"
+              },
+              {
+                "Lit": "3"
+              },
+              {
+                "Lit": "4"
+              },
+              {
+                "Lit": "5"
+              }
+            ],
+            "stdout": null,
+            "var": "_i"
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "./make"
+                  },
+                  {
+                    "Lit": "-C"
+                  },
+                  {
+                    "Lit": "/tmp/mk-work"
+                  },
+                  {
+                    "Lit": "all"
+                  },
+                  {
+                    "Lit": "clean"
+                  },
+                  {
+                    "Lit": "all"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "./make"
+                  },
+                  {
+                    "Lit": "-C"
+                  },
+                  {
+                    "Lit": "/tmp/mk-work"
+                  },
+                  {
+                    "Lit": "-n"
+                  },
+                  {
+                    "Lit": "all"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": {
+                "append": false,
+                "target": {
+                  "Lit": "/dev/null"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Configure": [
+          "--prefix=/usr"
+        ]
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

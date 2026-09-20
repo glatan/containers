@@ -1,0 +1,116 @@
+{
+  "Steps": {
+    "env": "Autotools",
+    "pgo": {
+      "Autotools": [
+        {
+          "ForEach": {
+            "body": [
+              {
+                "If": {
+                  "cond": {
+                    "FileExists": {
+                      "Lit": "\"$_input\""
+                    }
+                  },
+                  "else_": [],
+                  "then": [
+                    {
+                      "Exec": {
+                        "env": [],
+                        "pipe": {
+                          "stages": [
+                            [
+                              {
+                                "Lit": "./pcre2test"
+                              },
+                              {
+                                "Lit": "-q"
+                              },
+                              {
+                                "Lit": "\"$_input\""
+                              },
+                              {
+                                "Lit": "/tmp/pcre2-out"
+                              }
+                            ]
+                          ],
+                          "stderr": null,
+                          "stdin": null,
+                          "stdout": null
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "items": [
+              {
+                "Lit": "\"$SOURCE\"/testdata/testinput1"
+              },
+              {
+                "Lit": "\"$SOURCE\"/testdata/testinput2"
+              },
+              {
+                "Lit": "\"$SOURCE\"/testdata/testinput4"
+              },
+              {
+                "Lit": "\"$SOURCE\"/testdata/testinput5"
+              }
+            ],
+            "stdout": null,
+            "var": "_input"
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "./pcre2test"
+                  },
+                  {
+                    "Lit": "-q"
+                  },
+                  {
+                    "Lit": "\"$SOURCE/testdata/testinput1\""
+                  },
+                  {
+                    "Lit": "/dev/null"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        }
+      ]
+    },
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Configure": [
+          "--prefix=/usr"
+        ]
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

@@ -1,0 +1,117 @@
+{
+  "Steps": {
+    "env": "None",
+    "pgo": null,
+    "std": "Gnu17",
+    "steps": [
+      {
+        "If": {
+          "cond": {
+            "EnvSet": "SYSROOT"
+          },
+          "else_": [],
+          "then": [
+            {
+              "Export": {
+                "name": "CC",
+                "value": {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Var": "CC"
+                      },
+                      {
+                        "Lit": " --sysroot="
+                      },
+                      {
+                        "Var": "SYSROOT"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Var": "SOURCE"
+                      },
+                      {
+                        "Lit": "/Configure"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "Lit": "linux-aarch64"
+                },
+                {
+                  "Lit": "--prefix=/usr"
+                },
+                {
+                  "Lit": "--openssldir=/etc/ssl"
+                },
+                {
+                  "Lit": "--libdir=lib64"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "make"
+                },
+                {
+                  "Lit": "install_sw"
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "DESTDIR="
+                    },
+                    {
+                      "Quoted": {
+                        "Var": "OUT"
+                      }
+                    }
+                  ]
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

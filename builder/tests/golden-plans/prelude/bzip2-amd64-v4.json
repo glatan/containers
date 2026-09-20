@@ -1,0 +1,756 @@
+{
+  "prelude": [
+    {
+      "Set": {
+        "name": "_cc_triple",
+        "value": {
+          "Lit": "\"${PACKAGE_HOST:-$TRIPLE}\""
+        }
+      }
+    },
+    {
+      "Comment": "Never export LD=*-gcc: libtool then reports \"is GNU ld... no\" and skips\nthe real -shared link (gmp install: dangling libgmp.so.*)."
+    },
+    {
+      "Exec": {
+        "env": [],
+        "pipe": {
+          "stages": [
+            [
+              {
+                "Lit": "mkdir"
+              },
+              {
+                "Lit": "-p"
+              },
+              {
+                "Lit": "/tmp/la-overlay"
+              },
+              {
+                "Lit": "/tmp/pc-overlay"
+              }
+            ]
+          ],
+          "stderr": null,
+          "stdin": null,
+          "stdout": null
+        }
+      }
+    },
+    {
+      "Set": {
+        "name": "_pc_wrap",
+        "value": {
+          "Lit": "/tmp/pkg-config-bin"
+        }
+      }
+    },
+    {
+      "Exec": {
+        "env": [],
+        "pipe": {
+          "stages": [
+            [
+              {
+                "Lit": "mkdir"
+              },
+              {
+                "Lit": "-p"
+              },
+              {
+                "Lit": "\"$_pc_wrap\""
+              }
+            ]
+          ],
+          "stderr": null,
+          "stdin": null,
+          "stdout": null
+        }
+      }
+    },
+    {
+      "If": {
+        "cond": {
+          "Cmd": {
+            "stages": [
+              [
+                {
+                  "Lit": "command"
+                },
+                {
+                  "Lit": "-v"
+                },
+                {
+                  "Lit": "pkgconf"
+                }
+              ]
+            ],
+            "stderr": {
+              "Lit": "/dev/null"
+            },
+            "stdin": null,
+            "stdout": {
+              "append": false,
+              "target": {
+                "Lit": "/dev/null"
+              }
+            }
+          }
+        },
+        "else_": [
+          {
+            "If": {
+              "cond": {
+                "Cmd": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "command"
+                      },
+                      {
+                        "Lit": "-v"
+                      },
+                      {
+                        "Lit": "pkg-config"
+                      }
+                    ]
+                  ],
+                  "stderr": {
+                    "Lit": "/dev/null"
+                  },
+                  "stdin": null,
+                  "stdout": {
+                    "append": false,
+                    "target": {
+                      "Lit": "/dev/null"
+                    }
+                  }
+                }
+              },
+              "else_": [],
+              "then": [
+                {
+                  "WriteFile": {
+                    "append": false,
+                    "expand": false,
+                    "lines": [
+                      {
+                        "Lit": "#!/bin/sh"
+                      },
+                      {
+                        "Lit": "exec pkg-config \"$@\""
+                      }
+                    ],
+                    "path": {
+                      "Lit": "\"$_pc_wrap/pkg-config\""
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "then": [
+          {
+            "WriteFile": {
+              "append": false,
+              "expand": false,
+              "lines": [
+                {
+                  "Lit": "#!/bin/sh"
+                },
+                {
+                  "Lit": "exec pkgconf \"$@\""
+                }
+              ],
+              "path": {
+                "Lit": "\"$_pc_wrap/pkg-config\""
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "If": {
+        "cond": {
+          "FileExists": {
+            "Lit": "\"$_pc_wrap/pkg-config\""
+          }
+        },
+        "else_": [],
+        "then": [
+          {
+            "Exec": {
+              "env": [],
+              "pipe": {
+                "stages": [
+                  [
+                    {
+                      "Lit": "chmod"
+                    },
+                    {
+                      "Lit": "+x"
+                    },
+                    {
+                      "Lit": "\"$_pc_wrap/pkg-config\""
+                    }
+                  ]
+                ],
+                "stderr": null,
+                "stdin": null,
+                "stdout": null
+              }
+            }
+          },
+          {
+            "Export": {
+              "name": "PATH",
+              "value": {
+                "Lit": "\"$_pc_wrap:$PATH\""
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "Set": {
+        "name": "_mold_wrap",
+        "value": {
+          "Lit": "/tmp/mold-ld-cc"
+        }
+      }
+    },
+    {
+      "Exec": {
+        "env": [],
+        "pipe": {
+          "stages": [
+            [
+              {
+                "Lit": "mkdir"
+              },
+              {
+                "Lit": "-p"
+              },
+              {
+                "Lit": "\"$_mold_wrap\""
+              }
+            ]
+          ],
+          "stderr": null,
+          "stdin": null,
+          "stdout": null
+        }
+      }
+    },
+    {
+      "If": {
+        "cond": {
+          "Cmd": {
+            "stages": [
+              [
+                {
+                  "Lit": "command"
+                },
+                {
+                  "Lit": "-v"
+                },
+                {
+                  "Lit": "mold"
+                }
+              ]
+            ],
+            "stderr": {
+              "Lit": "/dev/null"
+            },
+            "stdin": null,
+            "stdout": {
+              "append": false,
+              "target": {
+                "Lit": "/dev/null"
+              }
+            }
+          }
+        },
+        "else_": [],
+        "then": [
+          {
+            "ForEach": {
+              "body": [
+                {
+                  "Set": {
+                    "name": "_src",
+                    "value": {
+                      "SubstOr": {
+                        "stages": [
+                          [
+                            {
+                              "Lit": "command"
+                            },
+                            {
+                              "Lit": "-v"
+                            },
+                            {
+                              "Lit": "\"$_name\""
+                            }
+                          ]
+                        ],
+                        "stderr": null,
+                        "stdin": null,
+                        "stdout": null
+                      }
+                    }
+                  }
+                },
+                {
+                  "If": {
+                    "cond": {
+                      "And": [
+                        {
+                          "NonEmpty": {
+                            "Lit": "\"$_src\""
+                          }
+                        },
+                        {
+                          "Executable": {
+                            "Lit": "\"$_src\""
+                          }
+                        }
+                      ]
+                    },
+                    "else_": [],
+                    "then": [
+                      {
+                        "Exec": {
+                          "env": [],
+                          "pipe": {
+                            "stages": [
+                              [
+                                {
+                                  "Lit": "printf"
+                                },
+                                {
+                                  "Lit": "'#!/bin/sh\\nexec %s -fuse-ld=mold \"$@\"\\n'"
+                                },
+                                {
+                                  "Lit": "\"$_src\""
+                                }
+                              ]
+                            ],
+                            "stderr": null,
+                            "stdin": null,
+                            "stdout": {
+                              "append": false,
+                              "target": {
+                                "Lit": "\"$_mold_wrap/$_name\""
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "Exec": {
+                          "env": [],
+                          "pipe": {
+                            "stages": [
+                              [
+                                {
+                                  "Lit": "chmod"
+                                },
+                                {
+                                  "Lit": "+x"
+                                },
+                                {
+                                  "Lit": "\"$_mold_wrap/$_name\""
+                                }
+                              ]
+                            ],
+                            "stderr": null,
+                            "stdin": null,
+                            "stdout": null
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ],
+              "items": [
+                {
+                  "Lit": "gcc"
+                },
+                {
+                  "Lit": "cc"
+                },
+                {
+                  "Lit": "g++"
+                },
+                {
+                  "Lit": "c++"
+                },
+                {
+                  "Lit": "\"${_cc_triple}-gcc\""
+                },
+                {
+                  "Lit": "\"${_cc_triple}-g++\""
+                },
+                {
+                  "Lit": "\"${TRIPLE}-gcc\""
+                },
+                {
+                  "Lit": "\"${TRIPLE}-g++\""
+                },
+                {
+                  "Lit": "\"${HOST_TRIPLE}-gcc\""
+                },
+                {
+                  "Lit": "\"${HOST_TRIPLE}-g++\""
+                }
+              ],
+              "stdout": null,
+              "var": "_name"
+            }
+          },
+          {
+            "Export": {
+              "name": "PATH",
+              "value": {
+                "Lit": "\"$_mold_wrap:$PATH\""
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "recipe": {
+    "Steps": {
+      "env": "Autotools",
+      "pgo": {
+        "Make": [
+          {
+            "ForEach": {
+              "body": [
+                {
+                  "Exec": {
+                    "env": [],
+                    "pipe": {
+                      "stages": [
+                        [
+                          {
+                            "Lit": "cat"
+                          },
+                          {
+                            "Lit": "./*.c"
+                          },
+                          {
+                            "Lit": "./*.h"
+                          }
+                        ]
+                      ],
+                      "stderr": {
+                        "Lit": "/dev/null"
+                      },
+                      "stdin": null,
+                      "stdout": null
+                    }
+                  }
+                }
+              ],
+              "items": [
+                {
+                  "Lit": "1"
+                },
+                {
+                  "Lit": "2"
+                },
+                {
+                  "Lit": "3"
+                },
+                {
+                  "Lit": "4"
+                },
+                {
+                  "Lit": "5"
+                },
+                {
+                  "Lit": "6"
+                },
+                {
+                  "Lit": "7"
+                },
+                {
+                  "Lit": "8"
+                }
+              ],
+              "stdout": {
+                "append": false,
+                "target": {
+                  "Lit": "/tmp/pgo-input"
+                }
+              },
+              "var": "_i"
+            }
+          },
+          {
+            "ForEach": {
+              "body": [
+                {
+                  "Exec": {
+                    "env": [],
+                    "pipe": {
+                      "stages": [
+                        [
+                          {
+                            "Lit": "./bzip2"
+                          },
+                          {
+                            "Lit": "-c"
+                          },
+                          {
+                            "Lit": "\"$_opt\""
+                          },
+                          {
+                            "Lit": "/tmp/pgo-input"
+                          }
+                        ],
+                        [
+                          {
+                            "Lit": "./bzip2"
+                          },
+                          {
+                            "Lit": "-d"
+                          },
+                          {
+                            "Lit": "-c"
+                          }
+                        ]
+                      ],
+                      "stderr": null,
+                      "stdin": null,
+                      "stdout": {
+                        "append": false,
+                        "target": {
+                          "Lit": "/dev/null"
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "items": [
+                {
+                  "Lit": "-1"
+                },
+                {
+                  "Lit": "-6"
+                },
+                {
+                  "Lit": "-9"
+                }
+              ],
+              "stdout": null,
+              "var": "_opt"
+            }
+          },
+          {
+            "If": {
+              "cond": {
+                "Cmd": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "./bzip2"
+                      },
+                      {
+                        "Lit": "-c"
+                      },
+                      {
+                        "Lit": "-9"
+                      },
+                      {
+                        "Lit": "/tmp/pgo-input"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": {
+                    "append": false,
+                    "target": {
+                      "Lit": "/tmp/pgo.bz2"
+                    }
+                  }
+                }
+              },
+              "else_": [],
+              "then": [
+                {
+                  "Exec": {
+                    "env": [],
+                    "pipe": {
+                      "stages": [
+                        [
+                          {
+                            "Lit": "./bzip2recover"
+                          },
+                          {
+                            "Lit": "/tmp/pgo.bz2"
+                          }
+                        ]
+                      ],
+                      "stderr": {
+                        "Lit": "/dev/null"
+                      },
+                      "stdin": null,
+                      "stdout": {
+                        "append": false,
+                        "target": {
+                          "Lit": "/dev/null"
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "std": "Gnu17",
+      "steps": [
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "sed"
+                  },
+                  {
+                    "Lit": "-i"
+                  },
+                  {
+                    "Lit": "'s/$(CC) -shared/$(CC) $(LDFLAGS) -shared/'"
+                  },
+                  {
+                    "Lit": "Makefile-libbz2_so"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Make": {
+            "args": [
+              "-f",
+              "Makefile-libbz2_so",
+              "CC=\"$CC\"",
+              "CFLAGS=\"$CFLAGS -fpic -fPIC -Wall -Winline -D_FILE_OFFSET_BITS=64\"",
+              "LDFLAGS=\"$LDFLAGS\""
+            ],
+            "jobs": false
+          }
+        },
+        {
+          "Make": {
+            "args": [
+              "CC=\"$CC\"",
+              "AR=\"${AR:-${TRIPLE}-ar}\"",
+              "RANLIB=\"${RANLIB:-${TRIPLE}-ranlib}\"",
+              "CFLAGS=\"$CFLAGS -Wall -Winline -D_FILE_OFFSET_BITS=64\"",
+              "LDFLAGS=\"$LDFLAGS\"",
+              "libbz2.a",
+              "bzip2",
+              "bzip2recover"
+            ],
+            "jobs": false
+          }
+        },
+        {
+          "MakeInstall": {
+            "vars": [
+              "PREFIX=\"$OUT/usr\""
+            ]
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "mkdir"
+                  },
+                  {
+                    "Lit": "-p"
+                  },
+                  {
+                    "Quoted": {
+                      "Concat": [
+                        {
+                          "Var": "OUT"
+                        },
+                        {
+                          "Lit": "/usr/lib"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "cp"
+                  },
+                  {
+                    "Lit": "-a"
+                  },
+                  {
+                    "Lit": "libbz2.so*"
+                  },
+                  {
+                    "Quoted": {
+                      "Concat": [
+                        {
+                          "Var": "OUT"
+                        },
+                        {
+                          "Lit": "/usr/lib/"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        }
+      ],
+      "sysroot": true,
+      "workdir": "InSource"
+    }
+  }
+}

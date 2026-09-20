@@ -1,0 +1,39 @@
+{
+  "Steps": {
+    "env": "Lto",
+    "pgo": {
+      "Autotools": [
+        {
+          "Make": {
+            "args": [
+              "check"
+            ],
+            "jobs": false
+          }
+        }
+      ]
+    },
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Configure": [
+          "--prefix=/usr",
+          "ABI=64"
+        ]
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

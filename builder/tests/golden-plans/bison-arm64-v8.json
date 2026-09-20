@@ -1,0 +1,97 @@
+{
+  "Steps": {
+    "env": "Autotools",
+    "pgo": {
+      "Autotools": [
+        {
+          "Export": {
+            "name": "BISON_PKGDATADIR",
+            "value": {
+              "Lit": "\"$SOURCE/data\""
+            }
+          }
+        },
+        {
+          "ForEach": {
+            "body": [
+              {
+                "If": {
+                  "cond": {
+                    "FileExists": {
+                      "Lit": "\"$_y\""
+                    }
+                  },
+                  "else_": [],
+                  "then": [
+                    {
+                      "Exec": {
+                        "env": [],
+                        "pipe": {
+                          "stages": [
+                            [
+                              {
+                                "Lit": "./src/bison"
+                              },
+                              {
+                                "Lit": "-o"
+                              },
+                              {
+                                "Lit": "/tmp/bison-out.c"
+                              },
+                              {
+                                "Lit": "\"$_y\""
+                              }
+                            ]
+                          ],
+                          "stderr": {
+                            "Lit": "/dev/null"
+                          },
+                          "stdin": null,
+                          "stdout": null
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "items": [
+              {
+                "Lit": "\"$SOURCE\"/src/parse-gram.y"
+              },
+              {
+                "Lit": "\"$SOURCE\"/examples/*/calc.y"
+              },
+              {
+                "Lit": "\"$SOURCE\"/tests/*.y"
+              }
+            ],
+            "stdout": null,
+            "var": "_y"
+          }
+        }
+      ]
+    },
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Configure": [
+          "--prefix=/usr"
+        ]
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

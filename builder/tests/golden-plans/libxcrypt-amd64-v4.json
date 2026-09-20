@@ -1,0 +1,42 @@
+{
+  "Steps": {
+    "env": "Autotools",
+    "pgo": {
+      "Autotools": [
+        {
+          "Make": {
+            "args": [
+              "check",
+              "CFLAGS=\"$CFLAGS\"",
+              "CXXFLAGS=\"${CXXFLAGS:-}\"",
+              "LDFLAGS=\"$LDFLAGS\""
+            ],
+            "jobs": false
+          }
+        }
+      ]
+    },
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Configure": [
+          "--prefix=/usr",
+          "--disable-werror"
+        ]
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

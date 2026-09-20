@@ -1,0 +1,191 @@
+{
+  "Steps": {
+    "env": "Autotools",
+    "pgo": {
+      "Autotools": [
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "mkdir"
+                  },
+                  {
+                    "Lit": "-p"
+                  },
+                  {
+                    "Lit": "/tmp/tar-out"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "./src/tar"
+                  },
+                  {
+                    "Lit": "-cf"
+                  },
+                  {
+                    "Lit": "/tmp/pgo.tar"
+                  },
+                  {
+                    "Lit": "-C"
+                  },
+                  {
+                    "Lit": "\"$SOURCE\""
+                  },
+                  {
+                    "Lit": "."
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "./src/tar"
+                  },
+                  {
+                    "Lit": "-tf"
+                  },
+                  {
+                    "Lit": "/tmp/pgo.tar"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": {
+                "append": false,
+                "target": {
+                  "Lit": "/dev/null"
+                }
+              }
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "./src/tar"
+                  },
+                  {
+                    "Lit": "-xf"
+                  },
+                  {
+                    "Lit": "/tmp/pgo.tar"
+                  },
+                  {
+                    "Lit": "-C"
+                  },
+                  {
+                    "Lit": "/tmp/tar-out"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "./src/tar"
+                  },
+                  {
+                    "Lit": "-cf"
+                  },
+                  {
+                    "Lit": "-"
+                  },
+                  {
+                    "Lit": "-C"
+                  },
+                  {
+                    "Lit": "\"$SOURCE\""
+                  },
+                  {
+                    "Lit": "."
+                  }
+                ],
+                [
+                  {
+                    "Lit": "./src/tar"
+                  },
+                  {
+                    "Lit": "-tf"
+                  },
+                  {
+                    "Lit": "-"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": {
+                "append": false,
+                "target": {
+                  "Lit": "/dev/null"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Configure": [
+          "--prefix=/usr",
+          "--disable-acl"
+        ]
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

@@ -1,5 +1,5 @@
-tools/packages/
-tools/sources/
-tools/build/
+# builder の作業領域（成果物・ソース・ビルドツリー・ログ）はリポジトリ管理外
+packages/
 images/
+oci-layouts/
 builder/target/

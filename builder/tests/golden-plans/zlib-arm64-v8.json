@@ -1,0 +1,141 @@
+{
+  "Steps": {
+    "env": "None",
+    "pgo": null,
+    "std": "Gnu17",
+    "steps": [
+      {
+        "If": {
+          "cond": {
+            "EnvSet": "SYSROOT"
+          },
+          "else_": [],
+          "then": [
+            {
+              "Export": {
+                "name": "CC",
+                "value": {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Var": "CC"
+                      },
+                      {
+                        "Lit": " --sysroot="
+                      },
+                      {
+                        "Var": "SYSROOT"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "Set": {
+          "name": "PGO",
+          "value": {
+            "Lit": "/tmp/zlib-pgo"
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "rm"
+                },
+                {
+                  "Lit": "-rf"
+                },
+                {
+                  "Lit": "\"$PGO\""
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "mkdir"
+                },
+                {
+                  "Lit": "-p"
+                },
+                {
+                  "Lit": "\"$PGO\""
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [
+            [
+              "CHOST",
+              {
+                "Quoted": {
+                  "Var": "TRIPLE"
+                }
+              }
+            ]
+          ],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "./configure"
+                },
+                {
+                  "Lit": "--prefix=/usr"
+                },
+                {
+                  "Lit": "--libdir=/usr/lib64"
+                },
+                {
+                  "Lit": "--shared"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "InSource"
+  }
+}

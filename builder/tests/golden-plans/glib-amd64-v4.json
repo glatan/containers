@@ -1,0 +1,134 @@
+{
+  "Steps": {
+    "env": "Lto",
+    "pgo": null,
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "meson"
+                },
+                {
+                  "Lit": "setup"
+                },
+                {
+                  "Quoted": {
+                    "Var": "SOURCE"
+                  }
+                },
+                {
+                  "Lit": "--prefix=/usr"
+                },
+                {
+                  "Lit": "--wrap-mode=nofallback"
+                },
+                {
+                  "Lit": "-Dlibmount=disabled"
+                },
+                {
+                  "Lit": "-Dnls=disabled"
+                },
+                {
+                  "Lit": "-Dtests=false"
+                },
+                {
+                  "Lit": "-Dsysprof=disabled"
+                },
+                {
+                  "Lit": "-Dintrospection=disabled"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "meson"
+                },
+                {
+                  "Lit": "compile"
+                },
+                {
+                  "Lit": "-C"
+                },
+                {
+                  "Lit": "."
+                },
+                {
+                  "Lit": "-j"
+                },
+                {
+                  "Subst": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "nproc"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "meson"
+                },
+                {
+                  "Lit": "install"
+                },
+                {
+                  "Lit": "-C"
+                },
+                {
+                  "Lit": "."
+                },
+                {
+                  "Lit": "--destdir"
+                },
+                {
+                  "Quoted": {
+                    "Var": "OUT"
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

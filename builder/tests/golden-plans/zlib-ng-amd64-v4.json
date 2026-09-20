@@ -1,0 +1,792 @@
+{
+  "Steps": {
+    "env": "None",
+    "pgo": null,
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Export": {
+          "name": "PGODIR",
+          "value": {
+            "Lit": "/tmp/pgo"
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "rm"
+                },
+                {
+                  "Lit": "-rf"
+                },
+                {
+                  "Quoted": {
+                    "Var": "PGODIR"
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "mkdir"
+                },
+                {
+                  "Lit": "-p"
+                },
+                {
+                  "Quoted": {
+                    "Var": "PGODIR"
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "cmake"
+                },
+                {
+                  "Lit": "-S"
+                },
+                {
+                  "Quoted": {
+                    "Var": "SOURCE"
+                  }
+                },
+                {
+                  "Lit": "-B"
+                },
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Var": "BUILD"
+                      },
+                      {
+                        "Lit": "/gen"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "Lit": "-DCMAKE_BUILD_TYPE=Release"
+                },
+                {
+                  "Lit": "-DCMAKE_INSTALL_PREFIX=/usr"
+                },
+                {
+                  "Lit": "-DCMAKE_INSTALL_LIBDIR=lib64"
+                },
+                {
+                  "Lit": "-DZLIB_COMPAT=OFF"
+                },
+                {
+                  "Lit": "-DWITH_GTEST=OFF"
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "-DBUILD_TESTING="
+                    },
+                    {
+                      "Lit": "ON"
+                    }
+                  ]
+                },
+                {
+                  "Lit": "-DBUILD_SHARED_LIBS=ON"
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "-DCMAKE_C_COMPILER="
+                    },
+                    {
+                      "Quoted": {
+                        "Var": "CC"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "-DCMAKE_AR="
+                    },
+                    {
+                      "Quoted": {
+                        "Var": "AR"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "-DCMAKE_NM="
+                    },
+                    {
+                      "Quoted": {
+                        "Var": "NM"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "-DCMAKE_RANLIB="
+                    },
+                    {
+                      "Quoted": {
+                        "Var": "RANLIB"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "-DCMAKE_C_FLAGS="
+                    },
+                    {
+                      "Quoted": {
+                        "Concat": [
+                          {
+                            "Var": "CFLAGS"
+                          },
+                          {
+                            "Lit": " -fprofile-generate="
+                          },
+                          {
+                            "Var": "PGODIR"
+                          },
+                          {
+                            "Lit": " -fprofile-update=atomic"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "-DCMAKE_EXE_LINKER_FLAGS="
+                    },
+                    {
+                      "Quoted": {
+                        "Concat": [
+                          {
+                            "Var": "LDFLAGS"
+                          },
+                          {
+                            "Lit": " -fprofile-generate"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "-DCMAKE_SHARED_LINKER_FLAGS="
+                    },
+                    {
+                      "Quoted": {
+                        "Concat": [
+                          {
+                            "Var": "LDFLAGS"
+                          },
+                          {
+                            "Lit": " -fprofile-generate"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "cmake"
+                },
+                {
+                  "Lit": "--build"
+                },
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Var": "BUILD"
+                      },
+                      {
+                        "Lit": "/gen"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "-j"
+                    },
+                    {
+                      "Subst": {
+                        "stages": [
+                          [
+                            {
+                              "Lit": "nproc"
+                            }
+                          ]
+                        ],
+                        "stderr": null,
+                        "stdin": null,
+                        "stdout": null
+                      }
+                    }
+                  ]
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Export": {
+          "name": "LD_LIBRARY_PATH",
+          "value": {
+            "Quoted": {
+              "Concat": [
+                {
+                  "Var": "BUILD"
+                },
+                {
+                  "Lit": "/gen"
+                },
+                {
+                  "Lit": "${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "Or": {
+          "lhs": [
+            {
+              "ForEach": {
+                "body": [
+                  {
+                    "Exec": {
+                      "env": [],
+                      "pipe": {
+                        "stages": [
+                          [
+                            {
+                              "Lit": "cat"
+                            },
+                            {
+                              "Concat": [
+                                {
+                                  "Quoted": {
+                                    "Var": "SOURCE"
+                                  }
+                                },
+                                {
+                                  "Lit": "/*.c"
+                                }
+                              ]
+                            },
+                            {
+                              "Concat": [
+                                {
+                                  "Quoted": {
+                                    "Var": "SOURCE"
+                                  }
+                                },
+                                {
+                                  "Lit": "/*.h"
+                                }
+                              ]
+                            }
+                          ]
+                        ],
+                        "stderr": null,
+                        "stdin": null,
+                        "stdout": null
+                      }
+                    }
+                  }
+                ],
+                "items": [
+                  {
+                    "Lit": "1"
+                  },
+                  {
+                    "Lit": "2"
+                  },
+                  {
+                    "Lit": "3"
+                  },
+                  {
+                    "Lit": "4"
+                  },
+                  {
+                    "Lit": "5"
+                  },
+                  {
+                    "Lit": "6"
+                  },
+                  {
+                    "Lit": "7"
+                  },
+                  {
+                    "Lit": "8"
+                  },
+                  {
+                    "Lit": "9"
+                  },
+                  {
+                    "Lit": "10"
+                  },
+                  {
+                    "Lit": "11"
+                  },
+                  {
+                    "Lit": "12"
+                  },
+                  {
+                    "Lit": "13"
+                  },
+                  {
+                    "Lit": "14"
+                  },
+                  {
+                    "Lit": "15"
+                  },
+                  {
+                    "Lit": "16"
+                  }
+                ],
+                "stdout": {
+                  "append": false,
+                  "target": {
+                    "Lit": "/tmp/pgo-input"
+                  }
+                },
+                "var": "_i"
+              }
+            },
+            {
+              "ForEach": {
+                "body": [
+                  {
+                    "Exec": {
+                      "env": [],
+                      "pipe": {
+                        "stages": [
+                          [
+                            {
+                              "Quoted": {
+                                "Concat": [
+                                  {
+                                    "Var": "BUILD"
+                                  },
+                                  {
+                                    "Lit": "/gen/minideflate"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "Lit": "-c"
+                            },
+                            {
+                              "Quoted": {
+                                "Concat": [
+                                  {
+                                    "Lit": "-"
+                                  },
+                                  {
+                                    "Var": "_level"
+                                  }
+                                ]
+                              }
+                            }
+                          ],
+                          [
+                            {
+                              "Quoted": {
+                                "Concat": [
+                                  {
+                                    "Var": "BUILD"
+                                  },
+                                  {
+                                    "Lit": "/gen/minideflate"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "Lit": "-d"
+                            },
+                            {
+                              "Lit": "-c"
+                            }
+                          ]
+                        ],
+                        "stderr": null,
+                        "stdin": {
+                          "Lit": "/tmp/pgo-input"
+                        },
+                        "stdout": {
+                          "append": false,
+                          "target": {
+                            "Lit": "/dev/null"
+                          }
+                        }
+                      }
+                    }
+                  }
+                ],
+                "items": [
+                  {
+                    "Lit": "1"
+                  },
+                  {
+                    "Lit": "6"
+                  },
+                  {
+                    "Lit": "9"
+                  }
+                ],
+                "stdout": null,
+                "var": "_level"
+              }
+            }
+          ],
+          "rhs": [
+            {
+              "Exec": {
+                "env": [],
+                "pipe": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "true"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "Unset": "LD_LIBRARY_PATH"
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "cmake"
+                },
+                {
+                  "Lit": "-S"
+                },
+                {
+                  "Quoted": {
+                    "Var": "SOURCE"
+                  }
+                },
+                {
+                  "Lit": "-B"
+                },
+                {
+                  "Quoted": {
+                    "Var": "BUILD"
+                  }
+                },
+                {
+                  "Lit": "-DCMAKE_BUILD_TYPE=Release"
+                },
+                {
+                  "Lit": "-DCMAKE_INSTALL_PREFIX=/usr"
+                },
+                {
+                  "Lit": "-DCMAKE_INSTALL_LIBDIR=lib64"
+                },
+                {
+                  "Lit": "-DZLIB_COMPAT=OFF"
+                },
+                {
+                  "Lit": "-DWITH_GTEST=OFF"
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "-DBUILD_TESTING="
+                    },
+                    {
+                      "Lit": "OFF"
+                    }
+                  ]
+                },
+                {
+                  "Lit": "-DBUILD_SHARED_LIBS=ON"
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "-DCMAKE_C_COMPILER="
+                    },
+                    {
+                      "Quoted": {
+                        "Var": "CC"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "-DCMAKE_AR="
+                    },
+                    {
+                      "Quoted": {
+                        "Var": "AR"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "-DCMAKE_NM="
+                    },
+                    {
+                      "Quoted": {
+                        "Var": "NM"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "-DCMAKE_RANLIB="
+                    },
+                    {
+                      "Quoted": {
+                        "Var": "RANLIB"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "-DCMAKE_C_FLAGS="
+                    },
+                    {
+                      "Quoted": {
+                        "Concat": [
+                          {
+                            "Var": "CFLAGS"
+                          },
+                          {
+                            "Lit": " -fprofile-use="
+                          },
+                          {
+                            "Var": "PGODIR"
+                          },
+                          {
+                            "Lit": " -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "-DCMAKE_EXE_LINKER_FLAGS="
+                    },
+                    {
+                      "Quoted": {
+                        "Concat": [
+                          {
+                            "Var": "LDFLAGS"
+                          },
+                          {
+                            "Lit": " -fprofile-use"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "-DCMAKE_SHARED_LINKER_FLAGS="
+                    },
+                    {
+                      "Quoted": {
+                        "Concat": [
+                          {
+                            "Var": "LDFLAGS"
+                          },
+                          {
+                            "Lit": " -fprofile-use"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "cmake"
+                },
+                {
+                  "Lit": "--build"
+                },
+                {
+                  "Quoted": {
+                    "Var": "BUILD"
+                  }
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "-j"
+                    },
+                    {
+                      "Subst": {
+                        "stages": [
+                          [
+                            {
+                              "Lit": "nproc"
+                            }
+                          ]
+                        ],
+                        "stderr": null,
+                        "stdin": null,
+                        "stdout": null
+                      }
+                    }
+                  ]
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [
+            [
+              "DESTDIR",
+              {
+                "Quoted": {
+                  "Var": "OUT"
+                }
+              }
+            ]
+          ],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "cmake"
+                },
+                {
+                  "Lit": "--install"
+                },
+                {
+                  "Quoted": {
+                    "Var": "BUILD"
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "None"
+  }
+}

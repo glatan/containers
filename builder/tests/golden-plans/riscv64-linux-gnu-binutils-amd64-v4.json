@@ -1,0 +1,186 @@
+{
+  "Steps": {
+    "env": "None",
+    "pgo": null,
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Export": {
+          "name": "CC_FOR_BUILD",
+          "value": {
+            "Concat": [
+              {
+                "Var": "HOST_TRIPLE"
+              },
+              {
+                "Lit": "-gcc"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "Export": {
+          "name": "CXX_FOR_BUILD",
+          "value": {
+            "Concat": [
+              {
+                "Var": "HOST_TRIPLE"
+              },
+              {
+                "Lit": "-g++"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "mkdir"
+                },
+                {
+                  "Lit": "-p"
+                },
+                {
+                  "Var": "BUILD"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Cd": {
+          "Var": "BUILD"
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Concat": [
+                    {
+                      "Var": "SOURCE"
+                    },
+                    {
+                      "Lit": "/configure"
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "build",
+                    {
+                      "Var": "HOST_TRIPLE"
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "host",
+                    {
+                      "Var": "HOST_TRIPLE"
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "target",
+                    {
+                      "Var": "TRIPLE"
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "program-prefix",
+                    {
+                      "Concat": [
+                        {
+                          "Var": "TRIPLE"
+                        },
+                        {
+                          "Lit": "-"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Lit": "--prefix=/usr"
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "--infodir=/usr/share/info/"
+                    },
+                    {
+                      "Var": "TRIPLE"
+                    }
+                  ]
+                },
+                {
+                  "Lit": "--disable-nls"
+                },
+                {
+                  "Lit": "--disable-werror"
+                },
+                {
+                  "Lit": "--enable-plugins"
+                },
+                {
+                  "Lit": "--with-system-zlib"
+                },
+                {
+                  "Lit": "--without-debuginfod"
+                },
+                {
+                  "Lit": "--disable-gprofng"
+                },
+                {
+                  "Lit": "--enable-new-dtags"
+                },
+                {
+                  "Lit": "--enable-relro"
+                },
+                {
+                  "Lit": "--enable-default-execstack=no"
+                },
+                {
+                  "Lit": "--enable-default-hash-style=gnu"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "None"
+  }
+}

@@ -2,6 +2,24 @@
 name = "containers-builder"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.98.1"
 license = "AGPL-3.0-only"
 
 [dependencies]
+blake3 = "=1.8.2"
+clap = { version = "=4.6.6", features = ["derive"] }
+fd-lock = "=4.0.4"
+jiff = "=0.2.35"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+sha2 = "=0.10.9"
+sha3 = "=0.10.8"
+tempfile = "=3.27.0"
+thiserror = "=2.0.20"
+
+[dev-dependencies]
+assert_cmd = "=2.2.2"
+predicates = "=3.1.4"
+
+[lints.clippy]
+missing_const_for_fn = "warn"

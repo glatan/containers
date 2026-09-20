@@ -1,0 +1,193 @@
+{
+  "Steps": {
+    "env": "Lto",
+    "pgo": null,
+    "std": "Gnu17",
+    "steps": [
+      {
+        "WriteFile": {
+          "append": false,
+          "expand": true,
+          "lines": [
+            {
+              "Lit": "[binaries]"
+            },
+            {
+              "Lit": "c = '$CC'"
+            },
+            {
+              "Lit": "cpp = '${CXX:-$CC}'"
+            },
+            {
+              "Lit": "ar = '${AR:-${TRIPLE}-ar}'"
+            },
+            {
+              "Lit": "strip = 'aarch64-linux-gnu-strip'"
+            },
+            {
+              "Lit": "pkg-config = 'pkg-config'"
+            },
+            {
+              "Lit": "[host_machine]"
+            },
+            {
+              "Lit": "system = 'linux'"
+            },
+            {
+              "Lit": "cpu_family = 'aarch64'"
+            },
+            {
+              "Lit": "cpu = 'aarch64'"
+            },
+            {
+              "Lit": "endian = 'little'"
+            }
+          ],
+          "path": {
+            "Lit": "meson-cross.ini"
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "meson"
+                },
+                {
+                  "Lit": "setup"
+                },
+                {
+                  "Quoted": {
+                    "Var": "SOURCE"
+                  }
+                },
+                {
+                  "Lit": "--prefix=/usr"
+                },
+                {
+                  "Lit": "--wrap-mode=nofallback"
+                },
+                {
+                  "Lit": "-Dlibmount=disabled"
+                },
+                {
+                  "Lit": "-Dnls=disabled"
+                },
+                {
+                  "Lit": "-Dtests=false"
+                },
+                {
+                  "Lit": "-Dsysprof=disabled"
+                },
+                {
+                  "Lit": "-Dintrospection=disabled"
+                },
+                {
+                  "Lit": "--cross-file"
+                },
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Var": "BUILD"
+                      },
+                      {
+                        "Lit": "/meson-cross.ini"
+                      }
+                    ]
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "meson"
+                },
+                {
+                  "Lit": "compile"
+                },
+                {
+                  "Lit": "-C"
+                },
+                {
+                  "Lit": "."
+                },
+                {
+                  "Lit": "-j"
+                },
+                {
+                  "Subst": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "nproc"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "meson"
+                },
+                {
+                  "Lit": "install"
+                },
+                {
+                  "Lit": "-C"
+                },
+                {
+                  "Lit": "."
+                },
+                {
+                  "Lit": "--destdir"
+                },
+                {
+                  "Quoted": {
+                    "Var": "OUT"
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

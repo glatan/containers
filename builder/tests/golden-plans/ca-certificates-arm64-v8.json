@@ -1,0 +1,32 @@
+{
+  "Steps": {
+    "env": "None",
+    "pgo": null,
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Install": {
+          "dst": "\"$OUT\"/etc/ssl/certs/ca-certificates.crt",
+          "mode": "644",
+          "src": "\"$SOURCE\"/certifi/cacert.pem"
+        }
+      },
+      {
+        "Symlink": {
+          "force": false,
+          "link": "\"$OUT\"/etc/ssl/certs/ca-bundle.crt",
+          "target": "ca-certificates.crt"
+        }
+      },
+      {
+        "Symlink": {
+          "force": false,
+          "link": "\"$OUT\"/etc/ssl/cert.pem",
+          "target": "certs/ca-certificates.crt"
+        }
+      }
+    ],
+    "sysroot": false,
+    "workdir": "None"
+  }
+}
