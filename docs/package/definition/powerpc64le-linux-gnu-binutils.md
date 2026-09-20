@@ -40,6 +40,6 @@ binutils 2.47。URL とハッシュは [toolchain.md](../toolchain.md) です。
 
 ## ビルド設定
 
-configure は `--build=$HOST_TRIPLE --host=$PACKAGE_HOST --target=powerpc64le-linux-gnu` です。ステージ順とプレフィックスは [toolchain.md](../toolchain.md) です。
+configure は `--build=$HOST_TRIPLE --host=$HOST_TRIPLE --target=powerpc64le-linux-gnu` です。ステージ順とプレフィックスは [toolchain.md](../toolchain.md) です。
 
 `supports` は `Target::all()` です。製品キューは [toolchain.md](../toolchain.md)。このパッケージでは HOST と、architecture `ppc64le` の variant（power8, power9, power10, power11）です。

@@ -68,7 +68,7 @@
 
 成果物の再ビルドは `artifact_ready` によるスキップがあるため、まず成果物を削除する必要があります。削除はシェルの `rm` ではなくこのコマンドを使います。Target の指定は `build` と同じで、`-t` または `--all-targets` が必須です。`--all` で全パッケージを対象にできます。`--dry-run` で削除対象の一覧だけを表示します。`--images` を付けると `oci-layouts/{name}-{version}` も削除対象に含めます。
 
-対象は 3 種類です。`packages/artifacts/{name}-{version}-{arch}-{variant}`、`packages/build/{arch}-{variant}/{name}-{version}`、`packages/logs/{name}-{version}-{arch}-{variant}.log`。ソース（`packages/sources/`）は削除しません。
+対象は `packages/artifacts/{name}-{version}-{arch}-{variant}` とその atomic publish 残骸（`{...}.tmp`）、`packages/build/{arch}-{variant}/{name}-{version}`、`packages/logs/{name}-{version}-{arch}-{variant}.log` です。ソース（`packages/sources/`）は削除しません。
 
 #### fetch のオプション
 
@@ -90,7 +90,7 @@
 
 `build-env` は `compose` / `pack` の対象外であり、`env compose` で合成します。
 
-`check` は生成済みの `oci-layouts/` ではなく、`packages/artifacts/` に出力された未圧縮パッケージ成果物の ELF バイナリを直接検査します。`--all` では公開対象の全パッケージイメージを対象とします（ビルド専用パッケージは除外します）。
+`check` は生成済みの `oci-layouts/` ではなく、`packages/artifacts/` に出力された未圧縮パッケージ成果物の ELF バイナリを直接検査します。`--all` では公開対象の全パッケージイメージを対象とします（ビルド専用パッケージは除外します）。`--all` 指定時、成果物のないエントリは `スキップ(パッケージなし)` を出して継続します。
 
 ### env — ビルド環境の管理
 
@@ -99,11 +99,11 @@
 | `env status` | ビルド環境イメージの `正本:` 参照（合成済みなら layout の canonical path、未合成なら `未合成`）を表示する。シードの digest 固定値は常に併記する |
 | `env bootstrap` | `BOOTSTRAP` の依存閉包を HOST（amd64 / v4）上で一度にコンパイルする |
 | `env plan {?package}` | 他パッケージを組める最小のシード相ビルド集合を出力する |
-| `env compose` | ビルド環境イメージを合成する |
+| `env compose` | ビルド環境イメージを合成する（`--profile` / `--zstd-level` は `pack` と同じ） |
 
 #### env plan
 
-`env plan`（引数なし）は、「これだけシード（Arch base-devel）上で組めば他のパッケージは合成済みビルド環境でビルドできる」最小集合を、`build-env` の依存閉包からトポロジカル順で出力します。`env plan {package}` にパッケージを渡した場合、そのパッケージが `BOOTSTRAP` / toolchain に属するならそのパッケージ自身のシード閉包（最小部分集合）を、属さないなら build-env のシード集合に続けて、合成環境でビルドする残りのパッケージ（指定パッケージ自身を含む）を出力します。
+`env plan`（引数なし）は、「これだけシード（Arch base-devel）上で組めば他のパッケージは合成済みビルド環境でビルドできる」最小集合を、`build-env` の依存閉包からトポロジカル順で出力します。`env plan {package}` にパッケージを渡した場合、そのパッケージが `BOOTSTRAP` / toolchain に属するならそのパッケージ自身のシード閉包（最小部分集合）を、属さないなら build-env のシード集合に続けて、合成環境でビルドする残りのパッケージを出力します（指定パッケージがシード集合に既に含まれる場合は Phase 3 に現れません）。
 
 #### env bootstrap
 

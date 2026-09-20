@@ -49,6 +49,6 @@ gcc 16.2.0。URL とハッシュは [toolchain.md](../toolchain.md) です。
 
 ## ビルド設定
 
-C/C++、`--disable-bootstrap`。gcc フラグ `--with-arch=$MARCH --with-abi=lp64d`（variant ごとの `$MARCH`、stage1/2 は `--with-arch=rv64gc`）。PGO と sanitizer は [toolchain.md](../toolchain.md) です。configure は `--build=$HOST_TRIPLE --host=$PACKAGE_HOST --target=riscv64-linux-gnu` です。
+C/C++、`--disable-bootstrap`。gcc フラグ `--with-arch=$MARCH --with-abi=lp64d`（`$MARCH` は host arch と codegen arch が一致する場合のみ。異種クロスでは `rv64gc` へフォールバック。stage1/2 は常に `--with-arch=rv64gc`）。PGO と sanitizer は [toolchain.md](../toolchain.md) です。configure は `--build=$HOST_TRIPLE --host=$HOST_TRIPLE --target=riscv64-linux-gnu` です。
 
 `supports` は `Target::all()` です。製品キューは [toolchain.md](../toolchain.md)。このパッケージでは HOST と、architecture `riscv64` の variant（rva20u64, rva22u64, rva23u64）です。

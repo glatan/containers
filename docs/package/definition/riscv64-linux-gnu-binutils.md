@@ -40,6 +40,6 @@ binutils 2.47。URL とハッシュは [toolchain.md](../toolchain.md) です。
 
 ## ビルド設定
 
-configure は `--build=$HOST_TRIPLE --host=$PACKAGE_HOST --target=riscv64-linux-gnu` です。ステージ順とプレフィックスは [toolchain.md](../toolchain.md) です。
+configure は `--build=$HOST_TRIPLE --host=$HOST_TRIPLE --target=riscv64-linux-gnu` です。ステージ順とプレフィックスは [toolchain.md](../toolchain.md) です。
 
 `supports` は `Target::all()` です。製品キューは [toolchain.md](../toolchain.md)。このパッケージでは HOST と、architecture `riscv64` の variant（rva20u64, rva22u64, rva23u64）です。

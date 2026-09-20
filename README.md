@@ -8,7 +8,7 @@
 
 ```
 |- docs          ドキュメント（設計・仕様・運用方針）
-|- packages      作業ツリー（sources / build / artifacts）
+|- packages      作業ツリー（sources / build / artifacts / logs）
 |- builder       ビルドツール（Rust 実装、バイナリ名 containers-builder）
 |- oci-layouts   パッケージイメージの Image Layout（packages/artifacts からの派生物）
 ```

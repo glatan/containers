@@ -20,7 +20,7 @@ containers-builder clean <name> --all-targets --dry-run
 containers-builder clean <name> --all-targets --images
 ```
 
-削除対象: `packages/artifacts/{name}-{version}-{arch}-{variant}`、`packages/build/{arch}-{variant}/{name}-{version}`、`packages/logs/{name}-{version}-{arch}-{variant}.log`。`--images` 指定時は `oci-layouts/{name}-{version}` も対象。`packages/sources/` は削除しない。
+削除対象: `packages/artifacts/{name}-{version}-{arch}-{variant}`（と中断残骸の `{...}.tmp`）、`packages/build/{arch}-{variant}/{name}-{version}`、`packages/logs/{name}-{version}-{arch}-{variant}.log`。`--images` 指定時は `oci-layouts/{name}-{version}` も対象。`packages/sources/` は削除しない。
 
 ## シェル注意
 

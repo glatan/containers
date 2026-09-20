@@ -49,6 +49,6 @@ gcc 16.2.0。URL とハッシュは [toolchain.md](../toolchain.md) です。
 
 ## ビルド設定
 
-C/C++、`--disable-bootstrap`。gcc フラグ `--with-cpu=$MARCH`（variant ごとの `$MARCH`、stage1/2 は `--with-cpu=power8`）。PGO と sanitizer は [toolchain.md](../toolchain.md) です。configure は `--build=$HOST_TRIPLE --host=$PACKAGE_HOST --target=powerpc64le-linux-gnu` です。
+C/C++、`--disable-bootstrap`。gcc フラグ `--with-cpu=$MARCH`（`$MARCH` は host arch と codegen arch が一致する場合のみ。異種クロスでは `power8` へフォールバック。stage1/2 は常に `--with-cpu=power8`）。PGO と sanitizer は [toolchain.md](../toolchain.md) です。configure は `--build=$HOST_TRIPLE --host=$HOST_TRIPLE --target=powerpc64le-linux-gnu` です。
 
 `supports` は `Target::all()` です。製品キューは [toolchain.md](../toolchain.md)。このパッケージでは HOST と、architecture `ppc64le` の variant（power8, power9, power10, power11）です。

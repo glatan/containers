@@ -10,7 +10,7 @@
 
 ビルド環境は特定のディストリビューションそのものではなく、HOST（amd64 / v4）向けパッケージを合成した単一の出力イメージです。その正本は `env compose` によって合成された成果物（`oci-layouts/build-env-amd64`）です。現在のビルド環境の参照先は `containers-builder env status` コマンドで確認できます。合成済みイメージが存在しないブートストラップ初期段階においては、シード環境として [`builder/src/package/env.rs`](../../builder/src/package/env.rs) でダイジェストを固定した Arch Linux `base-devel` イメージを使用します。
 
-各パッケージのビルドスクリプトには、環境変数として `SOURCE`、`BUILD`、`OUT`、`ARCH`、`VARIANT`、`TRIPLE`、`HOST_TRIPLE`、`PACKAGE_HOST`、`CROSS`、および `CFLAGS` / `LDFLAGS` が渡されます。`CFLAGS` および `LDFLAGS` は、パッケージ定義が返したフラグトークンから builder が合成します。`TRIPLE` はコード生成側の GNU triple（プレフィックス付き gcc ではパッケージ名の triple、Host tools ではパッケージ Platform の triple）です。`PACKAGE_HOST` は成果物が動く Platform の triple、`HOST_TRIPLE` はビルドマシン（常に `x86_64-linux-gnu`）です。
+各パッケージのビルドスクリプトには、環境変数として `SOURCE`、`BUILD`、`OUT`、`ARCH`、`VARIANT`、`TRIPLE`、`HOST_TRIPLE`、`PACKAGE_HOST`、`MARCH`、`CROSS`、および `CFLAGS` / `CXXFLAGS` / `LDFLAGS` が渡されます。`CFLAGS` および `LDFLAGS` は、パッケージ定義が返したフラグトークンから builder が合成します。`TRIPLE` はコード生成側の GNU triple（プレフィックス付き gcc ではパッケージ名の triple、Host tools ではパッケージ Platform の triple）です。`PACKAGE_HOST` は成果物が動く Platform の triple、`HOST_TRIPLE` はビルドマシン（常に `x86_64-linux-gnu`）です。`MARCH` は対象 variant の CPU 指定値（`-march=` / `-mcpu=` の引数）です。`CXXFLAGS` には `CFLAGS` と同じ値が入ります。
 
 `CC`、`CXX`、`AR`、`RANLIB`、`NM` などのツールチェーン環境変数は builder が制御します。シード上で HOST 向けに組むあいだは `CC=gcc` です。自前 gcc のあと、および合成イメージ上では、対象 Platform の `CROSS` 接頭辞を付けます。amd64 では `x86_64-linux-gnu-gcc`、arm64 では `aarch64-linux-gnu-gcc` です。
 

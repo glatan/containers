@@ -49,6 +49,6 @@ gcc 16.2.0。URL とハッシュは [toolchain.md](../toolchain.md) です。
 
 ## ビルド設定
 
-C/C++、`--disable-bootstrap`。gcc フラグ `--with-arch=$MARCH`（variant ごとの `$MARCH`、stage1/2 は `--with-arch=armv8-a`）。PGO と sanitizer は [toolchain.md](../toolchain.md) です。configure は `--build=$HOST_TRIPLE --host=$PACKAGE_HOST --target=aarch64-linux-gnu` です。
+C/C++、`--disable-bootstrap`。gcc フラグ `--with-arch=$MARCH`（`$MARCH` は host arch と codegen arch が一致する場合のみ。異種クロスでは `armv8-a` へフォールバック。stage1/2 は常に `--with-arch=armv8-a`）。PGO と sanitizer は [toolchain.md](../toolchain.md) です。configure は `--build=$HOST_TRIPLE --host=$HOST_TRIPLE --target=aarch64-linux-gnu` です。
 
 `supports` は `Target::all()` です。製品キューは [toolchain.md](../toolchain.md)。このパッケージでは HOST と、architecture `arm64` の variant（v8 から v9.5）です。

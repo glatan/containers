@@ -19,6 +19,9 @@
 | `package/mod.rs` | `Package` および `Bootstrap` トレイトと共通データ構造の定義 |
 | `package/definition/` | 個別パッケージの定義実装、`PACKAGES`、および `BOOTSTRAP` の登録一覧 |
 | `package/{fetch,build}.rs` | ソースコードの取得・検証とパッケージのコンパイル制御（シード環境および自前環境） |
+| `package/build/container.rs` | ビルドのファイルロック、成果物の atomic publish、コンテナ起動引数と plan の組み立て |
+| `package/recipe.rs` | 型付きビルド手順（`Recipe` / `Step`）から実行 plan へのコンパイルと bash 描画 |
+| `package/runner.rs` / `package/sandbox.rs` | plan を bash へレンダリングせず直接解釈する実行層（コンテナ内 `run-recipe` の実装） |
 | `package/env.rs` | シード用 Arch Linux コンテナイメージのダイジェスト固定値の保持 |
 | `package/validate.rs` | 宣言された依存関係と ELF バイナリ内の動的リンク（`DT_NEEDED`）の整合性検証 |
 | `image.rs` | パッケージ成果物からの Image Layout および SPDX SBOM の生成と、`compose` による出力イメージ合成 |
@@ -46,6 +49,9 @@ OCI 仕様準拠のテスト群は `tests/oci_spec.rs`、CLI 仕様のテスト�
 | `thiserror` | 内部処理に応じた型付きエラーの定義 |
 | `tempfile` | tar/zstd 処理および staging layout 用の一時作業ディレクトリ管理 |
 | `jiff` | RFC 3339 形式に準拠した作成時刻の算出 |
+| `fd-lock` | 同一パッケージ・ターゲットの同時ビルドを直列化するファイルロック |
+
+開発依存（`[dev-dependencies]`）として、CLI 統合テスト用に `assert_cmd` / `predicates` を使用します。
 
 ## 外部コマンドの利用
 
@@ -55,7 +61,7 @@ OCI 仕様準拠のテスト群は `tests/oci_spec.rs`、CLI 仕様のテスト�
 | `tar` | ソースコードの展開、およびレイヤー tarball の生成（`--sort=name` などを指定してビルドの再現性を確保） |
 | `zstd` | レイヤー tarball の圧縮（`--single-thread`。通常ビルドはレベル 3、公開用ビルドはレベル 22 であり、20〜22 は `--ultra` を付与） |
 | `podman` | 隔離されたビルド環境コンテナ上でのパッケージコンパイル |
-| `/bin/bash` | パッケージごとのビルドスクリプトの実行 |
+| `/bin/bash` | 描画したビルドスクリプトの構文検査（`bash -n`）および golden・照会・デバッグ用途のスクリプト描画。実実行は外部コマンドではなく、コンテナ内の `run-recipe` runner が plan を直接解釈します |
 | `readelf` | ELF バイナリの動的リンク依存（`DT_NEEDED`）の解析（`check`） |
 
 ## データフロー

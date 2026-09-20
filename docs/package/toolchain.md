@@ -62,7 +62,7 @@ glibc blake3: `6d07bc16d8d066b1c0ae713d762175f261e27df9cab8015ec11e1c980c05e79b0
 
 中間コンパイラ（stage1 および stage2）の配置先プレフィックスは `/usr/lib/cross/{triple}/stage{1,2}/` です。最終 gcc は `/usr/bin/{triple}-gcc` として配置し、configure 時に `--with-sysroot=/usr/{triple}` を指定します。また、`x86_64-linux-gnu-glibc` に限り、`/lib64` および `ld-linux-x86-64.so.2` の互換パスにもファイルを配置します。
 
-プレフィックス付きの `{triple}-glibc` が実行時 libc です。最終 gcc は libc を成果物に焼き付けません。リンクは `/dep/{triple}-glibc` です。configure は `--build=$HOST_TRIPLE --host=$PACKAGE_HOST --target=$TRIPLE` です。info は `--infodir=/usr/share/info/{triple}` に分け、5 本の HOST gcc が衝突しないようにします。
+プレフィックス付きの `{triple}-glibc` が実行時 libc です。最終 gcc は libc を成果物に焼き付けません。リンクは `/dep/{triple}-glibc` です。configure は `--build=$HOST_TRIPLE --host=$HOST_TRIPLE --target=$TRIPLE` です（ツールはビルド機で動くクロスツールのため `--host` は `$HOST_TRIPLE` です。`$PACKAGE_HOST` を渡すと host == target になり誤りです）。info は `--infodir=/usr/share/info/{triple}` に分け、5 本の HOST gcc が衝突しないようにします。
 
 `{triple}-binutils` の configure は `--enable-plugins`、`--with-system-zlib`、`--without-debuginfod`、`--disable-gprofng` を指定します。gold は組みません。`libstdc++.so.6` / `libgcc_s.so.1` への実行時依存（gcc との循環）を避けるためです。リンカは mold に一本化しています。
 

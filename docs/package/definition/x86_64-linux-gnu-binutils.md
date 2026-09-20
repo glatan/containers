@@ -40,6 +40,6 @@ binutils 2.47。URL とハッシュは [toolchain.md](../toolchain.md) です。
 
 ## ビルド設定
 
-configure は `--build=$HOST_TRIPLE --host=$PACKAGE_HOST --target=x86_64-linux-gnu` です。ステージ順とプレフィックスは [toolchain.md](../toolchain.md) です。ネイティブ（`$PACKAGE_HOST = $HOST_TRIPLE`）では PGO を適用します（`Pgo::Custom`。instrumented ツリーで `as` / `ld` / `objdump` を駆動してプロファイルを採取）。クロスでは適用しません。
+configure は `--build=$HOST_TRIPLE --host=$HOST_TRIPLE --target=x86_64-linux-gnu` です。ステージ順とプレフィックスは [toolchain.md](../toolchain.md) です。ネイティブ（`$PACKAGE_HOST = $HOST_TRIPLE`）では PGO を適用します（`Pgo::Custom`。instrumented ツリーで `as` / `ld` / `objdump` を駆動してプロファイルを採取）。クロスでは適用しません。
 
 `supports` は `Target::all()` です。製品キューは [toolchain.md](../toolchain.md)。このパッケージでは HOST と、architecture `amd64` の variant（v1, v2, v3, v4）です。
