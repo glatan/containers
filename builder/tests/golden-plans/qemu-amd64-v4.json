@@ -1,0 +1,568 @@
+{
+  "Steps": {
+    "env": "None",
+    "pgo": null,
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Export": {
+          "name": "CFLAGS",
+          "value": {
+            "Quoted": {
+              "Concat": [
+                {
+                  "Subst": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "printf"
+                        },
+                        {
+                          "Lit": "'%s'"
+                        },
+                        {
+                          "Quoted": {
+                            "Lit": "${CFLAGS:-}"
+                          }
+                        }
+                      ],
+                      [
+                        {
+                          "Lit": "sed"
+                        },
+                        {
+                          "Lit": "-E"
+                        },
+                        {
+                          "Lit": "'s/--sysroot=[^ ]+//g'"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                },
+                {
+                  "Lit": " -flto=auto"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "Export": {
+          "name": "CXXFLAGS",
+          "value": {
+            "Quoted": {
+              "Concat": [
+                {
+                  "Subst": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "printf"
+                        },
+                        {
+                          "Lit": "'%s'"
+                        },
+                        {
+                          "Quoted": {
+                            "Lit": "${CXXFLAGS:-}"
+                          }
+                        }
+                      ],
+                      [
+                        {
+                          "Lit": "sed"
+                        },
+                        {
+                          "Lit": "-E"
+                        },
+                        {
+                          "Lit": "'s/--sysroot=[^ ]+//g'"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                },
+                {
+                  "Lit": " -flto=auto"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "Export": {
+          "name": "LDFLAGS",
+          "value": {
+            "Quoted": {
+              "Concat": [
+                {
+                  "Subst": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "printf"
+                        },
+                        {
+                          "Lit": "'%s'"
+                        },
+                        {
+                          "Quoted": {
+                            "Lit": "${LDFLAGS:-}"
+                          }
+                        }
+                      ],
+                      [
+                        {
+                          "Lit": "sed"
+                        },
+                        {
+                          "Lit": "-E"
+                        },
+                        {
+                          "Lit": "'s/--sysroot=[^ ]+//g'"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                },
+                {
+                  "Lit": " -flto=auto"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "If": {
+          "cond": {
+            "DirExists": {
+              "Lit": "/dep/${TRIPLE}-glibc"
+            }
+          },
+          "else_": [],
+          "then": [
+            {
+              "Set": {
+                "name": "_glibc",
+                "value": {
+                  "Lit": "/dep/${TRIPLE}-glibc"
+                }
+              }
+            },
+            {
+              "Export": {
+                "name": "LDFLAGS",
+                "value": {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Var": "LDFLAGS"
+                      },
+                      {
+                        "Lit": " -B"
+                      },
+                      {
+                        "Var": "_glibc"
+                      },
+                      {
+                        "Lit": "/usr/lib64 -L"
+                      },
+                      {
+                        "Var": "_glibc"
+                      },
+                      {
+                        "Lit": "/usr/lib64 -L"
+                      },
+                      {
+                        "Var": "_glibc"
+                      },
+                      {
+                        "Lit": "/lib64"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "If": {
+          "cond": {
+            "DirExists": {
+              "Lit": "/dep/linux-headers/usr/include"
+            }
+          },
+          "else_": [],
+          "then": [
+            {
+              "Export": {
+                "name": "CFLAGS",
+                "value": {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Var": "CFLAGS"
+                      },
+                      {
+                        "Lit": " -idirafter /dep/linux-headers/usr/include"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "Export": {
+                "name": "CXXFLAGS",
+                "value": {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Var": "CXXFLAGS"
+                      },
+                      {
+                        "Lit": " -idirafter /dep/linux-headers/usr/include"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "Set": {
+          "name": "PKG_CONFIG_LIBDIR",
+          "value": {
+            "Lit": ""
+          }
+        }
+      },
+      {
+        "ForEach": {
+          "body": [
+            {
+              "ForEach": {
+                "body": [
+                  {
+                    "If": {
+                      "cond": {
+                        "DirExists": {
+                          "Quoted": {
+                            "Var": "_pc"
+                          }
+                        }
+                      },
+                      "else_": [],
+                      "then": [
+                        {
+                          "Set": {
+                            "name": "PKG_CONFIG_LIBDIR",
+                            "value": {
+                              "Quoted": {
+                                "Concat": [
+                                  {
+                                    "Lit": "${PKG_CONFIG_LIBDIR:+$PKG_CONFIG_LIBDIR:}"
+                                  },
+                                  {
+                                    "Var": "_pc"
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "items": [
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "/dep/\""
+                      },
+                      {
+                        "Var": "_dep"
+                      },
+                      {
+                        "Lit": "\"/usr/lib/pkgconfig"
+                      }
+                    ]
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "/dep/\""
+                      },
+                      {
+                        "Var": "_dep"
+                      },
+                      {
+                        "Lit": "\"/usr/lib64/pkgconfig"
+                      }
+                    ]
+                  }
+                ],
+                "stdout": null,
+                "var": "_pc"
+              }
+            }
+          ],
+          "items": [
+            {
+              "Lit": "glib"
+            },
+            {
+              "Lit": "pcre2"
+            },
+            {
+              "Lit": "zlib"
+            },
+            {
+              "Lit": "libffi"
+            }
+          ],
+          "stdout": null,
+          "var": "_dep"
+        }
+      },
+      {
+        "If": {
+          "cond": {
+            "EnvSet": "PKG_CONFIG_LIBDIR"
+          },
+          "else_": [],
+          "then": [
+            {
+              "ExportBare": "PKG_CONFIG_LIBDIR"
+            },
+            {
+              "Export": {
+                "name": "PKG_CONFIG_PATH",
+                "value": {
+                  "Lit": ""
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "If": {
+          "cond": {
+            "DirExists": {
+              "Lit": "/dep/glib"
+            }
+          },
+          "else_": [],
+          "then": [
+            {
+              "Export": {
+                "name": "PKG_CONFIG_SYSROOT_DIR",
+                "value": {
+                  "Lit": "/dep/glib"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "\"$SOURCE\"/configure"
+                },
+                {
+                  "Lit": "--prefix=/usr"
+                },
+                {
+                  "Lit": "--target-list=x86_64-linux-user,aarch64-linux-user,riscv64-linux-user,ppc64le-linux-user,s390x-linux-user"
+                },
+                {
+                  "Lit": "--enable-tcg"
+                },
+                {
+                  "Lit": "--disable-system"
+                },
+                {
+                  "Lit": "--disable-tools"
+                },
+                {
+                  "Lit": "--disable-docs"
+                },
+                {
+                  "Lit": "--disable-guest-agent"
+                },
+                {
+                  "Lit": "--disable-slirp"
+                },
+                {
+                  "Lit": "--disable-vnc"
+                },
+                {
+                  "Lit": "--disable-sdl"
+                },
+                {
+                  "Lit": "--disable-gtk"
+                },
+                {
+                  "Lit": "--disable-curses"
+                },
+                {
+                  "Lit": "--disable-brlapi"
+                },
+                {
+                  "Lit": "--disable-spice"
+                },
+                {
+                  "Lit": "--disable-libnfs"
+                },
+                {
+                  "Lit": "--disable-libusb"
+                },
+                {
+                  "Lit": "--disable-vde"
+                },
+                {
+                  "Lit": "--disable-nettle"
+                },
+                {
+                  "Lit": "--disable-gnutls"
+                },
+                {
+                  "Lit": "--disable-gcrypt"
+                },
+                {
+                  "Lit": "--disable-auth-pam"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      },
+      {
+        "If": {
+          "cond": {
+            "Cmd": {
+              "stages": [
+                [
+                  {
+                    "Lit": "command"
+                  },
+                  {
+                    "Lit": "-v"
+                  },
+                  {
+                    "Lit": "qemu-s390x"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          },
+          "else_": [],
+          "then": [
+            {
+              "Or": {
+                "lhs": [
+                  {
+                    "Exec": {
+                      "env": [],
+                      "pipe": {
+                        "stages": [
+                          [
+                            {
+                              "Lit": "qemu-s390x"
+                            },
+                            {
+                              "Lit": "-cpu"
+                            },
+                            {
+                              "Lit": "help"
+                            }
+                          ],
+                          [
+                            {
+                              "Lit": "grep"
+                            },
+                            {
+                              "Lit": "-E"
+                            },
+                            {
+                              "Lit": "'z900|z990|z9EC'"
+                            }
+                          ]
+                        ],
+                        "stderr": null,
+                        "stdin": null,
+                        "stdout": null
+                      }
+                    }
+                  }
+                ],
+                "rhs": [
+                  {
+                    "Exec": {
+                      "env": [],
+                      "pipe": {
+                        "stages": [
+                          [
+                            {
+                              "Lit": "true"
+                            }
+                          ]
+                        ],
+                        "stderr": null,
+                        "stdin": null,
+                        "stdout": null
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "sysroot": false,
+    "workdir": "Build"
+  }
+}

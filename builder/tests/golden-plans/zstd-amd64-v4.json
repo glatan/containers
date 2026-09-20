@@ -1,0 +1,152 @@
+{
+  "Steps": {
+    "env": "None",
+    "pgo": {
+      "Make": [
+        {
+          "ForEach": {
+            "body": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "cat"
+                        },
+                        {
+                          "Lit": "./lib/*.c"
+                        },
+                        {
+                          "Lit": "./lib/*/*.c"
+                        },
+                        {
+                          "Lit": "./lib/*/*.h"
+                        },
+                        {
+                          "Lit": "./programs/*.c"
+                        }
+                      ]
+                    ],
+                    "stderr": {
+                      "Lit": "/dev/null"
+                    },
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              }
+            ],
+            "items": [
+              {
+                "Lit": "1"
+              },
+              {
+                "Lit": "2"
+              },
+              {
+                "Lit": "3"
+              },
+              {
+                "Lit": "4"
+              },
+              {
+                "Lit": "5"
+              },
+              {
+                "Lit": "6"
+              },
+              {
+                "Lit": "7"
+              },
+              {
+                "Lit": "8"
+              }
+            ],
+            "stdout": {
+              "append": false,
+              "target": {
+                "Lit": "/tmp/pgo-input"
+              }
+            },
+            "var": "_i"
+          }
+        },
+        {
+          "ForEach": {
+            "body": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "./programs/zstd"
+                        },
+                        {
+                          "Lit": "-b\"$_level\""
+                        },
+                        {
+                          "Lit": "-T0"
+                        },
+                        {
+                          "Lit": "/tmp/pgo-input"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              }
+            ],
+            "items": [
+              {
+                "Lit": "1"
+              },
+              {
+                "Lit": "3"
+              },
+              {
+                "Lit": "9"
+              },
+              {
+                "Lit": "19"
+              }
+            ],
+            "stdout": null,
+            "var": "_level"
+          }
+        }
+      ]
+    },
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Make": {
+          "args": [
+            "PREFIX=/usr",
+            "LIBDIR=/usr/lib",
+            "HAVE_ZLIB=0",
+            "HAVE_LZMA=0",
+            "HAVE_LZ4=0"
+          ],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": [
+            "PREFIX=/usr",
+            "LIBDIR=/usr/lib"
+          ]
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "InSource"
+  }
+}

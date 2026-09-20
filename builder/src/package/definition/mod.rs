@@ -8,6 +8,7 @@ mod aarch64_linux_gnu_gcc_stage2;
 mod aarch64_linux_gnu_glibc;
 mod aarch64_linux_gnu_glibc_headers;
 mod bash;
+mod binutils;
 mod bison;
 mod build_env;
 mod bzip2;
@@ -19,7 +20,12 @@ mod expat;
 mod findutils;
 mod flex;
 mod gawk;
+mod gcc;
+mod gcc_stage1;
+mod gcc_stage2;
 mod glib;
+mod glibc;
+mod glibc_headers;
 mod gmp;
 mod grep;
 mod gzip;
@@ -63,9 +69,9 @@ mod s390x_linux_gnu_glibc;
 mod s390x_linux_gnu_glibc_headers;
 mod sed;
 mod sqlite;
+mod stages;
 mod tar;
 mod texinfo;
-mod toolchain;
 mod x86_64_linux_gnu_binutils;
 mod x86_64_linux_gnu_gcc;
 mod x86_64_linux_gnu_gcc_stage1;
@@ -409,35 +415,29 @@ mod tests {
                 .rendered_script(target)
                 .contains("realpath --relative-to")
         );
+        // case "$ARCH" の TGT 解決は ctx.target で静的に行われる。
+        let openssl = find("openssl").unwrap();
+        for (t, tgt) in [
+            (crate::target::Target::BUILD_ENV, "linux-x86_64"),
+            (
+                crate::target::Target::Arm64(crate::target::Arm64Variant::V8),
+                "linux-aarch64",
+            ),
+        ] {
+            let script = openssl.rendered_script(t);
+            assert!(script.contains(tgt), "{script}");
+        }
         assert!(
-            find("openssl")
+            find("linux-headers")
                 .unwrap()
                 .rendered_script(target)
-                .contains("linux64-riscv64")
-        );
-        assert!(
-            find("openssl")
-                .unwrap()
-                .rendered_script(target)
-                .contains("linux-ppc64le")
-        );
-        assert!(
-            find("openssl")
-                .unwrap()
-                .rendered_script(target)
-                .contains("linux64-s390x")
+                .contains("ARCH=\"powerpc\"")
         );
         assert!(
             find("linux-headers")
                 .unwrap()
                 .rendered_script(target)
-                .contains("install_uapi powerpc")
-        );
-        assert!(
-            find("linux-headers")
-                .unwrap()
-                .rendered_script(target)
-                .contains("install_uapi s390")
+                .contains("ARCH=\"s390\"")
         );
         assert!(
             find("zlib-ng")
@@ -455,20 +455,32 @@ mod tests {
             find("zlib-ng")
                 .unwrap()
                 .rendered_script(target)
-                .contains(r#"CMAKE_SHARED_LINKER_FLAGS="$4""#)
+                .contains("-DCMAKE_SHARED_LINKER_FLAGS=")
         );
+        // CMAKE_CROSS は ctx.cross() で静的解決: ネイティブでは付かず、
+        // クロスでは triple 特化の値が直接入る。
         assert!(
-            find("zlib-ng")
+            !find("zlib-ng")
                 .unwrap()
                 .rendered_script(target)
                 .contains("CMAKE_SYSTEM_NAME=Linux")
         );
+        let cross = find("zlib-ng")
+            .unwrap()
+            .rendered_script(crate::target::Target::Arm64(
+                crate::target::Arm64Variant::V8,
+            ));
+        assert!(cross.contains("-DCMAKE_SYSTEM_NAME=Linux"), "{cross}");
         assert!(
-            find("zlib-ng")
-                .unwrap()
-                .rendered_script(target)
-                .contains("/dep/${TRIPLE}-glibc/usr/${TRIPLE}")
+            cross.contains("-DCMAKE_C_COMPILER_TARGET=aarch64-linux-gnu"),
+            "{cross}"
         );
+        assert!(
+            cross.contains("-DCMAKE_SYSTEM_PROCESSOR=aarch64"),
+            "{cross}"
+        );
+        // sysroot 検出は wrap_script 側に移動（Steps{sysroot:true}）。
+        assert!(!cross.contains("/dep/"), "{cross}");
     }
 
     #[test]
@@ -555,19 +567,7 @@ mod tests {
                 .rendered_script(crate::target::Target::BUILD_ENV)
                 .contains("enable-lto")
         );
-        for name in ["openssl", "zlib", "zlib-ng", "mold"] {
-            let script = find(name)
-                .unwrap()
-                .rendered_script(crate::target::Target::BUILD_ENV);
-            assert!(
-                script.contains("/dep/${TRIPLE}-glibc/usr/${TRIPLE}"),
-                "{name} が triple sysroot を見ていません"
-            );
-            assert!(
-                !script.contains("-B/dep/${TRIPLE}-glibc/usr/lib64"),
-                "{name} が glibc の lib64 を決め打ちしています"
-            );
-        }
+
         // Steps レシピの sysroot は wrap_script がマウント情報から静的に解決する
         let ctx = crate::package::recipe::BuildContext::of(None, crate::target::Target::BUILD_ENV);
         match find("bash").unwrap().recipe(&ctx) {
@@ -590,8 +590,10 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["aarch64-linux-gnu-glibc"]
         );
+        // glibc の ld.so リンクに mold は使えない
+        //（_PROCEDURE_LINKAGE_TABLE_ が UND のまま残り UND チェックに落ちる）。
         assert!(
-            find("x86_64-linux-gnu-glibc")
+            !find("x86_64-linux-gnu-glibc")
                 .unwrap()
                 .rendered_script(host)
                 .contains("-fuse-ld=mold")
@@ -611,14 +613,21 @@ mod tests {
         let gcc_script = find("x86_64-linux-gnu-gcc").unwrap().rendered_script(host);
         assert!(gcc_script.contains("CFLAGS_FOR_TARGET="), "{gcc_script}");
         assert!(gcc_script.contains("CFLAGS_FOR_BUILD="), "{gcc_script}");
-        assert!(gcc_script.contains("/tmp/canadian-host-cc"), "{gcc_script}");
-        assert!(gcc_script.contains("command -v perl"), "{gcc_script}");
-        assert!(gcc_script.contains(r#"|$SYSROOT|g"#), "{gcc_script}");
         assert!(
-            gcc_script.contains("rm -rf \"$BUILD/instrumented\""),
+            gcc_script.contains("rm -rf ${BUILD}/instrumented"),
             "{gcc_script}"
         );
         assert!(gcc_script.contains(r#"s|//lib/|/lib/|g"#), "{gcc_script}");
+        // Canadian wrap はネイティブでは emit されず、arm ターゲット向け
+        // x86_64 gcc のみ出る（perl 生成器 + sed 書き換え + wrap 検査）。
+        let gcc_arm = find("x86_64-linux-gnu-gcc").unwrap().rendered_script(arm);
+        assert!(gcc_arm.contains("/tmp/canadian-host-cc"), "{gcc_arm}");
+        assert!(gcc_arm.contains("/tmp/gen-wrap.pl"), "{gcc_arm}");
+        assert!(gcc_arm.contains(r#"|${SYSROOT}|g"#), "{gcc_arm}");
+        assert!(
+            !gcc_script.contains("/tmp/canadian-host-cc"),
+            "{gcc_script}"
+        );
         assert!(find("python").is_ok());
         assert!(find("cmake").is_ok());
         assert!(find("mold").is_ok());
@@ -651,10 +660,11 @@ mod tests {
         );
         assert!(find("aarch64-linux-gnu-gcc").unwrap().supports(host));
         assert!(find("aarch64-linux-gnu-gcc").unwrap().supports(arm));
+        // *_FOR_TARGET は Canadian（PACKAGE_HOST != HOST_TRIPLE）のみ emit。
         assert!(
             find("x86_64-linux-gnu-gcc")
                 .unwrap()
-                .rendered_script(host)
+                .rendered_script(arm)
                 .contains("CC_FOR_TARGET")
         );
         assert!(find("glib").unwrap().build_depends_on(host, "meson"));
@@ -718,7 +728,7 @@ mod tests {
     fn toolchain_definitions_cover_all_thirty() {
         let toolchain = PACKAGES
             .iter()
-            .filter(|package| matches!(package.role(), crate::package::Role::Toolchain { .. }))
+            .filter(|package| package.gnu_triple().is_some())
             .count();
         assert_eq!(toolchain, 30);
         assert_eq!(TOOLCHAIN.len(), 30);
@@ -728,28 +738,28 @@ mod tests {
     fn env_fragments_render_in_shell_recipes() {
         let host = crate::target::Target::BUILD_ENV;
         let arm = crate::target::Target::Arm64(crate::target::Arm64Variant::V8);
+        // perl も Steps 化済み。-idirafter/sysroot 付与は wrap_script 側。
         let perl = find("perl").unwrap().rendered_script(arm);
         assert!(perl.starts_with("set -euxo pipefail"), "{perl}");
         assert!(perl.contains("sanitize_flags"), "{perl}");
         assert!(perl.contains("gl_cv_func_malloc_0_nonnull"), "{perl}");
-        assert!(perl.contains("-idirafter"), "{perl}");
+        assert!(!perl.contains("-idirafter"), "{perl}");
+        // glib は Steps(Env::Lto) 化済み。autotools_configure プリリュードは
+        // 残るが、sysroot 付与は wrap_script 側へ移った。
         let glib = find("glib").unwrap().rendered_script(host);
         assert!(glib.starts_with("set -euxo pipefail"), "{glib}");
         assert!(glib.contains("autotools_configure"), "{glib}");
-        assert!(glib.contains("--sysroot=$SYSROOT"), "{glib}");
-        for name in ["openssl", "zlib", "zlib-ng", "mold"] {
+        assert!(!glib.contains("--sysroot=$SYSROOT"), "{glib}");
+
+        // toolchain は全ステージ Steps 化済み。sysroot 付与は wrap_script
+        // 側へ移り、スクリプトは set -euxo pipefail で始まる。
+        for name in ["x86_64-linux-gnu-gcc", "x86_64-linux-gnu-binutils"] {
             let script = find(name).unwrap().rendered_script(host);
-            assert!(
-                script.starts_with("set -euxo pipefail\nif [ -d /dep/"),
-                "{name}"
-            );
-            assert!(script.contains("--sysroot=$SYSROOT"), "{name}");
+            assert!(script.starts_with("set -euxo pipefail"), "{name}");
         }
-        // binutils / 最終 gcc は SYSROOT_ENV が先で、set -euxo はその後に来る
-        for name in ["x86_64-linux-gnu-binutils", "x86_64-linux-gnu-gcc"] {
-            let script = find(name).unwrap().rendered_script(host);
-            assert!(script.starts_with("if [ -d /dep/"), "{name}");
-            assert!(script.contains("\nset -euxo pipefail"), "{name}");
-        }
+        let binutils = find("x86_64-linux-gnu-binutils")
+            .unwrap()
+            .rendered_script(host);
+        assert!(binutils.contains("--enable-cet"), "{binutils}");
     }
 }

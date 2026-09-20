@@ -9,9 +9,11 @@ pub mod definition;
 pub(crate) mod env;
 pub(crate) mod fetch;
 pub mod recipe;
+pub mod runner;
+pub mod sandbox;
 pub(crate) mod validate;
 
-/// パッケージの役割。`Role::Toolchain` / `Role::LinuxHeaders` / `Role::BuildEnv`
+/// パッケージの役割。`Role::LinuxHeaders` / `Role::BuildEnv`
 /// は依存グラフ解決やコンテナ内環境構築で特別扱いされる。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Role {
@@ -19,24 +21,8 @@ pub enum Role {
     Catalog,
     /// 通常パッケージ（ホストツール・ライブラリ）。
     Package,
-    /// `{triple}-` プレフィックス付きツールチェーン。
-    Toolchain {
-        triple: &'static str,
-        stage: Stage,
-    },
     LinuxHeaders,
     BuildEnv,
-}
-
-/// ツールチェーンのビルドステージ。
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Stage {
-    Binutils,
-    GccStage1,
-    GlibcHeaders,
-    GccStage2,
-    Glibc,
-    Gcc,
 }
 
 pub trait Bootstrap: Package {
@@ -49,8 +35,10 @@ pub trait Bootstrap: Package {
     fn seed(&self) -> bool {
         false
     }
-    /// シード相で使う依存グラフ。`None` は `Package` の依存をそのまま使う。
-    /// toolchain が glibc との循環を避けるために使う。
+    /// 依存グラフの上書き。`Some` を返すと `Package` の依存宣言は
+    /// 全ターゲットでこのペアに置き換わる（`find_bootstrap` 登録
+    /// パッケージのみ有効）。`{triple}-binutils` が glibc との循環を
+    /// 避けて実行時依存を空にするために使う。
     fn seed_dependencies(&self, _target: Target) -> Option<(Vec<Dependency>, Vec<Dependency>)> {
         None
     }
@@ -103,20 +91,19 @@ pub trait Package: Sync {
     fn source(&self) -> Source;
     fn dependencies(&self, target: Target) -> Vec<Dependency>;
     fn build_dependencies(&self, target: Target) -> Vec<Dependency>;
-    /// 生シェルのビルド手順。`recipe()` の逃げ道として残す。
-    /// 新規・移行済みパッケージは `recipe()` を実装する。
-    fn build_script(&self) -> &'static str {
-        ""
-    }
     /// ビルド手順。`ctx` で target・クロス判定を静的に解決する。
-    fn recipe(&self, ctx: &recipe::BuildContext) -> recipe::Recipe {
-        let _ = ctx;
-        recipe::Recipe::Shell(self.build_script().into())
-    }
+    fn recipe(&self, ctx: &recipe::BuildContext) -> recipe::Recipe;
     /// `target` 向けにレンダリングしたシェルスクリプト。
     fn rendered_script(&self, target: Target) -> String {
         let ctx = recipe::BuildContext::of(self.gnu_triple(), target);
-        self.recipe(&ctx).render(&ctx)
+        let recipe = self.recipe(&ctx);
+        let errors = recipe.validate();
+        assert!(
+            errors.is_empty(),
+            "{} の recipe が不変条件違反: {errors:?}",
+            self.name()
+        );
+        recipe.render(&ctx)
     }
 
     fn flags(&self, target: Target) -> Flag;
@@ -143,12 +130,22 @@ pub trait Package: Sync {
     fn host_tools(&self, _target: Target) -> Vec<&'static str> {
         Vec::new()
     }
-    /// コード生成 triple。toolchain パッケージは自身の triple を返す。
+    /// コード生成 triple。`{triple}-` プレフィックスのツールチェーン
+    /// 構成パッケージは自身の triple を返す。
     fn gnu_triple(&self) -> Option<&'static str> {
-        match self.role() {
-            Role::Toolchain { triple, .. } => Some(triple),
-            _ => None,
-        }
+        None
+    }
+    /// `wrap_script` が cc ラッパ（`--sysroot`/`-idirafter` 注入）を
+    /// 付与するか。ラッパが参照する gcc/glibc 自身は `false`。
+    fn uses_cc_wrapper(&self) -> bool {
+        true
+    }
+    /// 成果物がターゲットスコープか（ターゲット向けファイルを含む
+    /// sysroot コンテンツ。glibc / glibc-headers）。依存として
+    /// マウントされるとき BUILD_ENV ではなく depender のターゲット
+    /// 成果物が選ばれる。
+    fn target_artifact(&self) -> bool {
+        false
     }
     fn source_dir(&self) -> PathBuf {
         workspace::source_dir(self.name())

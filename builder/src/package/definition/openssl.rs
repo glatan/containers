@@ -1,5 +1,7 @@
 use crate::flags::Flag;
-use crate::package::recipe::{BuildContext, Recipe, SYSROOT_ENV};
+use crate::package::recipe::{
+    Arg, BuildContext, Cond, Env, Pipe, Recipe, Step, Steps, Workdir, args, argv,
+};
 use crate::package::{Dependency, Package, Role, Source};
 use crate::target::Target;
 
@@ -53,54 +55,134 @@ impl Package for Openssl {
     }
 
     fn recipe(&self, ctx: &BuildContext) -> Recipe {
-        let mut script = String::from("set -euxo pipefail\n");
-        script.push_str(SYSROOT_ENV);
-        script.push_str(HEAD);
-        // PGO: ネイティブビルドでのみプロファイルを実行できる
+        // case "$ARCH" の TGT 解決を Rust 側へ移す。
+        let tgt = match ctx.target.architecture() {
+            "amd64" => "linux-x86_64",
+            "arm64" => "linux-aarch64",
+            "riscv64" => "linux64-riscv64",
+            "ppc64le" => "linux-ppc64le",
+            "s390x" => "linux64-s390x",
+            arch => panic!("未対応の architecture です: {arch}"),
+        };
+        // sysroot:true デフォルト（検出・CFLAGS 付与は wrap_script が注入）。
+        // openssl の Configure は $CC を直接使うため CC 側にも反映する。
+        let mut steps = Steps::new(Env::None)
+            .workdir(Workdir::Build)
+            .step(Step::If {
+                cond: Cond::EnvSet("SYSROOT"),
+                then: vec![Step::Export {
+                    name: "CC",
+                    value: Arg::quoted(Arg::Concat(vec![
+                        Arg::Var("CC"),
+                        Arg::lit(" --sysroot="),
+                        Arg::Var("SYSROOT"),
+                    ])),
+                }],
+                else_: vec![],
+            })
+            .step(Step::Exec {
+                env: vec![],
+                pipe: Pipe::cmd(vec![
+                    Arg::quoted(Arg::Concat(vec![
+                        Arg::Var("SOURCE"),
+                        Arg::lit("/Configure"),
+                    ])),
+                    Arg::lit(tgt),
+                    Arg::lit("--prefix=/usr"),
+                    Arg::lit("--openssldir=/etc/ssl"),
+                    Arg::lit("--libdir=lib64"),
+                ]),
+            });
         if ctx.cross() {
-            script.push_str("make -j\"$(nproc)\"\n");
+            steps = steps.step(Step::make(&[]));
         } else {
-            script.push_str(PGO);
+            // ネイティブのみ PGO。OPENSSL_MODULES が無いと EVP 系
+            // アルゴリズムが実行できずプロファイルが空になる。
+            steps = steps
+                .step(Step::Export {
+                    name: "PGODIR",
+                    value: Arg::lit("/tmp/pgo"),
+                })
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("rm"),
+                        Arg::lit("-rf"),
+                        Arg::quoted(Arg::Var("PGODIR")),
+                    ]),
+                })
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("mkdir"),
+                        Arg::lit("-p"),
+                        Arg::quoted(Arg::Var("PGODIR")),
+                    ]),
+                })
+                .step(Step::Make {
+                    jobs: true,
+                    args: args(&[
+                        "CFLAGS=\"$CFLAGS -fprofile-generate=$PGODIR -fprofile-update=atomic\"",
+                        "LDFLAGS=\"$LDFLAGS -fprofile-generate\"",
+                    ]),
+                })
+                .step(Step::Export {
+                    name: "LD_LIBRARY_PATH",
+                    value: Arg::quoted(Arg::Concat(vec![
+                        Arg::Var("PWD"),
+                        Arg::lit("${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"),
+                    ])),
+                })
+                .step(Step::Export {
+                    name: "OPENSSL_MODULES",
+                    value: Arg::quoted(Arg::Concat(vec![
+                        Arg::Var("PWD"),
+                        Arg::lit("/providers"),
+                    ])),
+                })
+                .step(Step::Export {
+                    name: "OPENSSL_CONF",
+                    value: Arg::lit("/dev/null"),
+                })
+                .step(Step::Or {
+                    lhs: [
+                        "./apps/openssl speed -seconds 1 rsa2048 ecdsap256 ed25519",
+                        "./apps/openssl speed -seconds 1 -evp aes-128-gcm -evp aes-256-gcm -evp chacha20-poly1305 -evp sha256 -evp sha512",
+                        "./apps/openssl speed -seconds 1 aes-128-cbc aes-256-cbc sha256 sha512",
+                    ]
+                    .iter()
+                    .map(|line| Step::Exec {
+                        env: vec![],
+                        pipe: Pipe::cmd(argv(
+                            &line.split(' ').collect::<Vec<_>>(),
+                        )),
+                    })
+                    .collect(),
+                    rhs: vec![Step::Exec {
+                        env: vec![],
+                        pipe: Pipe::cmd(argv(&["true"])),
+                    }],
+                })
+                .step(Step::Make {
+                    jobs: false,
+                    args: args(&["clean"]),
+                })
+                .step(Step::Make {
+                    jobs: true,
+                    args: args(&[
+                        "CFLAGS=\"$CFLAGS -fprofile-use=$PGODIR -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch\"",
+                        "LDFLAGS=\"$LDFLAGS -fprofile-use\"",
+                    ]),
+                });
         }
-        script.push_str("make install_sw DESTDIR=\"$OUT\"\n");
-        Recipe::Shell(script.into())
+        steps = steps.step(Step::Exec {
+            env: vec![],
+            pipe: Pipe::cmd(vec![
+                Arg::lit("make"),
+                Arg::lit("install_sw"),
+                Arg::Concat(vec![Arg::lit("DESTDIR="), Arg::quoted(Arg::Var("OUT"))]),
+            ]),
+        });
+        Recipe::Steps(steps)
     }
 }
-
-const HEAD: &str = r#"
-case "$ARCH" in
-  amd64) TGT=linux-x86_64 ;;
-  arm64) TGT=linux-aarch64 ;;
-  riscv64) TGT=linux64-riscv64 ;;
-  ppc64le) TGT=linux-ppc64le ;;
-  s390x) TGT=linux64-s390x ;;
-  *) echo "未対応の architecture です: $ARCH"; exit 1 ;;
-esac
-if [ -n "${SYSROOT:-}" ]; then
-  export CC="$CC --sysroot=$SYSROOT"
-fi
-mkdir -p "$BUILD"
-cd "$BUILD"
-configure() {
-  "$SOURCE"/Configure "$TGT" --prefix=/usr --openssldir=/etc/ssl --libdir=lib64
-}
-configure
-"#;
-
-const PGO: &str = r#"export PGODIR=/tmp/pgo
-rm -rf "$PGODIR"
-mkdir -p "$PGODIR"
-make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-generate=$PGODIR -fprofile-update=atomic" LDFLAGS="$LDFLAGS -fprofile-generate"
-export LD_LIBRARY_PATH="$PWD${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-# ビルドツリー内の provider（default.so 等）を読めるようにする。
-# これが無いと EVP 系アルゴリズムが一切実行できずプロファイルが空になる。
-export OPENSSL_MODULES="$PWD/providers"
-export OPENSSL_CONF=/dev/null
-(
-  ./apps/openssl speed -seconds 1 rsa2048 ecdsap256 ed25519
-  ./apps/openssl speed -seconds 1 -evp aes-128-gcm -evp aes-256-gcm -evp chacha20-poly1305 -evp sha256 -evp sha512
-  ./apps/openssl speed -seconds 1 aes-128-cbc aes-256-cbc sha256 sha512
-) || true
-make clean
-make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-use=$PGODIR -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch" LDFLAGS="$LDFLAGS -fprofile-use"
-"#;

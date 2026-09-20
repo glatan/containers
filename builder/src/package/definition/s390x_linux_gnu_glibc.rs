@@ -1,68 +1,60 @@
-use crate::flags::{Flag, Pgo};
+use crate::flags::Flag;
 use crate::package::recipe::{BuildContext, Recipe};
-use crate::package::{Bootstrap, Dependency, Package, Role, Source, Stage};
+use crate::package::{Bootstrap, Dependency, Package, Source};
 use crate::target::Target;
 
-use super::toolchain::Prefixed;
+use super::glibc;
 
+/// `s390x-linux-gnu` 向け glibc。
 pub struct S390xLinuxGnuGlibc;
 
-const DEF: Prefixed = Prefixed {
-    name: "s390x-linux-gnu-glibc",
-    triple: "s390x-linux-gnu",
-    stage: Stage::Glibc,
-};
+const TRIPLE: &str = "s390x-linux-gnu";
+const NAME: &str = "s390x-linux-gnu-glibc";
 
 impl Package for S390xLinuxGnuGlibc {
     fn name(&self) -> &'static str {
-        DEF.name()
+        NAME
     }
     fn version(&self) -> &'static str {
-        DEF.version()
+        crate::package::GLIBC_VERSION
     }
     fn license(&self) -> &'static str {
-        DEF.license()
-    }
-    fn build_only(&self) -> bool {
-        DEF.build_only()
-    }
-    fn role(&self) -> Role {
-        DEF.role()
+        glibc::LICENSE
     }
     fn source(&self) -> Source {
-        DEF.source()
+        glibc::SOURCE
     }
-    fn dependencies(&self, target: Target) -> Vec<Dependency> {
-        DEF.dependencies(target)
+    fn dependencies(&self, _target: Target) -> Vec<Dependency> {
+        vec![]
     }
-    fn build_dependencies(&self, target: Target) -> Vec<Dependency> {
-        DEF.build_dependencies(target)
-    }
-    fn flags(&self, target: Target) -> Flag {
-        DEF.flags(target)
-    }
-    fn pgo(&self) -> Pgo {
-        DEF.pgo()
-    }
-    fn supports(&self, target: Target) -> bool {
-        DEF.supports(target)
-    }
-    fn host_tools(&self, target: Target) -> Vec<&'static str> {
-        DEF.host_tools(target)
+    fn build_dependencies(&self, _target: Target) -> Vec<Dependency> {
+        glibc::build_deps(TRIPLE)
     }
     fn recipe(&self, ctx: &BuildContext) -> Recipe {
-        DEF.recipe(ctx)
+        Recipe::Steps(glibc::recipe(ctx))
+    }
+    fn flags(&self, _target: Target) -> Flag {
+        Flag::new(vec![], vec![])
+    }
+    fn supports(&self, target: Target) -> bool {
+        target.gnu_triple() == TRIPLE
+    }
+    fn target_artifact(&self) -> bool {
+        true
+    }
+    fn host_tools(&self, _target: Target) -> Vec<&'static str> {
+        glibc::HOST_TOOLS.to_vec()
+    }
+    fn uses_cc_wrapper(&self) -> bool {
+        false
+    }
+    fn gnu_triple(&self) -> Option<&'static str> {
+        Some(TRIPLE)
     }
 }
 
 impl Bootstrap for S390xLinuxGnuGlibc {
     fn pacman(&self) -> &'static [&'static str] {
-        DEF.pacman()
-    }
-    fn seed(&self) -> bool {
-        DEF.seed()
-    }
-    fn seed_dependencies(&self, target: Target) -> Option<(Vec<Dependency>, Vec<Dependency>)> {
-        DEF.seed_dependencies(target)
+        glibc::PACMAN
     }
 }

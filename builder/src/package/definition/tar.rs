@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Recipe};
+use crate::package::recipe::{BuildContext, Recipe, Step};
 use crate::package::{Bootstrap, Package, Source};
 
 pub struct Tar;
@@ -34,18 +34,44 @@ impl Package for Tar {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools_pgo(&["--prefix=/usr", "--disable-acl"], PGO_WORKLOAD)
+        Recipe::autotools_pgo(&["--prefix=/usr", "--disable-acl"], pgo_workload())
     }
 }
 
-const PGO_WORKLOAD: &str = r#"mkdir -p /tmp/tar-out
-./src/tar -cf /tmp/pgo.tar -C "$SOURCE" .
-./src/tar -tf /tmp/pgo.tar > /dev/null
-./src/tar -xf /tmp/pgo.tar -C /tmp/tar-out
-./src/tar -cf - -C "$SOURCE" . | ./src/tar -tf - > /dev/null"#;
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::{Arg, Pipe, argv};
+
+    let exec = |pipe: Pipe| Step::Exec { env: vec![], pipe };
+    vec![
+        exec(Pipe::cmd(argv(&["mkdir", "-p", "/tmp/tar-out"]))),
+        exec(Pipe::cmd(argv(&[
+            "./src/tar",
+            "-cf",
+            "/tmp/pgo.tar",
+            "-C",
+            "\"$SOURCE\"",
+            ".",
+        ]))),
+        exec(Pipe::cmd(argv(&["./src/tar", "-tf", "/tmp/pgo.tar"])).stdout(Arg::lit("/dev/null"))),
+        exec(Pipe::cmd(argv(&[
+            "./src/tar",
+            "-xf",
+            "/tmp/pgo.tar",
+            "-C",
+            "/tmp/tar-out",
+        ]))),
+        exec(
+            Pipe::new(vec![
+                argv(&["./src/tar", "-cf", "-", "-C", "\"$SOURCE\"", "."]),
+                argv(&["./src/tar", "-tf", "-"]),
+            ])
+            .stdout(Arg::lit("/dev/null")),
+        ),
+    ]
+}
 
 impl Bootstrap for Tar {}

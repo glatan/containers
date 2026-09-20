@@ -1,0 +1,388 @@
+{
+  "Steps": {
+    "env": "None",
+    "pgo": null,
+    "std": "Gnu17",
+    "steps": [
+      {
+        "If": {
+          "cond": {
+            "EnvSet": "SYSROOT"
+          },
+          "else_": [],
+          "then": [
+            {
+              "Export": {
+                "name": "CC",
+                "value": {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Var": "CC"
+                      },
+                      {
+                        "Lit": " --sysroot="
+                      },
+                      {
+                        "Var": "SYSROOT"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "Set": {
+          "name": "PGO",
+          "value": {
+            "Lit": "/tmp/zlib-pgo"
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "rm"
+                },
+                {
+                  "Lit": "-rf"
+                },
+                {
+                  "Lit": "\"$PGO\""
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "mkdir"
+                },
+                {
+                  "Lit": "-p"
+                },
+                {
+                  "Lit": "\"$PGO\""
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "./configure"
+                },
+                {
+                  "Lit": "--prefix=/usr"
+                },
+                {
+                  "Lit": "--libdir=/usr/lib64"
+                },
+                {
+                  "Lit": "--shared"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Make": {
+          "args": [
+            "CFLAGS=\"$CFLAGS -fprofile-generate=$PGO -fprofile-update=atomic\"",
+            "LDFLAGS=\"$LDFLAGS -fprofile-generate\""
+          ],
+          "jobs": true
+        }
+      },
+      {
+        "Export": {
+          "name": "LD_LIBRARY_PATH",
+          "value": {
+            "Quoted": {
+              "Concat": [
+                {
+                  "Var": "PWD"
+                },
+                {
+                  "Lit": "${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "Or": {
+          "lhs": [
+            {
+              "ForEach": {
+                "body": [
+                  {
+                    "Exec": {
+                      "env": [],
+                      "pipe": {
+                        "stages": [
+                          [
+                            {
+                              "Lit": "cat"
+                            },
+                            {
+                              "Lit": "./*.c"
+                            },
+                            {
+                              "Lit": "./*.h"
+                            }
+                          ]
+                        ],
+                        "stderr": null,
+                        "stdin": null,
+                        "stdout": null
+                      }
+                    }
+                  }
+                ],
+                "items": [
+                  {
+                    "Lit": "1"
+                  },
+                  {
+                    "Lit": "2"
+                  },
+                  {
+                    "Lit": "3"
+                  },
+                  {
+                    "Lit": "4"
+                  },
+                  {
+                    "Lit": "5"
+                  },
+                  {
+                    "Lit": "6"
+                  },
+                  {
+                    "Lit": "7"
+                  },
+                  {
+                    "Lit": "8"
+                  },
+                  {
+                    "Lit": "9"
+                  },
+                  {
+                    "Lit": "10"
+                  },
+                  {
+                    "Lit": "11"
+                  },
+                  {
+                    "Lit": "12"
+                  },
+                  {
+                    "Lit": "13"
+                  },
+                  {
+                    "Lit": "14"
+                  },
+                  {
+                    "Lit": "15"
+                  },
+                  {
+                    "Lit": "16"
+                  }
+                ],
+                "stdout": {
+                  "append": false,
+                  "target": {
+                    "Lit": "/tmp/zlib-pgo-input"
+                  }
+                },
+                "var": "_i"
+              }
+            },
+            {
+              "ForEach": {
+                "body": [
+                  {
+                    "Exec": {
+                      "env": [],
+                      "pipe": {
+                        "stages": [
+                          [
+                            {
+                              "Lit": "./minigzip"
+                            },
+                            {
+                              "Lit": "-c"
+                            },
+                            {
+                              "Lit": "\"-$_level\""
+                            }
+                          ],
+                          [
+                            {
+                              "Lit": "./minigzip"
+                            },
+                            {
+                              "Lit": "-d"
+                            },
+                            {
+                              "Lit": "-c"
+                            }
+                          ]
+                        ],
+                        "stderr": null,
+                        "stdin": {
+                          "Lit": "/tmp/zlib-pgo-input"
+                        },
+                        "stdout": {
+                          "append": false,
+                          "target": {
+                            "Lit": "/dev/null"
+                          }
+                        }
+                      }
+                    }
+                  }
+                ],
+                "items": [
+                  {
+                    "Lit": "1"
+                  },
+                  {
+                    "Lit": "6"
+                  },
+                  {
+                    "Lit": "9"
+                  }
+                ],
+                "stdout": null,
+                "var": "_level"
+              }
+            },
+            {
+              "Exec": {
+                "env": [],
+                "pipe": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "./example"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": {
+                    "append": false,
+                    "target": {
+                      "Lit": "/dev/null"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "rhs": [
+            {
+              "Exec": {
+                "env": [],
+                "pipe": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "true"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "Make": {
+          "args": [
+            "distclean"
+          ],
+          "jobs": false
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "./configure"
+                },
+                {
+                  "Lit": "--prefix=/usr"
+                },
+                {
+                  "Lit": "--libdir=/usr/lib64"
+                },
+                {
+                  "Lit": "--shared"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Make": {
+          "args": [
+            "CFLAGS=\"$CFLAGS -fprofile-use=$PGO -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch\"",
+            "LDFLAGS=\"$LDFLAGS -fprofile-use\""
+          ],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "InSource"
+  }
+}

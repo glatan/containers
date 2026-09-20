@@ -86,7 +86,7 @@ LTO や PGO の適用方針はパッケージの種別ごとに異なります�
 自前で合成したビルド環境イメージ上では `--network=none` を指定して完全に隔離された状態でビルドします。一方、シード環境では `Bootstrap::pacman()` によるパッケージ導入や、カタログのクロス gcc 導入のためにネットワークアクセスを許可します。
 
 新規パッケージを定義する場合は、`builder/src/package/definition/{name}.rs` に `Package` トレイトを実装し、`builder/src/package/definition/mod.rs` の一覧へ登録します。`BOOTSTRAP` に載せるのは x86_64 ツールチェーンと POSIX PATH、cmake、mold です。他の Host tools は配列に無く、依存グラフ経由で入ります。プレフィックス付きツールチェーンは配列の外でも Bootstrap グラフを使います。`flags(target)` メソッドの実装は必須であり、フラグを要求しない場合は空の `Flag` を返します。
-文書としては、[`docs/package/definition/{name}.md`](../package/definition/) にビルド設定を記述します。1 パッケージ 1 ファイルです。索引は [definition/README.md](../package/definition/README.md) です。Host tools の共通前処理については [host-tools.md](../package/host-tools.md)、プレフィックス付きツールチェーンのステージ順については [toolchain.md](../package/toolchain.md) を参照してください。モジュール名の `linux_headers.rs` はパッケージ名 `linux-headers` に対応します。プレフィックス付きパッケージも 1 パッケージ 1 ファイルで、`x86_64_linux_gnu_binutils.rs` が `x86_64-linux-gnu-binutils` に対応します。ステージ共通の実装（`Prefixed`・スクリプト・依存表）は `toolchain.rs` に置き、各リーフは `impl Package` / `impl Bootstrap` で共有実装へ委譲します。
+文書としては、[`docs/package/definition/{name}.md`](../package/definition/) にビルド設定を記述します。1 パッケージ 1 ファイルです。索引は [definition/README.md](../package/definition/README.md) です。Host tools の共通前処理については [host-tools.md](../package/host-tools.md)、プレフィックス付きツールチェーンのステージ順については [toolchain.md](../package/toolchain.md) を参照してください。モジュール名の `linux_headers.rs` はパッケージ名 `linux-headers` に対応します。プレフィックス付きパッケージも 1 パッケージ 1 ファイルで、`x86_64_linux_gnu_binutils.rs` が `x86_64-linux-gnu-binutils` に対応します。ステージ共通の実装（レシピ・依存表・バージョン）は `definition/` 直下の `binutils.rs` / `gcc.rs` / `gcc_stage1.rs` / `gcc_stage2.rs` / `glibc.rs` / `glibc_headers.rs`（共有部品は `stages.rs`）に置き、各タプルのリーフは `impl Package` / `impl Bootstrap` で共有実装へ委譲します。
 
 ## クロスビルドの構成
 

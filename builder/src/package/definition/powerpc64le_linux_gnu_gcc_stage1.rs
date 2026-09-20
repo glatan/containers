@@ -1,68 +1,58 @@
-use crate::flags::{Flag, Pgo};
+use crate::flags::Flag;
 use crate::package::recipe::{BuildContext, Recipe};
-use crate::package::{Bootstrap, Dependency, Package, Role, Source, Stage};
+use crate::package::{Bootstrap, Dependency, Package, Source};
 use crate::target::Target;
 
-use super::toolchain::Prefixed;
+use super::{gcc, gcc_stage1};
 
+/// `powerpc64le-linux-gnu` 向け GCC stage1（最小構成 C コンパイラ）。
 pub struct Powerpc64leLinuxGnuGccStage1;
 
-const DEF: Prefixed = Prefixed {
-    name: "powerpc64le-linux-gnu-gcc-stage1",
-    triple: "powerpc64le-linux-gnu",
-    stage: Stage::GccStage1,
-};
+const TRIPLE: &str = "powerpc64le-linux-gnu";
+const NAME: &str = "powerpc64le-linux-gnu-gcc-stage1";
 
 impl Package for Powerpc64leLinuxGnuGccStage1 {
     fn name(&self) -> &'static str {
-        DEF.name()
+        NAME
     }
     fn version(&self) -> &'static str {
-        DEF.version()
+        crate::package::GCC_VERSION
     }
     fn license(&self) -> &'static str {
-        DEF.license()
-    }
-    fn build_only(&self) -> bool {
-        DEF.build_only()
-    }
-    fn role(&self) -> Role {
-        DEF.role()
+        gcc::LICENSE
     }
     fn source(&self) -> Source {
-        DEF.source()
+        gcc::SOURCE
     }
-    fn dependencies(&self, target: Target) -> Vec<Dependency> {
-        DEF.dependencies(target)
+    fn dependencies(&self, _target: Target) -> Vec<Dependency> {
+        vec![]
     }
-    fn build_dependencies(&self, target: Target) -> Vec<Dependency> {
-        DEF.build_dependencies(target)
-    }
-    fn flags(&self, target: Target) -> Flag {
-        DEF.flags(target)
-    }
-    fn pgo(&self) -> Pgo {
-        DEF.pgo()
-    }
-    fn supports(&self, target: Target) -> bool {
-        DEF.supports(target)
-    }
-    fn host_tools(&self, target: Target) -> Vec<&'static str> {
-        DEF.host_tools(target)
+    fn build_dependencies(&self, _target: Target) -> Vec<Dependency> {
+        gcc_stage1::build_deps(TRIPLE)
     }
     fn recipe(&self, ctx: &BuildContext) -> Recipe {
-        DEF.recipe(ctx)
+        Recipe::Steps(gcc_stage1::recipe(ctx))
+    }
+    fn flags(&self, _target: Target) -> Flag {
+        Flag::new(vec![], vec![])
+    }
+    fn build_only(&self) -> bool {
+        true
+    }
+    fn supports(&self, target: Target) -> bool {
+        target == Target::BUILD_ENV
+    }
+    fn gnu_triple(&self) -> Option<&'static str> {
+        Some(TRIPLE)
     }
 }
 
 impl Bootstrap for Powerpc64leLinuxGnuGccStage1 {
     fn pacman(&self) -> &'static [&'static str] {
-        DEF.pacman()
-    }
-    fn seed(&self) -> bool {
-        DEF.seed()
-    }
-    fn seed_dependencies(&self, target: Target) -> Option<(Vec<Dependency>, Vec<Dependency>)> {
-        DEF.seed_dependencies(target)
+        if self.seed() {
+            gcc::PACMAN_STAGE_SEED
+        } else {
+            gcc::PACMAN_STAGE
+        }
     }
 }

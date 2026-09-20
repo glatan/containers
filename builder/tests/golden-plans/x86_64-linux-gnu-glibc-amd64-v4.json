@@ -1,0 +1,1155 @@
+{
+  "Steps": {
+    "env": "None",
+    "pgo": null,
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Export": {
+          "name": "PATH",
+          "value": {
+            "Quoted": {
+              "Concat": [
+                {
+                  "Lit": "/dep/"
+                },
+                {
+                  "Var": "TRIPLE"
+                },
+                {
+                  "Lit": "-binutils/usr/bin:"
+                },
+                {
+                  "Var": "PATH"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "If": {
+          "cond": {
+            "DirExists": {
+              "Lit": "/dep/bison/usr/share/bison"
+            }
+          },
+          "else_": [],
+          "then": [
+            {
+              "Export": {
+                "name": "BISON_PKGDATADIR",
+                "value": {
+                  "Lit": "/dep/bison/usr/share/bison"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "Set": {
+          "name": "STAGE2",
+          "value": {
+            "Concat": [
+              {
+                "Lit": "/dep/"
+              },
+              {
+                "Var": "TRIPLE"
+              },
+              {
+                "Lit": "-gcc-stage2/usr/lib/cross/"
+              },
+              {
+                "Var": "TRIPLE"
+              },
+              {
+                "Lit": "/stage2"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "Set": {
+          "name": "SYSROOT",
+          "value": {
+            "Concat": [
+              {
+                "Var": "OUT"
+              },
+              {
+                "Lit": "/usr/"
+              },
+              {
+                "Var": "TRIPLE"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "mkdir"
+                },
+                {
+                  "Lit": "-p"
+                },
+                {
+                  "Concat": [
+                    {
+                      "Var": "SYSROOT"
+                    },
+                    {
+                      "Lit": "/include"
+                    }
+                  ]
+                },
+                {
+                  "Var": "BUILD"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Set": {
+          "name": "HDR",
+          "value": {
+            "Concat": [
+              {
+                "Lit": "/dep/linux-headers/usr/"
+              },
+              {
+                "Var": "TRIPLE"
+              },
+              {
+                "Lit": "/include"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "Or": {
+          "lhs": [
+            {
+              "Exec": {
+                "env": [],
+                "pipe": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "["
+                      },
+                      {
+                        "Lit": "-d"
+                      },
+                      {
+                        "Var": "HDR"
+                      },
+                      {
+                        "Lit": "]"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            }
+          ],
+          "rhs": [
+            {
+              "Set": {
+                "name": "HDR",
+                "value": {
+                  "Lit": "/dep/linux-headers/usr/include"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "cp"
+                },
+                {
+                  "Lit": "-a"
+                },
+                {
+                  "Concat": [
+                    {
+                      "Var": "HDR"
+                    },
+                    {
+                      "Lit": "/."
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Var": "SYSROOT"
+                    },
+                    {
+                      "Lit": "/include/"
+                    }
+                  ]
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Cd": {
+          "Var": "BUILD"
+        }
+      },
+      {
+        "Unset": "CFLAGS"
+      },
+      {
+        "Unset": "CXXFLAGS"
+      },
+      {
+        "Unset": "LDFLAGS"
+      },
+      {
+        "Export": {
+          "name": "CFLAGS",
+          "value": {
+            "Quoted": {
+              "Concat": [
+                {
+                  "Lit": "-O2 -pipe -march="
+                },
+                {
+                  "Var": "MARCH"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "Export": {
+          "name": "CXXFLAGS",
+          "value": {
+            "Quoted": {
+              "Lit": "${CFLAGS:-}"
+            }
+          }
+        }
+      },
+      {
+        "Unset": "LD"
+      },
+      {
+        "Export": {
+          "name": "CPP",
+          "value": {
+            "Quoted": {
+              "Concat": [
+                {
+                  "Concat": [
+                    {
+                      "Var": "STAGE2"
+                    },
+                    {
+                      "Lit": "/bin/"
+                    },
+                    {
+                      "Var": "TRIPLE"
+                    },
+                    {
+                      "Lit": "-gcc"
+                    }
+                  ]
+                },
+                {
+                  "Lit": " -E"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [
+            [
+              "BUILD_CC",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Var": "HOST_TRIPLE"
+                    },
+                    {
+                      "Lit": "-gcc"
+                    }
+                  ]
+                }
+              }
+            ],
+            [
+              "CC",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Var": "STAGE2"
+                    },
+                    {
+                      "Lit": "/bin/"
+                    },
+                    {
+                      "Var": "TRIPLE"
+                    },
+                    {
+                      "Lit": "-gcc"
+                    }
+                  ]
+                }
+              }
+            ],
+            [
+              "AR",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Var": "TRIPLE"
+                    },
+                    {
+                      "Lit": "-"
+                    },
+                    {
+                      "Lit": "ar"
+                    }
+                  ]
+                }
+              }
+            ],
+            [
+              "RANLIB",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Var": "TRIPLE"
+                    },
+                    {
+                      "Lit": "-"
+                    },
+                    {
+                      "Lit": "ranlib"
+                    }
+                  ]
+                }
+              }
+            ],
+            [
+              "NM",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Var": "TRIPLE"
+                    },
+                    {
+                      "Lit": "-"
+                    },
+                    {
+                      "Lit": "nm"
+                    }
+                  ]
+                }
+              }
+            ],
+            [
+              "AS",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Var": "TRIPLE"
+                    },
+                    {
+                      "Lit": "-"
+                    },
+                    {
+                      "Lit": "as"
+                    }
+                  ]
+                }
+              }
+            ],
+            [
+              "LD",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Var": "TRIPLE"
+                    },
+                    {
+                      "Lit": "-"
+                    },
+                    {
+                      "Lit": "ld"
+                    }
+                  ]
+                }
+              }
+            ],
+            [
+              "OBJCOPY",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Var": "TRIPLE"
+                    },
+                    {
+                      "Lit": "-"
+                    },
+                    {
+                      "Lit": "objcopy"
+                    }
+                  ]
+                }
+              }
+            ],
+            [
+              "OBJDUMP",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Var": "TRIPLE"
+                    },
+                    {
+                      "Lit": "-"
+                    },
+                    {
+                      "Lit": "objdump"
+                    }
+                  ]
+                }
+              }
+            ],
+            [
+              "READELF",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Var": "TRIPLE"
+                    },
+                    {
+                      "Lit": "-"
+                    },
+                    {
+                      "Lit": "readelf"
+                    }
+                  ]
+                }
+              }
+            ]
+          ],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Concat": [
+                    {
+                      "Var": "SOURCE"
+                    },
+                    {
+                      "Lit": "/configure"
+                    }
+                  ]
+                },
+                {
+                  "Lit": "--prefix=/"
+                },
+                {
+                  "Opt": [
+                    "host",
+                    {
+                      "Var": "TRIPLE"
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "build",
+                    {
+                      "Var": "HOST_TRIPLE"
+                    }
+                  ]
+                },
+                {
+                  "Lit": "--libdir=/lib"
+                },
+                {
+                  "Opt": [
+                    "with-headers",
+                    {
+                      "Concat": [
+                        {
+                          "Var": "SYSROOT"
+                        },
+                        {
+                          "Lit": "/include"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Lit": "--disable-werror"
+                },
+                {
+                  "Lit": "--disable-nscd"
+                },
+                {
+                  "Lit": "--disable-profile"
+                },
+                {
+                  "Lit": "--enable-stack-protector=strong"
+                },
+                {
+                  "Lit": "--enable-bind-now"
+                },
+                {
+                  "Lit": "--enable-fortify-source"
+                },
+                {
+                  "Lit": "--enable-cet"
+                },
+                {
+                  "Lit": "libc_cv_forced_unwind=yes"
+                },
+                {
+                  "Lit": "libc_cv_c_cleanup=yes"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "echo"
+                },
+                {
+                  "Quoted": {
+                    "Lit": "build-programs=no"
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": {
+              "append": true,
+              "target": {
+                "Lit": "configparms"
+              }
+            }
+          }
+        }
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "Make": {
+          "args": [
+            "DESTDIR=\"$SYSROOT\"",
+            "install"
+          ],
+          "jobs": false
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "rm"
+                },
+                {
+                  "Lit": "-rf"
+                },
+                {
+                  "Concat": [
+                    {
+                      "Var": "SYSROOT"
+                    },
+                    {
+                      "Lit": "/share"
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Var": "SYSROOT"
+                    },
+                    {
+                      "Lit": "/etc"
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Var": "SYSROOT"
+                    },
+                    {
+                      "Lit": "/var"
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Var": "SYSROOT"
+                    },
+                    {
+                      "Lit": "/bin"
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Var": "SYSROOT"
+                    },
+                    {
+                      "Lit": "/sbin"
+                    }
+                  ]
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "ForEach": {
+          "body": [
+            {
+              "If": {
+                "cond": {
+                  "Cmd": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "grep"
+                        },
+                        {
+                          "Lit": "-q"
+                        },
+                        {
+                          "Quoted": {
+                            "Lit": "GNU ld script"
+                          }
+                        },
+                        {
+                          "Var": "_so"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                },
+                "else_": [],
+                "then": [
+                  {
+                    "Exec": {
+                      "env": [],
+                      "pipe": {
+                        "stages": [
+                          [
+                            {
+                              "Lit": "sed"
+                            },
+                            {
+                              "Lit": "-i"
+                            },
+                            {
+                              "Quoted": {
+                                "Lit": "s|//lib/|/lib/|g; s|//lib64/|/lib64/|g"
+                              }
+                            },
+                            {
+                              "Var": "_so"
+                            }
+                          ]
+                        ],
+                        "stderr": null,
+                        "stdin": null,
+                        "stdout": null
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "items": [
+            {
+              "Subst": {
+                "stages": [
+                  [
+                    {
+                      "Lit": "find"
+                    },
+                    {
+                      "Var": "SYSROOT"
+                    },
+                    {
+                      "Lit": "-type"
+                    },
+                    {
+                      "Lit": "f"
+                    },
+                    {
+                      "Lit": "-name"
+                    },
+                    {
+                      "Quoted": {
+                        "Lit": "*.so"
+                      }
+                    }
+                  ]
+                ],
+                "stderr": null,
+                "stdin": null,
+                "stdout": null
+              }
+            }
+          ],
+          "stdout": null,
+          "var": "_so"
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "ln"
+                },
+                {
+                  "Lit": "-sfn"
+                },
+                {
+                  "Lit": "lib"
+                },
+                {
+                  "Concat": [
+                    {
+                      "Var": "SYSROOT"
+                    },
+                    {
+                      "Lit": "/lib64"
+                    }
+                  ]
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "mkdir"
+                },
+                {
+                  "Lit": "-p"
+                },
+                {
+                  "Concat": [
+                    {
+                      "Var": "OUT"
+                    },
+                    {
+                      "Lit": "/lib64"
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Var": "OUT"
+                    },
+                    {
+                      "Lit": "/usr/lib64"
+                    }
+                  ]
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Or": {
+          "lhs": [
+            {
+              "Exec": {
+                "env": [],
+                "pipe": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "ln"
+                      },
+                      {
+                        "Lit": "-sfn"
+                      },
+                      {
+                        "Lit": "/usr/x86_64-linux-gnu/lib/ld-linux-x86-64.so.2"
+                      },
+                      {
+                        "Concat": [
+                          {
+                            "Var": "OUT"
+                          },
+                          {
+                            "Lit": "/lib64/ld-linux-x86-64.so.2"
+                          }
+                        ]
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            }
+          ],
+          "rhs": [
+            {
+              "Exec": {
+                "env": [],
+                "pipe": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "true"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "If": {
+          "cond": {
+            "FileExists": {
+              "Concat": [
+                {
+                  "Var": "SYSROOT"
+                },
+                {
+                  "Lit": "/lib/ld-linux-x86-64.so.2"
+                }
+              ]
+            }
+          },
+          "else_": [],
+          "then": [
+            {
+              "Exec": {
+                "env": [],
+                "pipe": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "ln"
+                      },
+                      {
+                        "Lit": "-sfn"
+                      },
+                      {
+                        "Lit": "../usr/x86_64-linux-gnu/lib/ld-linux-x86-64.so.2"
+                      },
+                      {
+                        "Concat": [
+                          {
+                            "Var": "OUT"
+                          },
+                          {
+                            "Lit": "/lib64/ld-linux-x86-64.so.2"
+                          }
+                        ]
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "ForEach": {
+          "body": [
+            {
+              "If": {
+                "cond": {
+                  "FileExists": {
+                    "Var": "so"
+                  }
+                },
+                "else_": [],
+                "then": [
+                  {
+                    "Exec": {
+                      "env": [],
+                      "pipe": {
+                        "stages": [
+                          [
+                            {
+                              "Lit": "ln"
+                            },
+                            {
+                              "Lit": "-sfn"
+                            },
+                            {
+                              "Quoted": {
+                                "Subst": {
+                                  "stages": [
+                                    [
+                                      {
+                                        "Lit": "realpath"
+                                      },
+                                      {
+                                        "Concat": [
+                                          {
+                                            "Lit": "--relative-to="
+                                          },
+                                          {
+                                            "Concat": [
+                                              {
+                                                "Var": "OUT"
+                                              },
+                                              {
+                                                "Lit": "/usr/lib64"
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "Var": "so"
+                                      }
+                                    ]
+                                  ],
+                                  "stderr": null,
+                                  "stdin": null,
+                                  "stdout": null
+                                }
+                              }
+                            },
+                            {
+                              "Concat": [
+                                {
+                                  "Concat": [
+                                    {
+                                      "Var": "OUT"
+                                    },
+                                    {
+                                      "Lit": "/usr/lib64/"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "Subst": {
+                                    "stages": [
+                                      [
+                                        {
+                                          "Lit": "basename"
+                                        },
+                                        {
+                                          "Var": "so"
+                                        }
+                                      ]
+                                    ],
+                                    "stderr": null,
+                                    "stdin": null,
+                                    "stdout": null
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        ],
+                        "stderr": null,
+                        "stdin": null,
+                        "stdout": null
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "items": [
+            {
+              "Concat": [
+                {
+                  "Var": "SYSROOT"
+                },
+                {
+                  "Lit": "/lib/"
+                },
+                {
+                  "Lit": "libc.so.6"
+                }
+              ]
+            },
+            {
+              "Concat": [
+                {
+                  "Var": "SYSROOT"
+                },
+                {
+                  "Lit": "/lib/"
+                },
+                {
+                  "Lit": "libm.so.6"
+                }
+              ]
+            },
+            {
+              "Concat": [
+                {
+                  "Var": "SYSROOT"
+                },
+                {
+                  "Lit": "/lib/"
+                },
+                {
+                  "Lit": "libdl.so.2"
+                }
+              ]
+            },
+            {
+              "Concat": [
+                {
+                  "Var": "SYSROOT"
+                },
+                {
+                  "Lit": "/lib/"
+                },
+                {
+                  "Lit": "libpthread.so.0"
+                }
+              ]
+            },
+            {
+              "Concat": [
+                {
+                  "Var": "SYSROOT"
+                },
+                {
+                  "Lit": "/lib/"
+                },
+                {
+                  "Lit": "librt.so.1"
+                }
+              ]
+            },
+            {
+              "Concat": [
+                {
+                  "Var": "SYSROOT"
+                },
+                {
+                  "Lit": "/lib/"
+                },
+                {
+                  "Lit": "libresolv.so.2"
+                }
+              ]
+            }
+          ],
+          "stdout": null,
+          "var": "so"
+        }
+      }
+    ],
+    "sysroot": false,
+    "workdir": "None"
+  }
+}

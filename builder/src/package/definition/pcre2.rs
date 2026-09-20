@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Recipe};
+use crate::package::recipe::{BuildContext, Recipe, Step};
 use crate::package::{Package, Source};
 
 pub struct Pcre2;
@@ -34,15 +34,44 @@ impl Package for Pcre2 {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
+        Recipe::autotools_pgo(&["--prefix=/usr"], pgo_workload())
     }
 }
 
-const PGO_WORKLOAD: &str = r#"for _input in "$SOURCE"/testdata/testinput1 "$SOURCE"/testdata/testinput2 "$SOURCE"/testdata/testinput4 "$SOURCE"/testdata/testinput5; do
-  [ -f "$_input" ] && ./pcre2test -q "$_input" /tmp/pcre2-out
-done
-./pcre2test -q "$SOURCE/testdata/testinput1" /dev/null"#;
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::{Arg, Cond, Pipe, argv};
+
+    let exec = |pipe: Pipe| Step::Exec { env: vec![], pipe };
+    vec![
+        Step::ForEach {
+            var: "_input",
+            items: argv(&[
+                "\"$SOURCE\"/testdata/testinput1",
+                "\"$SOURCE\"/testdata/testinput2",
+                "\"$SOURCE\"/testdata/testinput4",
+                "\"$SOURCE\"/testdata/testinput5",
+            ]),
+            body: vec![Step::If {
+                cond: Cond::FileExists(Arg::lit("\"$_input\"")),
+                then: vec![exec(Pipe::cmd(argv(&[
+                    "./pcre2test",
+                    "-q",
+                    "\"$_input\"",
+                    "/tmp/pcre2-out",
+                ])))],
+                else_: vec![],
+            }],
+            stdout: None,
+        },
+        exec(Pipe::cmd(argv(&[
+            "./pcre2test",
+            "-q",
+            "\"$SOURCE/testdata/testinput1\"",
+            "/dev/null",
+        ]))),
+    ]
+}

@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Recipe};
+use crate::package::recipe::{BuildContext, Recipe, Step};
 use crate::package::{Bootstrap, Package, Source};
 
 pub struct Patch;
@@ -34,20 +34,64 @@ impl Package for Patch {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
+        Recipe::autotools_pgo(&["--prefix=/usr"], pgo_workload())
     }
 }
 
-const PGO_WORKLOAD: &str = r#"mkdir -p /tmp/patch-work
-cp -a "$SOURCE"/src/*.c /tmp/patch-work/ 2>/dev/null || cp -a "$SOURCE"/*.c /tmp/patch-work/
-for _f in /tmp/patch-work/*.c; do
-  sed 's/^int /INT /' "$_f" > "$_f.new"
-  diff -u "$_f" "$_f.new" | ./src/patch --dry-run -s "$_f" > /dev/null
-  ./src/patch -s -o "$_f.out" "$_f" < <(diff -u "$_f" "$_f.new") > /dev/null
-done"#;
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::{Arg, Pipe, argv};
+
+    let exec = |pipe: Pipe| Step::Exec { env: vec![], pipe };
+    vec![
+        exec(Pipe::cmd(argv(&["mkdir", "-p", "/tmp/patch-work"]))),
+        Step::Or {
+            lhs: vec![exec(
+                Pipe::cmd(argv(&[
+                    "cp",
+                    "-a",
+                    "\"$SOURCE\"/src/*.c",
+                    "/tmp/patch-work/",
+                ]))
+                .stderr(Arg::lit("/dev/null")),
+            )],
+            rhs: vec![exec(Pipe::cmd(argv(&[
+                "cp",
+                "-a",
+                "\"$SOURCE\"/*.c",
+                "/tmp/patch-work/",
+            ])))],
+        },
+        Step::ForEach {
+            var: "_f",
+            items: argv(&["/tmp/patch-work/*.c"]),
+            body: vec![
+                exec(
+                    Pipe::cmd(argv(&["sed", "'s/^int /INT /'", "\"$_f\""]))
+                        .stdout(Arg::Concat(vec![Arg::Var("_f"), Arg::lit(".new")])),
+                ),
+                exec(
+                    Pipe::new(vec![
+                        argv(&["diff", "-u", "\"$_f\"", "\"$_f.new\""]),
+                        argv(&["./src/patch", "--dry-run", "-s", "\"$_f\""]),
+                    ])
+                    .stdout(Arg::lit("/dev/null")),
+                ),
+                // `< <(diff …)` のプロセス置換はパイプラインと同じ意味。
+                exec(
+                    Pipe::new(vec![
+                        argv(&["diff", "-u", "\"$_f\"", "\"$_f.new\""]),
+                        argv(&["./src/patch", "-s", "-o", "\"$_f.out\"", "\"$_f\""]),
+                    ])
+                    .stdout(Arg::lit("/dev/null")),
+                ),
+            ],
+            stdout: None,
+        },
+    ]
+}
 
 impl Bootstrap for Patch {}

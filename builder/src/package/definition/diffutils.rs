@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Recipe};
+use crate::package::recipe::{BuildContext, Recipe, Step};
 use crate::package::{Bootstrap, Package, Source};
 
 pub struct Diffutils;
@@ -34,21 +34,69 @@ impl Package for Diffutils {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
+        Recipe::autotools_pgo(&["--prefix=/usr"], pgo_workload())
     }
 }
 
-const PGO_WORKLOAD: &str = r#"cp -a "$SOURCE" /tmp/pgo-src2
-find /tmp/pgo-src2 -name '*.c' | head -20 | while read -r _f; do
-  ./src/diff -u "$_f" "$_f" > /dev/null
-done
-echo x >> /tmp/pgo-src2/ChangeLog 2>/dev/null || touch /tmp/pgo-src2/extra.c
-./src/diff -r "$SOURCE" /tmp/pgo-src2 > /dev/null
-./src/diff --brief -r "$SOURCE" /tmp/pgo-src2 > /dev/null
-./src/diff -u "$SOURCE"/configure /tmp/pgo-src2/configure > /dev/null"#;
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::{Arg, Pipe, argv};
+
+    let exec = |pipe: Pipe| Step::Exec { env: vec![], pipe };
+    vec![
+        exec(Pipe::cmd(argv(&[
+            "cp",
+            "-a",
+            "\"$SOURCE\"",
+            "/tmp/pgo-src2",
+        ]))),
+        Step::ForEach {
+            var: "_f",
+            items: vec![Arg::Subst(Box::new(Pipe::new(vec![
+                argv(&["find", "/tmp/pgo-src2", "-name", "'*.c'"]),
+                argv(&["head", "-20"]),
+            ])))],
+            body: vec![exec(
+                Pipe::cmd(argv(&["./src/diff", "-u", "\"$_f\"", "\"$_f\""]))
+                    .stdout(Arg::lit("/dev/null")),
+            )],
+            stdout: None,
+        },
+        Step::Or {
+            lhs: vec![exec(
+                Pipe::cmd(argv(&["echo", "x"]))
+                    .append_stdout(Arg::lit("/tmp/pgo-src2/ChangeLog"))
+                    .stderr(Arg::lit("/dev/null")),
+            )],
+            rhs: vec![exec(Pipe::cmd(argv(&["touch", "/tmp/pgo-src2/extra.c"])))],
+        },
+        exec(
+            Pipe::cmd(argv(&["./src/diff", "-r", "\"$SOURCE\"", "/tmp/pgo-src2"]))
+                .stdout(Arg::lit("/dev/null")),
+        ),
+        exec(
+            Pipe::cmd(argv(&[
+                "./src/diff",
+                "--brief",
+                "-r",
+                "\"$SOURCE\"",
+                "/tmp/pgo-src2",
+            ]))
+            .stdout(Arg::lit("/dev/null")),
+        ),
+        exec(
+            Pipe::cmd(argv(&[
+                "./src/diff",
+                "-u",
+                "\"$SOURCE\"/configure",
+                "/tmp/pgo-src2/configure",
+            ]))
+            .stdout(Arg::lit("/dev/null")),
+        ),
+    ]
+}
 
 impl Bootstrap for Diffutils {}

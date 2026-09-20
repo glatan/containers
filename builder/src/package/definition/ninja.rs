@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Env, Recipe, Step, Steps, Workdir};
+use crate::package::recipe::{Arg, BuildContext, Env, Pipe, Recipe, Step, Steps, Workdir};
 use crate::package::{Package, Source};
 
 pub struct Ninja;
@@ -49,40 +49,108 @@ impl Package for Ninja {
     }
 
     fn recipe(&self, ctx: &BuildContext) -> Recipe {
-        let bootstrap = if ctx.cross() {
-            "python3 configure.py --bootstrap"
-        } else {
-            PGO_BOOTSTRAP
+        let cmd = |args: Vec<Arg>| Step::Exec {
+            env: vec![],
+            pipe: Pipe::cmd(args),
         };
-        Recipe::Steps(
-            Steps::new(Env::Autotools)
-                .workdir(Workdir::InSource)
-                .step(Step::Shell(bootstrap))
-                .step(Step::Install {
-                    src: "ninja",
-                    dst: "\"$OUT\"/usr/bin/ninja",
-                    mode: "755",
-                }),
-        )
+        let mut steps = Steps::new(Env::Autotools).workdir(Workdir::InSource);
+        if ctx.cross() {
+            steps.steps.push(cmd(vec![
+                Arg::lit("python3"),
+                Arg::lit("configure.py"),
+                Arg::lit("--bootstrap"),
+            ]));
+        } else {
+            // instrumented bootstrap → ninja で自身を rebuild（workload）→
+            // clean → -fprofile-use bootstrap。
+            steps.steps.extend([
+                Step::Export {
+                    name: "PGODIR",
+                    value: Arg::lit("/tmp/pgo"),
+                },
+                cmd(vec![
+                    Arg::lit("rm"),
+                    Arg::lit("-rf"),
+                    Arg::quoted(Arg::Var("PGODIR")),
+                ]),
+                cmd(vec![
+                    Arg::lit("mkdir"),
+                    Arg::lit("-p"),
+                    Arg::quoted(Arg::Var("PGODIR")),
+                ]),
+                Step::Export {
+                    name: "_PGO_CXXFLAGS",
+                    value: Arg::quoted(Arg::lit("${CXXFLAGS:-}")),
+                },
+                Step::Export {
+                    name: "_PGO_LDFLAGS",
+                    value: Arg::quoted(Arg::lit("${LDFLAGS:-}")),
+                },
+                Step::Export {
+                    name: "CXXFLAGS",
+                    value: Arg::quoted(Arg::Concat(vec![
+                        Arg::Var("_PGO_CXXFLAGS"),
+                        Arg::lit(" -fprofile-generate=${PGODIR} -fprofile-update=atomic"),
+                    ])),
+                },
+                Step::Export {
+                    name: "LDFLAGS",
+                    value: Arg::quoted(Arg::Concat(vec![
+                        Arg::Var("_PGO_LDFLAGS"),
+                        Arg::lit(" -fprofile-generate"),
+                    ])),
+                },
+                cmd(vec![
+                    Arg::lit("python3"),
+                    Arg::lit("configure.py"),
+                    Arg::lit("--bootstrap"),
+                ]),
+                Step::Or {
+                    lhs: vec![
+                        cmd(vec![Arg::lit("./ninja"), Arg::lit("--version")]),
+                        // bootstrap 直後は ninja が最新なので、obj を消して
+                        // 再ビルドさせる。
+                        cmd(vec![Arg::lit("rm"), Arg::lit("-f"), Arg::lit("build/*.o")]),
+                        cmd(vec![
+                            Arg::lit("./ninja"),
+                            Arg::nproc_jobs("-j"),
+                            Arg::lit("ninja"),
+                        ]),
+                    ],
+                    rhs: vec![cmd(vec![Arg::lit("true")])],
+                },
+                cmd(vec![
+                    Arg::lit("rm"),
+                    Arg::lit("-rf"),
+                    Arg::lit("build"),
+                    Arg::lit("ninja"),
+                ]),
+                Step::Export {
+                    name: "CXXFLAGS",
+                    value: Arg::quoted(Arg::Concat(vec![
+                        Arg::Var("_PGO_CXXFLAGS"),
+                        Arg::lit(" -fprofile-use=${PGODIR} -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"),
+                    ])),
+                },
+                Step::Export {
+                    name: "LDFLAGS",
+                    value: Arg::quoted(Arg::Concat(vec![
+                        Arg::Var("_PGO_LDFLAGS"),
+                        Arg::lit(" -fprofile-use"),
+                    ])),
+                },
+                cmd(vec![
+                    Arg::lit("python3"),
+                    Arg::lit("configure.py"),
+                    Arg::lit("--bootstrap"),
+                ]),
+            ]);
+        }
+        steps.steps.push(Step::Install {
+            src: "ninja".into(),
+            dst: "\"$OUT\"/usr/bin/ninja".into(),
+            mode: "755".into(),
+        });
+        Recipe::Steps(steps)
     }
 }
-
-/// instrumented bootstrap → ninja で自身を rebuild（workload）→
-/// clean → -fprofile-use bootstrap。
-const PGO_BOOTSTRAP: &str = r#"export PGODIR=/tmp/pgo
-rm -rf "$PGODIR"
-mkdir -p "$PGODIR"
-export _PGO_CXXFLAGS="${CXXFLAGS:-}" _PGO_LDFLAGS="${LDFLAGS:-}"
-export CXXFLAGS="$_PGO_CXXFLAGS -fprofile-generate=$PGODIR -fprofile-update=atomic"
-export LDFLAGS="$_PGO_LDFLAGS -fprofile-generate"
-python3 configure.py --bootstrap
-(
-  ./ninja --version
-  # bootstrap 直後は ninja が最新なので、obj を消して再ビルドさせる
-  rm -f build/*.o
-  ./ninja -j"$(nproc)" ninja
-) || true
-rm -rf build ninja
-export CXXFLAGS="$_PGO_CXXFLAGS -fprofile-use=$PGODIR -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"
-export LDFLAGS="$_PGO_LDFLAGS -fprofile-use"
-python3 configure.py --bootstrap"#;

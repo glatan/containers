@@ -114,8 +114,8 @@ pub enum Pgo {
     /// PGO なし。
     None,
     /// 宣言 workload を使うテンプレート PGO（ネイティブのみ）。
-    /// 値はコンテナ内で `( … ) || true` 実行されるシェル片。
-    Profiled(&'static str),
+    /// workload 本体は `Steps::pgo` の `PgoTemplate` が持つ。
+    Profiled,
     /// パッケージ固有の instrumented → workload → clean → rebuild 手順。
     Custom,
 }

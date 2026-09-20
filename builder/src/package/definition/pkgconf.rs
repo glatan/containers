@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Recipe};
+use crate::package::recipe::{BuildContext, Recipe, Step};
 use crate::package::{Package, Source};
 
 pub struct Pkgconf;
@@ -39,17 +39,45 @@ impl Package for Pkgconf {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
+        Recipe::autotools_pgo(&["--prefix=/usr"], pgo_workload())
     }
 }
 
-const PGO_WORKLOAD: &str = r#"find /dep /usr -name '*.pc' 2>/dev/null | while read -r _pc; do
-  _dir=$(dirname "$_pc")
-  _name=$(basename "$_pc" .pc)
-  PKG_CONFIG_PATH="$_dir" ./pkgconf --cflags --libs "$_name" > /dev/null 2>&1
-  PKG_CONFIG_PATH="$_dir" ./pkgconf --modversion "$_name" > /dev/null 2>&1
-done"#;
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::{Arg, Pipe, argv};
+
+    vec![Step::ForEach {
+        var: "_pc",
+        items: vec![Arg::Subst(Box::new(
+            Pipe::cmd(argv(&["find", "/dep", "/usr", "-name", "'*.pc'"]))
+                .stderr(Arg::lit("/dev/null")),
+        ))],
+        body: vec![
+            Step::Set {
+                name: "_dir",
+                value: Arg::Subst(Box::new(Pipe::cmd(argv(&["dirname", "\"$_pc\""])))),
+            },
+            Step::Set {
+                name: "_name",
+                value: Arg::Subst(Box::new(Pipe::cmd(argv(&["basename", "\"$_pc\"", ".pc"])))),
+            },
+            Step::Exec {
+                env: vec![("PKG_CONFIG_PATH", Arg::Var("_dir"))],
+                pipe: Pipe::cmd(argv(&["./pkgconf", "--cflags", "--libs", "\"$_name\""]))
+                    .stdout(Arg::lit("/dev/null"))
+                    .stderr(Arg::lit("/dev/null")),
+            },
+            Step::Exec {
+                env: vec![("PKG_CONFIG_PATH", Arg::Var("_dir"))],
+                pipe: Pipe::cmd(argv(&["./pkgconf", "--modversion", "\"$_name\""]))
+                    .stdout(Arg::lit("/dev/null"))
+                    .stderr(Arg::lit("/dev/null")),
+            },
+        ],
+        stdout: None,
+    }]
+}

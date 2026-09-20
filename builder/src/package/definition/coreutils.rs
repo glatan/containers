@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Recipe};
+use crate::package::recipe::{BuildContext, Recipe, Step};
 use crate::package::{Bootstrap, Package, Source};
 
 pub struct Coreutils;
@@ -34,7 +34,7 @@ impl Package for Coreutils {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
@@ -45,16 +45,54 @@ impl Package for Coreutils {
                 "--disable-xattr",
                 "--without-selinux",
             ],
-            PGO_WORKLOAD,
+            pgo_workload(),
         )
     }
 }
 
 impl Bootstrap for Coreutils {}
 
-const PGO_WORKLOAD: &str = r#"./src/ls -lR "$SOURCE" > /dev/null
-./src/sort "$SOURCE"/src/*.c > /dev/null 2>&1 || true
-./src/cp -a "$SOURCE" /tmp/coreutils-copy
-./src/wc -l "$SOURCE"/src/*.c > /dev/null 2>&1 || true
-./src/cat "$SOURCE"/configure | ./src/md5sum > /dev/null
-find "$SOURCE" -name '*.h' -print0 | ./src/sort -z > /dev/null"#;
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::{Arg, Pipe, argv};
+
+    let exec = |pipe: Pipe| Step::Exec { env: vec![], pipe };
+    vec![
+        exec(Pipe::cmd(argv(&["./src/ls", "-lR", "\"$SOURCE\""])).stdout(Arg::lit("/dev/null"))),
+        Step::Or {
+            lhs: vec![exec(
+                Pipe::cmd(argv(&["./src/sort", "\"$SOURCE\"/src/*.c"]))
+                    .stdout(Arg::lit("/dev/null"))
+                    .stderr(Arg::lit("/dev/null")),
+            )],
+            rhs: vec![exec(Pipe::cmd(argv(&["true"])))],
+        },
+        exec(Pipe::cmd(argv(&[
+            "./src/cp",
+            "-a",
+            "\"$SOURCE\"",
+            "/tmp/coreutils-copy",
+        ]))),
+        Step::Or {
+            lhs: vec![exec(
+                Pipe::cmd(argv(&["./src/wc", "-l", "\"$SOURCE\"/src/*.c"]))
+                    .stdout(Arg::lit("/dev/null"))
+                    .stderr(Arg::lit("/dev/null")),
+            )],
+            rhs: vec![exec(Pipe::cmd(argv(&["true"])))],
+        },
+        exec(
+            Pipe::new(vec![
+                argv(&["./src/cat", "\"$SOURCE\"/configure"]),
+                argv(&["./src/md5sum"]),
+            ])
+            .stdout(Arg::lit("/dev/null")),
+        ),
+        exec(
+            Pipe::new(vec![
+                argv(&["find", "\"$SOURCE\"", "-name", "'*.h'", "-print0"]),
+                argv(&["./src/sort", "-z"]),
+            ])
+            .stdout(Arg::lit("/dev/null")),
+        ),
+    ]
+}

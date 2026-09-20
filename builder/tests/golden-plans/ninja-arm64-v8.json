@@ -1,0 +1,41 @@
+{
+  "Steps": {
+    "env": "Autotools",
+    "pgo": null,
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "python3"
+                },
+                {
+                  "Lit": "configure.py"
+                },
+                {
+                  "Lit": "--bootstrap"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Install": {
+          "dst": "\"$OUT\"/usr/bin/ninja",
+          "mode": "755",
+          "src": "ninja"
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "InSource"
+  }
+}

@@ -12,7 +12,7 @@ cmake は mold の build-dep として seed 上で先に組み、python は `bui
 
 コンパイラ接頭辞はパッケージ Platform の GNU triple です。`gcc` や `cc` という名前の実行ファイルは置きません。実行時 libc は、そのパッケージ Platform の `{triple}-glibc` です。
 
-ビルド環境イメージの合成、および `check` による動的リンク検証には、実行時依存（`Package::dependencies(target)`）を使用します。`Role::Toolchain` のシード閉包だけが `Bootstrap::seed_dependencies(target)` を使います。`BOOTSTRAP` 配列に載る Host tools は POSIX PATH と cmake、mold です。gmp などは配列に無く、グラフ経由で入ります。
+ビルド環境イメージの合成、および `check` による動的リンク検証には、実行時依存（`Package::dependencies(target)`）を使用します。`Bootstrap::seed_dependencies(target)` でシード相のグラフを上書きするのは `{triple}-binutils` のみです（glibc との循環回避のため実行時依存を空にします）。`BOOTSTRAP` 配列に載る Host tools は POSIX PATH と cmake、mold です。gmp などは配列に無く、グラフ経由で入ります。
 
 シード中のリンクは Arch の mold（`-fuse-ld=mold`）です。compose 後は自前 mold を PATH に載せます。builder が `-fuse-ld=mold` を剥がすのは、合成後かつ自前 mold 成果物が無いときに限ります。
 
@@ -22,7 +22,7 @@ cmake は mold の build-dep として seed 上で先に組み、python は `bui
 
 GNU Autotools（configure）を使用するツールでは、configure 実行時のみフラグから `-flto*`・LTO 系 `-Werror=*`・`-fhardened` 系を除外し、`-std=gnu17` を追加します（flex は `gnu11`）。除外は `autotools_configure` が `sanitize_flags` で `CFLAGS` / `CXXFLAGS` / `LDFLAGS` を一時上書きする方式（`Env::Autotools` のみに適用）、`-std` 追加は recipe プリリュードの `Steps::std` で行います。シード環境の GCC 16 では、この組み合わせにおいて GMP のコンパイラ検査（compiler probe）および gnulib の検出処理が失敗するためです。configure が Makefile へ焼いた sanitized 値は、`Step::Make` / `MakeInstall` が付与する `CFLAGS="$CFLAGS"` 等の make 変数上書きでフルフラグへ戻ります。configure が CFLAGS を Makefile へ焼くパッケージ（gmp 等）は `Env::Lto` で sanitize を回避し、PGO 時は `-fprofile-generate` を configure 時の CFLAGS へ注入します。
 
-この前処理（`Env::Autotools` の sanitize と `-std` 付与）を適用しないパッケージは、`Env::Lto` を使う bash / gmp / ncurses、`Env::None` の meson / ca-certificates、独自 `build_script` の qemu / linux-headers、`Recipe::Shell` の glib / perl / zlib / zlib-ng / mold / openssl、`Recipe::Noop` の build-env です。なお perl は `Env::Autotools` ではなく専用の `AUTOTOOLS_ENV` プリリュードを使うため、`-flto*`・`-Werror=*` を剥がす点は同じですが `-fhardened` は残り、`make` にも sanitized 値が残る旧仕様です。`Env::Lto` では configure がフルフラグを Makefile へ焼くため、make 時の変数上書きなしに LTO とバイナリ強化が維持されます。meson は Python パッケージの配置処理のみを行うため、C コンパイラの LTO は使用しません。
+この前処理（`Env::Autotools` の sanitize と `-std` 付与）を適用しないパッケージは、`Env::Lto` を使う bash / gmp / glib / ncurses、`Env::None` の qemu / linux-headers / openssl / zlib / zlib-ng / mold / meson / ca-certificates / 各 toolchain ステージ、`Recipe::Noop` の build-env です。perl は `Env::Autotools` ですが `Step::Configure` ではなく `./Configure` を直接起動するため、レシピ冒頭で `sanitize_flags` を `CFLAGS` / `CXXFLAGS` / `LDFLAGS` に明示 export しています。`Env::Lto` では configure がフルフラグを Makefile へ焼くため、make 時の変数上書きなしに LTO とバイナリ強化が維持されます。meson は Python パッケージの配置処理のみを行うため、C コンパイラの LTO は使用しません。
 
 Host tools の多くにはネイティブ実行可能な PGO を適用します。`Pgo::Profiled` は各パッケージのワークロード（`make check` またはビルドしたツール自身でのデータ処理）、`Pgo::Custom` は openssl / ninja / zlib / zlib-ng / mold / python の個別手順です。適用対象とワークロードは [README.md](./README.md) の PGO 対象パッケージ表を参照してください。ncurses は `tic` が libncurses の消費者経路を駆動しないため `Pgo::None` です。
 

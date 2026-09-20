@@ -1,0 +1,279 @@
+{
+  "Steps": {
+    "env": "Autotools",
+    "pgo": {
+      "Autotools": [
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "cp"
+                  },
+                  {
+                    "Lit": "-a"
+                  },
+                  {
+                    "Lit": "\"$SOURCE\""
+                  },
+                  {
+                    "Lit": "/tmp/pgo-src2"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "ForEach": {
+            "body": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "./src/diff"
+                        },
+                        {
+                          "Lit": "-u"
+                        },
+                        {
+                          "Lit": "\"$_f\""
+                        },
+                        {
+                          "Lit": "\"$_f\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": {
+                      "append": false,
+                      "target": {
+                        "Lit": "/dev/null"
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "items": [
+              {
+                "Subst": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "find"
+                      },
+                      {
+                        "Lit": "/tmp/pgo-src2"
+                      },
+                      {
+                        "Lit": "-name"
+                      },
+                      {
+                        "Lit": "'*.c'"
+                      }
+                    ],
+                    [
+                      {
+                        "Lit": "head"
+                      },
+                      {
+                        "Lit": "-20"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            ],
+            "stdout": null,
+            "var": "_f"
+          }
+        },
+        {
+          "Or": {
+            "lhs": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "echo"
+                        },
+                        {
+                          "Lit": "x"
+                        }
+                      ]
+                    ],
+                    "stderr": {
+                      "Lit": "/dev/null"
+                    },
+                    "stdin": null,
+                    "stdout": {
+                      "append": true,
+                      "target": {
+                        "Lit": "/tmp/pgo-src2/ChangeLog"
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "rhs": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "touch"
+                        },
+                        {
+                          "Lit": "/tmp/pgo-src2/extra.c"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "./src/diff"
+                  },
+                  {
+                    "Lit": "-r"
+                  },
+                  {
+                    "Lit": "\"$SOURCE\""
+                  },
+                  {
+                    "Lit": "/tmp/pgo-src2"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": {
+                "append": false,
+                "target": {
+                  "Lit": "/dev/null"
+                }
+              }
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "./src/diff"
+                  },
+                  {
+                    "Lit": "--brief"
+                  },
+                  {
+                    "Lit": "-r"
+                  },
+                  {
+                    "Lit": "\"$SOURCE\""
+                  },
+                  {
+                    "Lit": "/tmp/pgo-src2"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": {
+                "append": false,
+                "target": {
+                  "Lit": "/dev/null"
+                }
+              }
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "./src/diff"
+                  },
+                  {
+                    "Lit": "-u"
+                  },
+                  {
+                    "Lit": "\"$SOURCE\"/configure"
+                  },
+                  {
+                    "Lit": "/tmp/pgo-src2/configure"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": {
+                "append": false,
+                "target": {
+                  "Lit": "/dev/null"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Configure": [
+          "--prefix=/usr"
+        ]
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

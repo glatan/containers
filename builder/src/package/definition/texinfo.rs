@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Env, Recipe, Step, Steps};
+use crate::package::recipe::{Arg, BuildContext, Cond, Env, Pipe, Recipe, Step, Steps};
 use crate::package::{Package, Source};
 use crate::target::Target;
 
@@ -45,33 +45,108 @@ impl Package for Texinfo {
         }
         Recipe::Steps(
             Steps::new(Env::Autotools)
-                .pgo(crate::package::recipe::PgoTemplate::Autotools(PGO_WORKLOAD))
-                .step(Step::Configure(args))
-                .step(Step::Shell(
-                    "if [ ! -f tools/Makefile ]; then
-  mkdir -p tools
-  printf 'all:\ninstall:\ncheck:\n.PHONY: all install check\n' > tools/Makefile
-fi",
+                .pgo(crate::package::recipe::PgoTemplate::Autotools(
+                    pgo_workload(),
                 ))
+                .step(Step::Configure(args))
+                .step(Step::If {
+                    cond: Cond::Not(Box::new(Cond::FileExists(Arg::lit("tools/Makefile")))),
+                    then: vec![
+                        Step::Exec {
+                            env: vec![],
+                            pipe: Pipe::cmd(vec![
+                                Arg::lit("mkdir"),
+                                Arg::lit("-p"),
+                                Arg::lit("tools"),
+                            ]),
+                        },
+                        Step::WriteFile {
+                            path: Arg::lit("tools/Makefile"),
+                            lines: vec![
+                                Arg::lit("all:"),
+                                Arg::lit("install:"),
+                                Arg::lit("check:"),
+                                Arg::lit(".PHONY: all install check"),
+                            ],
+                            append: false,
+                            expand: false,
+                        },
+                    ],
+                    else_: vec![],
+                })
                 .step(Step::make(&[]))
                 .step(Step::make_install(&[])),
         )
     }
 
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 }
 
-const PGO_WORKLOAD: &str = r#"# texi2any は configure が生成するラッパー。out-of-tree で
-# 見つからない場合に備えてビルドツリーから解決する。
-_texi2any="$BUILD/tp/texi2any"
-if [ ! -x "$_texi2any" ]; then
-  _texi2any=$(find "$BUILD" -name texi2any -type f -print -quit)
-fi
-for _texi in "$SOURCE"/doc/*.texi; do
-  [ -f "$_texi" ] && "$_texi2any" --plaintext "$_texi" > /dev/null 2>&1
-done
-find "$SOURCE" -name '*.texi' | head -5 | while read -r _t; do
-  "$_texi2any" --html "$_t" -o /tmp/texi-out 2>/dev/null
-done"#;
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::{Arg, Cond, Pipe, argv};
+
+    let exec = |pipe: Pipe| Step::Exec { env: vec![], pipe };
+    vec![
+        Step::Set {
+            name: "_texi2any",
+            value: Arg::lit("\"$BUILD/tp/texi2any\""),
+        },
+        // texi2any は configure が生成するラッパー。out-of-tree で
+        // 見つからない場合に備えてビルドツリーから解決する。
+        Step::If {
+            cond: Cond::Not(Box::new(Cond::Cmd(Pipe::cmd(argv(&[
+                "test",
+                "-x",
+                "\"$_texi2any\"",
+            ]))))),
+            then: vec![Step::Set {
+                name: "_texi2any",
+                value: Arg::Subst(Box::new(Pipe::cmd(argv(&[
+                    "find",
+                    "\"$BUILD\"",
+                    "-name",
+                    "texi2any",
+                    "-type",
+                    "f",
+                    "-print",
+                    "-quit",
+                ])))),
+            }],
+            else_: vec![],
+        },
+        Step::ForEach {
+            var: "_texi",
+            items: argv(&["\"$SOURCE\"/doc/*.texi"]),
+            body: vec![Step::If {
+                cond: Cond::FileExists(Arg::lit("\"$_texi\"")),
+                then: vec![exec(
+                    Pipe::cmd(argv(&["\"$_texi2any\"", "--plaintext", "\"$_texi\""]))
+                        .stdout(Arg::lit("/dev/null"))
+                        .stderr(Arg::lit("/dev/null")),
+                )],
+                else_: vec![],
+            }],
+            stdout: None,
+        },
+        Step::ForEach {
+            var: "_t",
+            items: vec![Arg::Subst(Box::new(Pipe::new(vec![
+                argv(&["find", "\"$SOURCE\"", "-name", "'*.texi'"]),
+                argv(&["head", "-5"]),
+            ])))],
+            body: vec![exec(
+                Pipe::cmd(argv(&[
+                    "\"$_texi2any\"",
+                    "--html",
+                    "\"$_t\"",
+                    "-o",
+                    "/tmp/texi-out",
+                ]))
+                .stderr(Arg::lit("/dev/null")),
+            )],
+            stdout: None,
+        },
+    ]
+}

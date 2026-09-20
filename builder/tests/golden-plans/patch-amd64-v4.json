@@ -1,0 +1,256 @@
+{
+  "Steps": {
+    "env": "Autotools",
+    "pgo": {
+      "Autotools": [
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "mkdir"
+                  },
+                  {
+                    "Lit": "-p"
+                  },
+                  {
+                    "Lit": "/tmp/patch-work"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Or": {
+            "lhs": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "cp"
+                        },
+                        {
+                          "Lit": "-a"
+                        },
+                        {
+                          "Lit": "\"$SOURCE\"/src/*.c"
+                        },
+                        {
+                          "Lit": "/tmp/patch-work/"
+                        }
+                      ]
+                    ],
+                    "stderr": {
+                      "Lit": "/dev/null"
+                    },
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              }
+            ],
+            "rhs": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "cp"
+                        },
+                        {
+                          "Lit": "-a"
+                        },
+                        {
+                          "Lit": "\"$SOURCE\"/*.c"
+                        },
+                        {
+                          "Lit": "/tmp/patch-work/"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "ForEach": {
+            "body": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "sed"
+                        },
+                        {
+                          "Lit": "'s/^int /INT /'"
+                        },
+                        {
+                          "Lit": "\"$_f\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": {
+                      "append": false,
+                      "target": {
+                        "Concat": [
+                          {
+                            "Var": "_f"
+                          },
+                          {
+                            "Lit": ".new"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "diff"
+                        },
+                        {
+                          "Lit": "-u"
+                        },
+                        {
+                          "Lit": "\"$_f\""
+                        },
+                        {
+                          "Lit": "\"$_f.new\""
+                        }
+                      ],
+                      [
+                        {
+                          "Lit": "./src/patch"
+                        },
+                        {
+                          "Lit": "--dry-run"
+                        },
+                        {
+                          "Lit": "-s"
+                        },
+                        {
+                          "Lit": "\"$_f\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": {
+                      "append": false,
+                      "target": {
+                        "Lit": "/dev/null"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "diff"
+                        },
+                        {
+                          "Lit": "-u"
+                        },
+                        {
+                          "Lit": "\"$_f\""
+                        },
+                        {
+                          "Lit": "\"$_f.new\""
+                        }
+                      ],
+                      [
+                        {
+                          "Lit": "./src/patch"
+                        },
+                        {
+                          "Lit": "-s"
+                        },
+                        {
+                          "Lit": "-o"
+                        },
+                        {
+                          "Lit": "\"$_f.out\""
+                        },
+                        {
+                          "Lit": "\"$_f\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": {
+                      "append": false,
+                      "target": {
+                        "Lit": "/dev/null"
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "items": [
+              {
+                "Lit": "/tmp/patch-work/*.c"
+              }
+            ],
+            "stdout": null,
+            "var": "_f"
+          }
+        }
+      ]
+    },
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Configure": [
+          "--prefix=/usr"
+        ]
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

@@ -1,5 +1,7 @@
 use crate::flags::Flag;
-use crate::package::recipe::{BuildContext, Recipe, SYSROOT_ENV};
+use crate::package::recipe::{
+    Arg, BuildContext, Cond, Env, Pipe, Recipe, Redirect, Step, Steps, Workdir, argv,
+};
 use crate::package::{Dependency, Package, Role, Source};
 use crate::target::Target;
 
@@ -48,44 +50,125 @@ impl Package for Zlib {
     }
 
     fn recipe(&self, ctx: &BuildContext) -> Recipe {
-        let mut script = String::from("set -euxo pipefail\n");
-        script.push_str(SYSROOT_ENV);
-        script.push_str(HEAD);
+        const CONFIGURE: &[&str] = &[
+            "./configure",
+            "--prefix=/usr",
+            "--libdir=/usr/lib64",
+            "--shared",
+        ];
+        let mut steps = Steps::new(Env::None)
+            .workdir(Workdir::InSource)
+            // sysroot:true — 検出・CFLAGS 付与は wrap_script が注入。
+            // zlib の configure は $CC を直接使うため CC 側にも反映する。
+            .step(Step::If {
+                cond: Cond::EnvSet("SYSROOT"),
+                then: vec![Step::Export {
+                    name: "CC",
+                    value: Arg::quoted(Arg::Concat(vec![
+                        Arg::Var("CC"),
+                        Arg::lit(" --sysroot="),
+                        Arg::Var("SYSROOT"),
+                    ])),
+                }],
+                else_: vec![],
+            })
+            .step(Step::Set {
+                name: "PGO",
+                value: Arg::lit("/tmp/zlib-pgo"),
+            })
+            .step(Step::Exec {
+                env: vec![],
+                pipe: Pipe::cmd(argv(&["rm", "-rf", "\"$PGO\""])),
+            })
+            .step(Step::Exec {
+                env: vec![],
+                pipe: Pipe::cmd(argv(&["mkdir", "-p", "\"$PGO\""])),
+            });
         if ctx.cross() {
             // クロスではプロファイルを実行できない
-            script.push_str(
-                "CHOST=\"$TRIPLE\" ./configure --prefix=/usr --libdir=/usr/lib64 --shared\nmake -j\"$(nproc)\"\n",
-            );
+            steps = steps
+                .step(Step::Exec {
+                    env: vec![("CHOST", Arg::quoted(Arg::Var("TRIPLE")))],
+                    pipe: Pipe::cmd(argv(CONFIGURE)),
+                })
+                .step(Step::make(&[]));
         } else {
-            script.push_str(PGO);
+            steps = steps
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(argv(CONFIGURE)),
+                })
+                .step(Step::Make {
+                    jobs: true,
+                    args: vec![
+                        "CFLAGS=\"$CFLAGS -fprofile-generate=$PGO -fprofile-update=atomic\"".into(),
+                        "LDFLAGS=\"$LDFLAGS -fprofile-generate\"".into(),
+                    ],
+                })
+                .step(Step::Export {
+                    name: "LD_LIBRARY_PATH",
+                    value: Arg::quoted(Arg::Concat(vec![
+                        Arg::Var("PWD"),
+                        Arg::lit("${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"),
+                    ])),
+                })
+                .step(Step::Or {
+                    lhs: vec![
+                        Step::ForEach {
+                            var: "_i",
+                            items: argv(&[
+                                "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12",
+                                "13", "14", "15", "16",
+                            ]),
+                            body: vec![Step::Exec {
+                                env: vec![],
+                                pipe: Pipe::cmd(argv(&["cat", "./*.c", "./*.h"])),
+                            }],
+                            stdout: Some(Redirect {
+                                target: Arg::lit("/tmp/zlib-pgo-input"),
+                                append: false,
+                            }),
+                        },
+                        Step::ForEach {
+                            var: "_level",
+                            items: argv(&["1", "6", "9"]),
+                            body: vec![Step::Exec {
+                                env: vec![],
+                                pipe: Pipe::new(vec![
+                                    argv(&["./minigzip", "-c", "\"-$_level\""]),
+                                    argv(&["./minigzip", "-d", "-c"]),
+                                ])
+                                .stdin(Arg::lit("/tmp/zlib-pgo-input"))
+                                .stdout(Arg::lit("/dev/null")),
+                            }],
+                            stdout: None,
+                        },
+                        Step::Exec {
+                            env: vec![],
+                            pipe: Pipe::cmd(argv(&["./example"])).stdout(Arg::lit("/dev/null")),
+                        },
+                    ],
+                    rhs: vec![Step::Exec {
+                        env: vec![],
+                        pipe: Pipe::cmd(argv(&["true"])),
+                    }],
+                })
+                .step(Step::Make {
+                    jobs: false,
+                    args: vec!["distclean".to_owned()],
+                })
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(argv(CONFIGURE)),
+                })
+                .step(Step::Make {
+                    jobs: true,
+                    args: vec![
+                        "CFLAGS=\"$CFLAGS -fprofile-use=$PGO -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch\"".into(),
+                        "LDFLAGS=\"$LDFLAGS -fprofile-use\"".into(),
+                    ],
+                });
         }
-        script.push_str("make install DESTDIR=\"$OUT\"\n");
-        Recipe::Shell(script.into())
+        Recipe::Steps(steps.step(Step::make_install(&[])))
     }
 }
-
-const HEAD: &str = r#"
-if [ -n "${SYSROOT:-}" ]; then
-  export CC="$CC --sysroot=$SYSROOT"
-fi
-PGO=/tmp/zlib-pgo
-rm -rf "$PGO"
-mkdir -p "$PGO"
-cp -a "$SOURCE"/. "$BUILD"/
-cd "$BUILD"
-"#;
-
-const PGO: &str = r#"./configure --prefix=/usr --libdir=/usr/lib64 --shared
-make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-generate=$PGO -fprofile-update=atomic" LDFLAGS="$LDFLAGS -fprofile-generate"
-export LD_LIBRARY_PATH="$PWD${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-(
-  for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do cat ./*.c ./*.h; done > /tmp/zlib-pgo-input
-  for _level in 1 6 9; do
-    ./minigzip -c "-$_level" < /tmp/zlib-pgo-input | ./minigzip -d -c > /dev/null
-  done
-  ./example > /dev/null
-) || true
-make distclean
-./configure --prefix=/usr --libdir=/usr/lib64 --shared
-make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-use=$PGO -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch" LDFLAGS="$LDFLAGS -fprofile-use"
-"#;

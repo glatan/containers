@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Recipe};
+use crate::package::recipe::{BuildContext, Recipe, Step};
 use crate::package::{Bootstrap, Package, Source};
 
 pub struct Gawk;
@@ -34,18 +34,52 @@ impl Package for Gawk {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
+        Recipe::autotools_pgo(&["--prefix=/usr"], pgo_workload())
     }
 }
 
-const PGO_WORKLOAD: &str = r#"find "$SOURCE" -name '*.c' | while read -r _f; do
-  ./gawk '{ n += NF; if ($0 ~ /return/) r++ } END { print n, r }' "$_f" > /dev/null
-done
-./gawk 'BEGIN { for (i = 0; i < 100000; i++) { s = s i; x[i] = i * 2 } print length(s), length(x) }'
-seq 1 50000 | ./gawk '{ sum += $1; a[NR] = $1 } END { asort(a); print sum, a[1], a[NR] }' > /dev/null"#;
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::{Arg, Pipe, argv};
+
+    let exec = |pipe: Pipe| Step::Exec { env: vec![], pipe };
+    vec![
+        Step::ForEach {
+            var: "_f",
+            items: vec![Arg::Subst(Box::new(Pipe::cmd(argv(&[
+                "find",
+                "\"$SOURCE\"",
+                "-name",
+                "'*.c'",
+            ]))))],
+            body: vec![exec(
+                Pipe::cmd(argv(&[
+                    "./gawk",
+                    "'{ n += NF; if ($0 ~ /return/) r++ } END { print n, r }'",
+                    "\"$_f\"",
+                ]))
+                .stdout(Arg::lit("/dev/null")),
+            )],
+            stdout: None,
+        },
+        exec(Pipe::cmd(argv(&[
+            "./gawk",
+            "'BEGIN { for (i = 0; i < 100000; i++) { s = s i; x[i] = i * 2 } print length(s), length(x) }'",
+        ]))),
+        exec(
+            Pipe::new(vec![
+                argv(&["seq", "1", "50000"]),
+                argv(&[
+                    "./gawk",
+                    "'{ sum += $1; a[NR] = $1 } END { asort(a); print sum, a[1], a[NR] }'",
+                ]),
+            ])
+            .stdout(Arg::lit("/dev/null")),
+        ),
+    ]
+}
 
 impl Bootstrap for Gawk {}

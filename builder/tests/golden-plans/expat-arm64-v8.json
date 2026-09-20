@@ -1,0 +1,135 @@
+{
+  "Steps": {
+    "env": "Autotools",
+    "pgo": {
+      "Autotools": [
+        {
+          "If": {
+            "cond": {
+              "FileExists": {
+                "Lit": "\"$SOURCE/doc/xmlwf.xml\""
+              }
+            },
+            "else_": [],
+            "then": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "./xmlwf/xmlwf"
+                        },
+                        {
+                          "Lit": "\"$SOURCE/doc/xmlwf.xml\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": {
+                      "append": false,
+                      "target": {
+                        "Lit": "/dev/null"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "ForEach": {
+            "body": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "./xmlwf/xmlwf"
+                        },
+                        {
+                          "Lit": "\"$_x\""
+                        }
+                      ]
+                    ],
+                    "stderr": {
+                      "Lit": "/dev/null"
+                    },
+                    "stdin": null,
+                    "stdout": {
+                      "append": false,
+                      "target": {
+                        "Lit": "/dev/null"
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "items": [
+              {
+                "Subst": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "find"
+                      },
+                      {
+                        "Lit": "\"$SOURCE\""
+                      },
+                      {
+                        "Lit": "-name"
+                      },
+                      {
+                        "Lit": "'*.xml'"
+                      }
+                    ],
+                    [
+                      {
+                        "Lit": "head"
+                      },
+                      {
+                        "Lit": "-20"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            ],
+            "stdout": null,
+            "var": "_x"
+          }
+        }
+      ]
+    },
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Configure": [
+          "--prefix=/usr"
+        ]
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

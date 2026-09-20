@@ -1,0 +1,193 @@
+{
+  "Steps": {
+    "env": "Autotools",
+    "pgo": {
+      "Autotools": [
+        {
+          "ForEach": {
+            "body": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "./src/flex"
+                        },
+                        {
+                          "Lit": "-o"
+                        },
+                        {
+                          "Lit": "/tmp/flex-out.c"
+                        },
+                        {
+                          "Lit": "\"$_l\""
+                        }
+                      ]
+                    ],
+                    "stderr": {
+                      "Lit": "/dev/null"
+                    },
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              }
+            ],
+            "items": [
+              {
+                "Subst": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "find"
+                      },
+                      {
+                        "Lit": "\"$SOURCE\""
+                      },
+                      {
+                        "Lit": "-name"
+                      },
+                      {
+                        "Lit": "'*.l'"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            ],
+            "stdout": null,
+            "var": "_l"
+          }
+        }
+      ]
+    },
+    "std": "Gnu11",
+    "steps": [
+      {
+        "If": {
+          "cond": {
+            "FileExists": {
+              "Lit": "lib/malloc.c"
+            }
+          },
+          "else_": [],
+          "then": [
+            {
+              "WriteFile": {
+                "append": false,
+                "expand": false,
+                "lines": [
+                  {
+                    "Lit": "#include <stdlib.h>"
+                  },
+                  {
+                    "Lit": "void *rpl_malloc(size_t n) { if (n == 0) n = 1; return malloc(n); }"
+                  }
+                ],
+                "path": {
+                  "Lit": "lib/malloc.c"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "If": {
+          "cond": {
+            "FileExists": {
+              "Lit": "lib/realloc.c"
+            }
+          },
+          "else_": [],
+          "then": [
+            {
+              "WriteFile": {
+                "append": false,
+                "expand": false,
+                "lines": [
+                  {
+                    "Lit": "#include <stdlib.h>"
+                  },
+                  {
+                    "Lit": "void *rpl_realloc(void *p, size_t n) { if (n == 0) n = 1; return realloc(p, n); }"
+                  }
+                ],
+                "path": {
+                  "Lit": "lib/realloc.c"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "Configure": [
+          "--prefix=/usr"
+        ]
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "find"
+                },
+                {
+                  "Lit": "."
+                },
+                {
+                  "Lit": "-name"
+                },
+                {
+                  "Lit": "config.h"
+                },
+                {
+                  "Lit": "-exec"
+                },
+                {
+                  "Lit": "sed"
+                },
+                {
+                  "Lit": "-i"
+                },
+                {
+                  "Lit": "'/rpl_malloc/d;/rpl_realloc/d'"
+                },
+                {
+                  "Lit": "{}"
+                },
+                {
+                  "Lit": "+"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "InSource"
+  }
+}

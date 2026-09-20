@@ -81,9 +81,7 @@ pub fn info(name: &str, target: Target) -> Result<()> {
         println!("LDFLAGS: {ldflags}");
     }
     match defined.pgo() {
-        crate::flags::Pgo::Profiled(workload) => {
-            println!("PGO: native ({})", workload.lines().next().unwrap_or(""))
-        }
+        crate::flags::Pgo::Profiled => println!("PGO: native"),
         crate::flags::Pgo::Custom => println!("PGO: custom"),
         crate::flags::Pgo::None => {}
     }
@@ -311,14 +309,24 @@ fn describe_role(role: package::Role) -> String {
         package::Role::Package => "package".to_owned(),
         package::Role::LinuxHeaders => "linux-headers".to_owned(),
         package::Role::BuildEnv => "build-env".to_owned(),
-        package::Role::Toolchain { triple, stage } => format!("toolchain({triple}, {stage:?})"),
     }
+}
+
+fn pipe_label(pipe: &crate::package::recipe::Pipe) -> String {
+    pipe.stages
+        .iter()
+        .map(|argv| {
+            argv.first()
+                .map(|arg| format!("{arg:?}"))
+                .unwrap_or_default()
+        })
+        .collect::<Vec<_>>()
+        .join("|")
 }
 
 fn describe_recipe(recipe: &crate::package::recipe::Recipe) -> String {
     use crate::package::recipe::{Env, PgoTemplate, Recipe, Step, Workdir};
     match recipe {
-        Recipe::Shell(_) => "shell".to_owned(),
         Recipe::Noop => "noop".to_owned(),
         Recipe::Steps(steps) => {
             let env = match steps.env {
@@ -340,7 +348,18 @@ fn describe_recipe(recipe: &crate::package::recipe::Recipe) -> String {
                     Step::MakeInstall { .. } => "make-install".to_owned(),
                     Step::Install { .. } => "install".to_owned(),
                     Step::Symlink { .. } => "symlink".to_owned(),
-                    Step::Shell(_) => "shell".to_owned(),
+                    Step::Exec { pipe, .. } => format!("exec({})", pipe_label(pipe)),
+                    Step::Cd(_) => "cd".to_owned(),
+                    Step::Export { name, .. } => format!("export({name})"),
+                    Step::ExportBare(name) => format!("export({name})"),
+                    Step::Set { name, .. } => format!("set({name})"),
+                    Step::Unset(name) => format!("unset({name})"),
+                    Step::If { .. } => "if".to_owned(),
+                    Step::ForEach { var, .. } => format!("for({var})"),
+                    Step::Or { .. } => "or".to_owned(),
+                    Step::WriteFile { .. } => "write-file".to_owned(),
+                    Step::Subshell(_) => "subshell".to_owned(),
+                    Step::Comment(_) => "comment".to_owned(),
                 })
                 .collect();
             let pgo = match steps.pgo {

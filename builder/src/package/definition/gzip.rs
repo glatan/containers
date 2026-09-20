@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Recipe};
+use crate::package::recipe::{BuildContext, Recipe, Step};
 use crate::package::{Bootstrap, Package, Source};
 
 pub struct Gzip;
@@ -34,16 +34,46 @@ impl Package for Gzip {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
+        Recipe::autotools_pgo(&["--prefix=/usr"], pgo_workload())
     }
 }
 
 impl Bootstrap for Gzip {}
 
-const PGO_WORKLOAD: &str = r#"for _i in 1 2 3 4 5 6 7 8; do cat "$SOURCE"/*.c "$SOURCE"/*.h 2>/dev/null; done > /tmp/pgo-input
-./gzip -9 -c /tmp/pgo-input | ./gzip -d -c > /dev/null
-./gzip -1 -c /tmp/pgo-input | ./gzip -d -c > /dev/null"#;
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::{Arg, Pipe, Redirect, argv};
+
+    let exec = |pipe: Pipe| Step::Exec { env: vec![], pipe };
+    vec![
+        Step::ForEach {
+            var: "_i",
+            items: argv(&["1", "2", "3", "4", "5", "6", "7", "8"]),
+            body: vec![exec(
+                Pipe::cmd(argv(&["cat", "\"$SOURCE\"/*.c", "\"$SOURCE\"/*.h"]))
+                    .stderr(Arg::lit("/dev/null")),
+            )],
+            stdout: Some(Redirect {
+                target: Arg::lit("/tmp/pgo-input"),
+                append: false,
+            }),
+        },
+        exec(
+            Pipe::new(vec![
+                argv(&["./gzip", "-9", "-c", "/tmp/pgo-input"]),
+                argv(&["./gzip", "-d", "-c"]),
+            ])
+            .stdout(Arg::lit("/dev/null")),
+        ),
+        exec(
+            Pipe::new(vec![
+                argv(&["./gzip", "-1", "-c", "/tmp/pgo-input"]),
+                argv(&["./gzip", "-d", "-c"]),
+            ])
+            .stdout(Arg::lit("/dev/null")),
+        ),
+    ]
+}

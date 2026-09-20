@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Recipe};
+use crate::package::recipe::{BuildContext, Recipe, Step};
 use crate::package::{Bootstrap, Package, Source};
 
 pub struct Grep;
@@ -34,17 +34,58 @@ impl Package for Grep {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
+        Recipe::autotools_pgo(&["--prefix=/usr"], pgo_workload())
     }
 }
 
-const PGO_WORKLOAD: &str = r#"./src/grep -r -E 'int|char' "$SOURCE" > /dev/null
-./src/grep -r -F 'include' "$SOURCE" > /dev/null
-./src/grep -r -i -w 'main' "$SOURCE" > /dev/null
-printf 'a\0b\0c' | ./src/grep -a 'b' > /dev/null"#;
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::{Arg, Pipe, argv};
+
+    let exec = |pipe: Pipe| Step::Exec { env: vec![], pipe };
+    vec![
+        exec(
+            Pipe::cmd(argv(&[
+                "./src/grep",
+                "-r",
+                "-E",
+                "'int|char'",
+                "\"$SOURCE\"",
+            ]))
+            .stdout(Arg::lit("/dev/null")),
+        ),
+        exec(
+            Pipe::cmd(argv(&[
+                "./src/grep",
+                "-r",
+                "-F",
+                "'include'",
+                "\"$SOURCE\"",
+            ]))
+            .stdout(Arg::lit("/dev/null")),
+        ),
+        exec(
+            Pipe::cmd(argv(&[
+                "./src/grep",
+                "-r",
+                "-i",
+                "-w",
+                "'main'",
+                "\"$SOURCE\"",
+            ]))
+            .stdout(Arg::lit("/dev/null")),
+        ),
+        exec(
+            Pipe::new(vec![
+                argv(&["printf", "'a\\0b\\0c'"]),
+                argv(&["./src/grep", "-a", "'b'"]),
+            ])
+            .stdout(Arg::lit("/dev/null")),
+        ),
+    ]
+}
 
 impl Bootstrap for Grep {}

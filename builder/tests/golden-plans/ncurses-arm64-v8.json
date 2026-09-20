@@ -1,0 +1,39 @@
+{
+  "Steps": {
+    "env": "Lto",
+    "pgo": null,
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Configure": [
+          "--prefix=/usr",
+          "--with-shared",
+          "--without-cxx",
+          "--enable-widec",
+          "--enable-pc-files",
+          "--with-pkg-config-libdir=/usr/lib/pkgconfig",
+          "--without-ada",
+          "--without-debug",
+          "--with-build-cc=x86_64-linux-gnu-gcc",
+          "--with-build-cpp=x86_64-linux-gnu-gcc",
+          "--with-build-cflags=-O2 -std=gnu17",
+          "--with-build-cppflags=",
+          "--with-build-ldflags="
+        ]
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

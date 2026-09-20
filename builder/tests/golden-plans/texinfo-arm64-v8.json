@@ -1,0 +1,295 @@
+{
+  "Steps": {
+    "env": "Autotools",
+    "pgo": {
+      "Autotools": [
+        {
+          "Set": {
+            "name": "_texi2any",
+            "value": {
+              "Lit": "\"$BUILD/tp/texi2any\""
+            }
+          }
+        },
+        {
+          "If": {
+            "cond": {
+              "Not": {
+                "Cmd": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "test"
+                      },
+                      {
+                        "Lit": "-x"
+                      },
+                      {
+                        "Lit": "\"$_texi2any\""
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            },
+            "else_": [],
+            "then": [
+              {
+                "Set": {
+                  "name": "_texi2any",
+                  "value": {
+                    "Subst": {
+                      "stages": [
+                        [
+                          {
+                            "Lit": "find"
+                          },
+                          {
+                            "Lit": "\"$BUILD\""
+                          },
+                          {
+                            "Lit": "-name"
+                          },
+                          {
+                            "Lit": "texi2any"
+                          },
+                          {
+                            "Lit": "-type"
+                          },
+                          {
+                            "Lit": "f"
+                          },
+                          {
+                            "Lit": "-print"
+                          },
+                          {
+                            "Lit": "-quit"
+                          }
+                        ]
+                      ],
+                      "stderr": null,
+                      "stdin": null,
+                      "stdout": null
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "ForEach": {
+            "body": [
+              {
+                "If": {
+                  "cond": {
+                    "FileExists": {
+                      "Lit": "\"$_texi\""
+                    }
+                  },
+                  "else_": [],
+                  "then": [
+                    {
+                      "Exec": {
+                        "env": [],
+                        "pipe": {
+                          "stages": [
+                            [
+                              {
+                                "Lit": "\"$_texi2any\""
+                              },
+                              {
+                                "Lit": "--plaintext"
+                              },
+                              {
+                                "Lit": "\"$_texi\""
+                              }
+                            ]
+                          ],
+                          "stderr": {
+                            "Lit": "/dev/null"
+                          },
+                          "stdin": null,
+                          "stdout": {
+                            "append": false,
+                            "target": {
+                              "Lit": "/dev/null"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "items": [
+              {
+                "Lit": "\"$SOURCE\"/doc/*.texi"
+              }
+            ],
+            "stdout": null,
+            "var": "_texi"
+          }
+        },
+        {
+          "ForEach": {
+            "body": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "\"$_texi2any\""
+                        },
+                        {
+                          "Lit": "--html"
+                        },
+                        {
+                          "Lit": "\"$_t\""
+                        },
+                        {
+                          "Lit": "-o"
+                        },
+                        {
+                          "Lit": "/tmp/texi-out"
+                        }
+                      ]
+                    ],
+                    "stderr": {
+                      "Lit": "/dev/null"
+                    },
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              }
+            ],
+            "items": [
+              {
+                "Subst": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "find"
+                      },
+                      {
+                        "Lit": "\"$SOURCE\""
+                      },
+                      {
+                        "Lit": "-name"
+                      },
+                      {
+                        "Lit": "'*.texi'"
+                      }
+                    ],
+                    [
+                      {
+                        "Lit": "head"
+                      },
+                      {
+                        "Lit": "-5"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            ],
+            "stdout": null,
+            "var": "_t"
+          }
+        }
+      ]
+    },
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Configure": [
+          "--prefix=/usr",
+          "--disable-perl-xs"
+        ]
+      },
+      {
+        "If": {
+          "cond": {
+            "Not": {
+              "FileExists": {
+                "Lit": "tools/Makefile"
+              }
+            }
+          },
+          "else_": [],
+          "then": [
+            {
+              "Exec": {
+                "env": [],
+                "pipe": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "mkdir"
+                      },
+                      {
+                        "Lit": "-p"
+                      },
+                      {
+                        "Lit": "tools"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            },
+            {
+              "WriteFile": {
+                "append": false,
+                "expand": false,
+                "lines": [
+                  {
+                    "Lit": "all:"
+                  },
+                  {
+                    "Lit": "install:"
+                  },
+                  {
+                    "Lit": "check:"
+                  },
+                  {
+                    "Lit": ".PHONY: all install check"
+                  }
+                ],
+                "path": {
+                  "Lit": "tools/Makefile"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

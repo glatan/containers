@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Recipe};
+use crate::package::recipe::{BuildContext, Recipe, Step};
 use crate::package::{Package, Source};
 
 pub struct Expat;
@@ -34,15 +34,39 @@ impl Package for Expat {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
+        Recipe::autotools_pgo(&["--prefix=/usr"], pgo_workload())
     }
 }
 
-const PGO_WORKLOAD: &str = r#"[ -f "$SOURCE/doc/xmlwf.xml" ] && ./xmlwf/xmlwf "$SOURCE/doc/xmlwf.xml" > /dev/null
-find "$SOURCE" -name '*.xml' | head -20 | while read -r _x; do
-  ./xmlwf/xmlwf "$_x" > /dev/null 2>&1
-done"#;
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::{Arg, Cond, Pipe, argv};
+
+    let exec = |pipe: Pipe| Step::Exec { env: vec![], pipe };
+    vec![
+        Step::If {
+            cond: Cond::FileExists(Arg::lit("\"$SOURCE/doc/xmlwf.xml\"")),
+            then: vec![exec(
+                Pipe::cmd(argv(&["./xmlwf/xmlwf", "\"$SOURCE/doc/xmlwf.xml\""]))
+                    .stdout(Arg::lit("/dev/null")),
+            )],
+            else_: vec![],
+        },
+        Step::ForEach {
+            var: "_x",
+            items: vec![Arg::Subst(Box::new(Pipe::new(vec![
+                argv(&["find", "\"$SOURCE\"", "-name", "'*.xml'"]),
+                argv(&["head", "-20"]),
+            ])))],
+            body: vec![exec(
+                Pipe::cmd(argv(&["./xmlwf/xmlwf", "\"$_x\""]))
+                    .stdout(Arg::lit("/dev/null"))
+                    .stderr(Arg::lit("/dev/null")),
+            )],
+            stdout: None,
+        },
+    ]
+}

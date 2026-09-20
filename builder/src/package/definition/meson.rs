@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Env, Recipe, Step, Steps, Workdir};
+use crate::package::recipe::{Arg, BuildContext, Env, Pipe, Recipe, Step, Steps, Workdir};
 use crate::package::{Package, Source};
 
 pub struct Meson;
@@ -47,16 +47,72 @@ impl Package for Meson {
             Steps::new(Env::None)
                 .sysroot(false)
                 .workdir(Workdir::None)
-                .step(Step::Shell(
-                    // python 成果物は --without-ensurepip で pip を持たないため、
-                    // mesonbuild を site-packages へ直接配置して launcher を作る。
-                    r#"_pyver=$(python3 -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')
-_site="$OUT/usr/lib/$_pyver/site-packages"
-mkdir -p "$_site" "$OUT/usr/bin"
-cp -a "$SOURCE"/mesonbuild "$_site"/
-printf '#!/bin/sh\nexec python3 -m mesonbuild.mesonmain "$@"\n' > "$OUT/usr/bin/meson"
-chmod +x "$OUT/usr/bin/meson""#,
-                )),
+                // python 成果物は --without-ensurepip で pip を持たないため、
+                // mesonbuild を site-packages へ直接配置して launcher を作る。
+                .step(Step::Set {
+                    name: "_pyver",
+                    value: Arg::Subst(Box::new(Pipe::cmd(vec![
+                        Arg::lit("python3"),
+                        Arg::lit("-c"),
+                        Arg::lit("'import sys; print(f\"python{sys.version_info.major}.{sys.version_info.minor}\")'"),
+                    ]))),
+                })
+                .step(Step::Set {
+                    name: "_site",
+                    value: Arg::quoted(Arg::Concat(vec![
+                        Arg::Var("OUT"),
+                        Arg::lit("/usr/lib/"),
+                        Arg::Var("_pyver"),
+                        Arg::lit("/site-packages"),
+                    ])),
+                })
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("mkdir"),
+                        Arg::lit("-p"),
+                        Arg::quoted(Arg::Var("_site")),
+                        Arg::quoted(Arg::Concat(vec![
+                            Arg::Var("OUT"),
+                            Arg::lit("/usr/bin"),
+                        ])),
+                    ]),
+                })
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("cp"),
+                        Arg::lit("-a"),
+                        Arg::Concat(vec![
+                            Arg::quoted(Arg::Var("SOURCE")),
+                            Arg::lit("/mesonbuild"),
+                        ]),
+                        Arg::Concat(vec![Arg::quoted(Arg::Var("_site")), Arg::lit("/")]),
+                    ]),
+                })
+                .step(Step::WriteFile {
+                    path: Arg::quoted(Arg::Concat(vec![
+                        Arg::Var("OUT"),
+                        Arg::lit("/usr/bin/meson"),
+                    ])),
+                    lines: vec![
+                        Arg::lit("#!/bin/sh"),
+                        Arg::lit("exec python3 -m mesonbuild.mesonmain \"$@\""),
+                    ],
+                    append: false,
+                    expand: false,
+                })
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("chmod"),
+                        Arg::lit("+x"),
+                        Arg::quoted(Arg::Concat(vec![
+                            Arg::Var("OUT"),
+                            Arg::lit("/usr/bin/meson"),
+                        ])),
+                    ]),
+                }),
         )
     }
 }

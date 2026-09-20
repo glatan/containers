@@ -2,7 +2,7 @@
 
 パッケージ定義に共通するビルド方針です。段階ごとのコマンドは [build-flow.md](./build-flow.md)、個別設定は [definition/](./definition/)、Host tools の共通前処理は [host-tools.md](./host-tools.md)、プレフィックス付きツールチェーンは [toolchain.md](./toolchain.md) です。公開対象の分類は [image/packages.md](../image/packages.md) です。
 
-`PACKAGES` に載るパッケージは [definition/](./definition/) に `{パッケージ名}.md` を 1 ファイル置きます。索引は [definition/README.md](./definition/README.md) です。実装は [`builder/src/package/definition/`](../../builder/src/package/definition/) です。ハイフンはモジュール名ではアンダースコア `_` です。プレフィックス付きツールチェーンも `{パッケージ名}.rs` の 1 ファイル 1 定義で、ステージ共通の実装は `toolchain.rs` に置きます。
+`PACKAGES` に載るパッケージは [definition/](./definition/) に `{パッケージ名}.md` を 1 ファイル置きます。索引は [definition/README.md](./definition/README.md) です。実装は [`builder/src/package/definition/`](../../builder/src/package/definition/) です。ハイフンはモジュール名ではアンダースコア `_` です。プレフィックス付きツールチェーンも `{パッケージ名}.rs` の 1 ファイル 1 定義で、ステージ共通の実装は `binutils.rs` / `gcc.rs` / `gcc_stage1.rs` / `gcc_stage2.rs` / `glibc.rs` / `glibc_headers.rs` / `stages.rs` に置きます。
 
 パッケージイメージには各パッケージ固有のファイルのみを含めます。実行時に必要となる他のパッケージは `dependencies`、ビルド時のみ必要な依存パッケージは `build-dependencies` として分離して宣言します。`check` コマンドは、この実行時依存の宣言と、パッケージ成果物（`packages/artifacts/`）に含まれる ELF バイナリの動的リンク情報を静的に照合します。
 
@@ -22,7 +22,7 @@
 
 | 層 | 注入点 | 実装 | 内容 | 適用条件 |
 |-|-|-|-|-|
-| L1 ツールチェーン既定 | 最終 gcc の specs / configure | `toolchain.rs` の `--with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'`、`--enable-default-pie`、`--enable-default-ssp` | CFLAGS を無視するビルド系にも `-fhardened` / PIE / SSP を既定適用 | 最終 gcc 経由の全コンパイル。`-fno-hardened` で傘フラグのみ解除（toolchain 既定 PIE/SSP は残存） |
+| L1 ツールチェーン既定 | 最終 gcc の specs / configure | `definition/gcc.rs` の `--with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'`、`--enable-default-pie`、`--enable-default-ssp` | CFLAGS を無視するビルド系にも `-fhardened` / PIE / SSP を既定適用 | 最終 gcc 経由の全コンパイル。`-fno-hardened` で傘フラグのみ解除（toolchain 既定 PIE/SSP は残存） |
 | L2 環境変数 | コンテナ `CFLAGS` / `CXXFLAGS` / `LDFLAGS` | `container.rs` の `linker_env()` が `flags().env()` を渡す | `tool_flags(target)`（後述の既定セット）またはパッケージ固有 `flags()` | 常時。`CXXFLAGS` は `CFLAGS` と同値。mold 成果物が無い時のみ `-fuse-ld=mold` を除去 |
 | L3 recipe プリリュード | configure 実行時の一時 env | `recipe.rs` の `autotools_configure` が `sanitize_flags` で `CFLAGS` / `CXXFLAGS` / `LDFLAGS` を一時上書き | `-flto*`・LTO 系 `-Werror={odr,lto-type-mismatch,strict-aliasing}`・`-f{,no-}hardened` を configure のみ除去（`-Werror=format-security` は保持） | `Env::Autotools` のみ。`Env::Lto`（configure が CFLAGS を Makefile へ焼くパッケージ）と `Env::None` では除去しない |
 | L3b `-std` 付与 | `CFLAGS` への末尾追加 | `Steps::std`（プリリュードで `export CFLAGS="... -std=gnu17"`、flex は `gnu11`） | gnulib 等の K&R 宣言保護 | `Env::Autotools` のみ |
@@ -108,6 +108,6 @@
 
 `Package` トレイト自体にはブートストラップ用のメソッドを設けず、ブートストラップ処理は [`Bootstrap`](../../builder/src/package/mod.rs) トレイトおよび `BOOTSTRAP` 登録一覧として分離して定義しています。`BOOTSTRAP` に登録されたパッケージは、合成済みビルド環境イメージが存在しない初期段階において、シード環境（Arch Linux）と pacman を用いてビルドします。それ以外のパッケージは、合成済みビルド環境が存在する場合はそれをベースとし、未合成の場合はシード環境へフォールバックしてビルドします。
 
-ビルド手順は `recipe(&self, ctx)` メソッドが返す型付きの [`Recipe`](../../builder/src/package/recipe.rs)（`Step::Configure` / `Make` / `MakeInstall` / `Install` / `Symlink` 等）として記述します。定型の autotools パッケージは `Recipe::autotools(&[...])` で configure 引数のみを列挙します。`ctx`（`BuildContext`）は `target`・`$TRIPLE`・`$HOST_TRIPLE`・クロス判定を保持するため、クロス限定の configure 引数は Rust 側の条件分岐で静的に解決します。型では表現しきれない手順は `Step::Shell` または `build_script()`（`Recipe::Shell`）に逃がします。いずれの場合も configure、make、`DESTDIR` を用いたインストール手順のみを記述し、pacman コマンドなどのホスト環境を変更する処理は含めません。
+ビルド手順は `recipe(&self, ctx)` メソッドが返す型付きの [`Recipe`](../../builder/src/package/recipe.rs)（`Step::Configure` / `Make` / `MakeInstall` / `Install` / `Symlink` 等）として記述します。定型の autotools パッケージは `Recipe::autotools(&[...])` で configure 引数のみを列挙します。`ctx`（`BuildContext`）は `target`・`$TRIPLE`・`$HOST_TRIPLE`・クロス判定を保持するため、クロス限定の configure 引数は Rust 側の条件分岐で静的に解決します。全ての手順を型付き `Step` として記述します（生のシェル文字列への逃げ道はありません）。configure、make、`DESTDIR` を用いたインストール手順のみを記述し、pacman コマンドなどのホスト環境を変更する処理は含めません。
 
 上流ソースコードのアーカイブ検証には SHA3-512 および BLAKE3（出力 512 bit）の双方を使用します。生成される OCI Image Layout 内の blob ダイジェストおよび DiffID については、OCI 仕様に従い SHA-256 のまま算出します。

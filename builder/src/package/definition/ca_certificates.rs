@@ -49,18 +49,18 @@ impl Package for CaCertificates {
                 .sysroot(false)
                 .workdir(Workdir::None)
                 .step(Step::Install {
-                    src: "\"$SOURCE\"/certifi/cacert.pem",
-                    dst: "\"$OUT\"/etc/ssl/certs/ca-certificates.crt",
-                    mode: "644",
+                    src: "\"$SOURCE\"/certifi/cacert.pem".into(),
+                    dst: "\"$OUT\"/etc/ssl/certs/ca-certificates.crt".into(),
+                    mode: "644".into(),
                 })
                 .step(Step::Symlink {
-                    target: "ca-certificates.crt",
-                    link: "\"$OUT\"/etc/ssl/certs/ca-bundle.crt",
+                    target: "ca-certificates.crt".into(),
+                    link: "\"$OUT\"/etc/ssl/certs/ca-bundle.crt".into(),
                     force: false,
                 })
                 .step(Step::Symlink {
-                    target: "certs/ca-certificates.crt",
-                    link: "\"$OUT\"/etc/ssl/cert.pem",
+                    target: "certs/ca-certificates.crt".into(),
+                    link: "\"$OUT\"/etc/ssl/cert.pem".into(),
                     force: false,
                 }),
         )

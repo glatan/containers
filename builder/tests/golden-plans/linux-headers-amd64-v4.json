@@ -1,0 +1,436 @@
+{
+  "Steps": {
+    "env": "None",
+    "pgo": null,
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "mkdir"
+                },
+                {
+                  "Lit": "-p"
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$BUILD/x86_64"
+                  }
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$OUT/usr/x86_64-linux-gnu/include"
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Make": {
+          "args": [
+            "-C",
+            "\"$SOURCE\"",
+            "O=\"$BUILD/x86_64\"",
+            "ARCH=\"x86_64\"",
+            "headers"
+          ],
+          "jobs": false
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "cp"
+                },
+                {
+                  "Lit": "-a"
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$BUILD/x86_64/usr/include/."
+                  }
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$OUT/usr/x86_64-linux-gnu/include/"
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "mkdir"
+                },
+                {
+                  "Lit": "-p"
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$BUILD/arm64"
+                  }
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$OUT/usr/aarch64-linux-gnu/include"
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Make": {
+          "args": [
+            "-C",
+            "\"$SOURCE\"",
+            "O=\"$BUILD/arm64\"",
+            "ARCH=\"arm64\"",
+            "headers"
+          ],
+          "jobs": false
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "cp"
+                },
+                {
+                  "Lit": "-a"
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$BUILD/arm64/usr/include/."
+                  }
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$OUT/usr/aarch64-linux-gnu/include/"
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "mkdir"
+                },
+                {
+                  "Lit": "-p"
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$BUILD/riscv"
+                  }
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$OUT/usr/riscv64-linux-gnu/include"
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Make": {
+          "args": [
+            "-C",
+            "\"$SOURCE\"",
+            "O=\"$BUILD/riscv\"",
+            "ARCH=\"riscv\"",
+            "headers"
+          ],
+          "jobs": false
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "cp"
+                },
+                {
+                  "Lit": "-a"
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$BUILD/riscv/usr/include/."
+                  }
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$OUT/usr/riscv64-linux-gnu/include/"
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "mkdir"
+                },
+                {
+                  "Lit": "-p"
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$BUILD/powerpc"
+                  }
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$OUT/usr/powerpc64le-linux-gnu/include"
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Make": {
+          "args": [
+            "-C",
+            "\"$SOURCE\"",
+            "O=\"$BUILD/powerpc\"",
+            "ARCH=\"powerpc\"",
+            "headers"
+          ],
+          "jobs": false
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "cp"
+                },
+                {
+                  "Lit": "-a"
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$BUILD/powerpc/usr/include/."
+                  }
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$OUT/usr/powerpc64le-linux-gnu/include/"
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "mkdir"
+                },
+                {
+                  "Lit": "-p"
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$BUILD/s390"
+                  }
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$OUT/usr/s390x-linux-gnu/include"
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Make": {
+          "args": [
+            "-C",
+            "\"$SOURCE\"",
+            "O=\"$BUILD/s390\"",
+            "ARCH=\"s390\"",
+            "headers"
+          ],
+          "jobs": false
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "cp"
+                },
+                {
+                  "Lit": "-a"
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$BUILD/s390/usr/include/."
+                  }
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$OUT/usr/s390x-linux-gnu/include/"
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "mkdir"
+                },
+                {
+                  "Lit": "-p"
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$OUT/usr/include"
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "cp"
+                },
+                {
+                  "Lit": "-a"
+                },
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": "$OUT/usr/"
+                      },
+                      {
+                        "Var": "HOST_TRIPLE"
+                      },
+                      {
+                        "Lit": "/include/."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "Quoted": {
+                    "Lit": "$OUT/usr/include/"
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      }
+    ],
+    "sysroot": false,
+    "workdir": "None"
+  }
+}

@@ -1,68 +1,61 @@
-use crate::flags::{Flag, Pgo};
+use crate::flags::Flag;
 use crate::package::recipe::{BuildContext, Recipe};
-use crate::package::{Bootstrap, Dependency, Package, Role, Source, Stage};
+use crate::package::{Bootstrap, Dependency, Package, Source};
 use crate::target::Target;
 
-use super::toolchain::Prefixed;
+use super::gcc;
 
+/// `riscv64-linux-gnu` 向け 最終 GCC。
 pub struct Riscv64LinuxGnuGcc;
 
-const DEF: Prefixed = Prefixed {
-    name: "riscv64-linux-gnu-gcc",
-    triple: "riscv64-linux-gnu",
-    stage: Stage::Gcc,
-};
+const TRIPLE: &str = "riscv64-linux-gnu";
+const NAME: &str = "riscv64-linux-gnu-gcc";
 
 impl Package for Riscv64LinuxGnuGcc {
     fn name(&self) -> &'static str {
-        DEF.name()
+        NAME
     }
     fn version(&self) -> &'static str {
-        DEF.version()
+        crate::package::GCC_VERSION
     }
     fn license(&self) -> &'static str {
-        DEF.license()
-    }
-    fn build_only(&self) -> bool {
-        DEF.build_only()
-    }
-    fn role(&self) -> Role {
-        DEF.role()
+        gcc::LICENSE
     }
     fn source(&self) -> Source {
-        DEF.source()
+        gcc::SOURCE
     }
     fn dependencies(&self, target: Target) -> Vec<Dependency> {
-        DEF.dependencies(target)
+        gcc::deps(target)
     }
-    fn build_dependencies(&self, target: Target) -> Vec<Dependency> {
-        DEF.build_dependencies(target)
-    }
-    fn flags(&self, target: Target) -> Flag {
-        DEF.flags(target)
-    }
-    fn pgo(&self) -> Pgo {
-        DEF.pgo()
-    }
-    fn supports(&self, target: Target) -> bool {
-        DEF.supports(target)
-    }
-    fn host_tools(&self, target: Target) -> Vec<&'static str> {
-        DEF.host_tools(target)
+    fn build_dependencies(&self, _target: Target) -> Vec<Dependency> {
+        gcc::build_deps(TRIPLE)
     }
     fn recipe(&self, ctx: &BuildContext) -> Recipe {
-        DEF.recipe(ctx)
+        Recipe::Steps(gcc::recipe(ctx))
+    }
+    fn flags(&self, target: Target) -> Flag {
+        gcc::flags(target)
+    }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Custom
+    }
+    fn uses_cc_wrapper(&self) -> bool {
+        false
+    }
+    fn host_tools(&self, target: Target) -> Vec<&'static str> {
+        if target == Target::BUILD_ENV {
+            vec![]
+        } else {
+            vec![NAME]
+        }
+    }
+    fn gnu_triple(&self) -> Option<&'static str> {
+        Some(TRIPLE)
     }
 }
 
 impl Bootstrap for Riscv64LinuxGnuGcc {
     fn pacman(&self) -> &'static [&'static str] {
-        DEF.pacman()
-    }
-    fn seed(&self) -> bool {
-        DEF.seed()
-    }
-    fn seed_dependencies(&self, target: Target) -> Option<(Vec<Dependency>, Vec<Dependency>)> {
-        DEF.seed_dependencies(target)
+        gcc::PACMAN
     }
 }

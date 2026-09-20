@@ -463,7 +463,7 @@ fn ls_prints_five_columns_with_role() {
         .stdout(contains(
             "zlib\t1.3.2\tcatalog\tx86_64-linux-gnu-glibc\tlinux-headers",
         ))
-        .stdout(contains("toolchain(x86_64-linux-gnu, Binutils)"))
+        .stdout(contains("x86_64-linux-gnu-binutils\t2.47\tpackage"))
         .stdout(contains("\tなし\t"));
 }
 

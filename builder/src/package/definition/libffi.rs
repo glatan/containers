@@ -34,14 +34,10 @@ impl Package for Libffi {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(MAKE_CHECK_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools_pgo(&["--prefix=/usr"], MAKE_CHECK_WORKLOAD)
+        Recipe::autotools_pgo(&["--prefix=/usr"], Recipe::make_check_workload())
     }
 }
-
-/// make check へフラグ変数を伝播（テストバイナリも instrumented 化）。
-const MAKE_CHECK_WORKLOAD: &str =
-    "make check CFLAGS=\"$CFLAGS\" CXXFLAGS=\"${CXXFLAGS:-}\" LDFLAGS=\"$LDFLAGS\"";

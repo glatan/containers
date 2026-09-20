@@ -1,68 +1,59 @@
-use crate::flags::{Flag, Pgo};
+use crate::flags::Flag;
 use crate::package::recipe::{BuildContext, Recipe};
-use crate::package::{Bootstrap, Dependency, Package, Role, Source, Stage};
+use crate::package::{Bootstrap, Dependency, Package, Source};
 use crate::target::Target;
 
-use super::toolchain::Prefixed;
+use super::binutils;
 
+/// `s390x-linux-gnu` 向け binutils。
 pub struct S390xLinuxGnuBinutils;
 
-const DEF: Prefixed = Prefixed {
-    name: "s390x-linux-gnu-binutils",
-    triple: "s390x-linux-gnu",
-    stage: Stage::Binutils,
-};
+const TRIPLE: &str = "s390x-linux-gnu";
+const NAME: &str = "s390x-linux-gnu-binutils";
 
 impl Package for S390xLinuxGnuBinutils {
     fn name(&self) -> &'static str {
-        DEF.name()
+        NAME
     }
     fn version(&self) -> &'static str {
-        DEF.version()
+        binutils::VERSION
     }
     fn license(&self) -> &'static str {
-        DEF.license()
-    }
-    fn build_only(&self) -> bool {
-        DEF.build_only()
-    }
-    fn role(&self) -> Role {
-        DEF.role()
+        binutils::LICENSE
     }
     fn source(&self) -> Source {
-        DEF.source()
+        binutils::SOURCE
     }
     fn dependencies(&self, target: Target) -> Vec<Dependency> {
-        DEF.dependencies(target)
+        binutils::deps(target)
     }
     fn build_dependencies(&self, target: Target) -> Vec<Dependency> {
-        DEF.build_dependencies(target)
-    }
-    fn flags(&self, target: Target) -> Flag {
-        DEF.flags(target)
-    }
-    fn pgo(&self) -> Pgo {
-        DEF.pgo()
-    }
-    fn supports(&self, target: Target) -> bool {
-        DEF.supports(target)
-    }
-    fn host_tools(&self, target: Target) -> Vec<&'static str> {
-        DEF.host_tools(target)
+        // シード相では glibc 依存を切り離す（循環回避）。
+        binutils::build_deps(!(self.seed() && target == Target::BUILD_ENV))
     }
     fn recipe(&self, ctx: &BuildContext) -> Recipe {
-        DEF.recipe(ctx)
+        Recipe::Steps(binutils::recipe(ctx))
+    }
+    fn flags(&self, target: Target) -> Flag {
+        crate::flags::tool_flags(target)
+    }
+    fn pgo(&self) -> crate::flags::Pgo {
+        crate::flags::Pgo::Custom
+    }
+    fn gnu_triple(&self) -> Option<&'static str> {
+        Some(TRIPLE)
     }
 }
 
 impl Bootstrap for S390xLinuxGnuBinutils {
     fn pacman(&self) -> &'static [&'static str] {
-        DEF.pacman()
-    }
-    fn seed(&self) -> bool {
-        DEF.seed()
+        if self.seed() {
+            binutils::PACMAN_SEED
+        } else {
+            binutils::PACMAN
+        }
     }
     fn seed_dependencies(&self, target: Target) -> Option<(Vec<Dependency>, Vec<Dependency>)> {
-        DEF.seed_dependencies(target)
+        Some((vec![], self.build_dependencies(target)))
     }
 }

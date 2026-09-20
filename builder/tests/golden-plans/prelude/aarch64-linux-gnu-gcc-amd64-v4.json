@@ -1,0 +1,2550 @@
+{
+  "prelude": [
+    {
+      "Set": {
+        "name": "_cc_triple",
+        "value": {
+          "Lit": "\"${PACKAGE_HOST:-$TRIPLE}\""
+        }
+      }
+    },
+    {
+      "Comment": "Never export LD=*-gcc: libtool then reports \"is GNU ld... no\" and skips\nthe real -shared link (gmp install: dangling libgmp.so.*)."
+    },
+    {
+      "Exec": {
+        "env": [],
+        "pipe": {
+          "stages": [
+            [
+              {
+                "Lit": "mkdir"
+              },
+              {
+                "Lit": "-p"
+              },
+              {
+                "Lit": "/tmp/la-overlay"
+              },
+              {
+                "Lit": "/tmp/pc-overlay"
+              }
+            ]
+          ],
+          "stderr": null,
+          "stdin": null,
+          "stdout": null
+        }
+      }
+    },
+    {
+      "Set": {
+        "name": "_pc_wrap",
+        "value": {
+          "Lit": "/tmp/pkg-config-bin"
+        }
+      }
+    },
+    {
+      "Exec": {
+        "env": [],
+        "pipe": {
+          "stages": [
+            [
+              {
+                "Lit": "mkdir"
+              },
+              {
+                "Lit": "-p"
+              },
+              {
+                "Lit": "\"$_pc_wrap\""
+              }
+            ]
+          ],
+          "stderr": null,
+          "stdin": null,
+          "stdout": null
+        }
+      }
+    },
+    {
+      "If": {
+        "cond": {
+          "Cmd": {
+            "stages": [
+              [
+                {
+                  "Lit": "command"
+                },
+                {
+                  "Lit": "-v"
+                },
+                {
+                  "Lit": "pkgconf"
+                }
+              ]
+            ],
+            "stderr": {
+              "Lit": "/dev/null"
+            },
+            "stdin": null,
+            "stdout": {
+              "append": false,
+              "target": {
+                "Lit": "/dev/null"
+              }
+            }
+          }
+        },
+        "else_": [
+          {
+            "If": {
+              "cond": {
+                "Cmd": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "command"
+                      },
+                      {
+                        "Lit": "-v"
+                      },
+                      {
+                        "Lit": "pkg-config"
+                      }
+                    ]
+                  ],
+                  "stderr": {
+                    "Lit": "/dev/null"
+                  },
+                  "stdin": null,
+                  "stdout": {
+                    "append": false,
+                    "target": {
+                      "Lit": "/dev/null"
+                    }
+                  }
+                }
+              },
+              "else_": [],
+              "then": [
+                {
+                  "WriteFile": {
+                    "append": false,
+                    "expand": false,
+                    "lines": [
+                      {
+                        "Lit": "#!/bin/sh"
+                      },
+                      {
+                        "Lit": "exec pkg-config \"$@\""
+                      }
+                    ],
+                    "path": {
+                      "Lit": "\"$_pc_wrap/pkg-config\""
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "then": [
+          {
+            "WriteFile": {
+              "append": false,
+              "expand": false,
+              "lines": [
+                {
+                  "Lit": "#!/bin/sh"
+                },
+                {
+                  "Lit": "exec pkgconf \"$@\""
+                }
+              ],
+              "path": {
+                "Lit": "\"$_pc_wrap/pkg-config\""
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "If": {
+        "cond": {
+          "FileExists": {
+            "Lit": "\"$_pc_wrap/pkg-config\""
+          }
+        },
+        "else_": [],
+        "then": [
+          {
+            "Exec": {
+              "env": [],
+              "pipe": {
+                "stages": [
+                  [
+                    {
+                      "Lit": "chmod"
+                    },
+                    {
+                      "Lit": "+x"
+                    },
+                    {
+                      "Lit": "\"$_pc_wrap/pkg-config\""
+                    }
+                  ]
+                ],
+                "stderr": null,
+                "stdin": null,
+                "stdout": null
+              }
+            }
+          },
+          {
+            "Export": {
+              "name": "PATH",
+              "value": {
+                "Lit": "\"$_pc_wrap:$PATH\""
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "recipe": {
+    "Steps": {
+      "env": "None",
+      "pgo": null,
+      "std": "Gnu17",
+      "steps": [
+        {
+          "Unset": "CPP"
+        },
+        {
+          "Export": {
+            "name": "PATH",
+            "value": {
+              "Quoted": {
+                "Concat": [
+                  {
+                    "Lit": "/dep/"
+                  },
+                  {
+                    "Var": "TRIPLE"
+                  },
+                  {
+                    "Lit": "-binutils/usr/bin:"
+                  },
+                  {
+                    "Var": "PATH"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "Export": {
+            "name": "CC_FOR_BUILD",
+            "value": {
+              "Concat": [
+                {
+                  "Var": "HOST_TRIPLE"
+                },
+                {
+                  "Lit": "-gcc"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Export": {
+            "name": "CXX_FOR_BUILD",
+            "value": {
+              "Concat": [
+                {
+                  "Var": "HOST_TRIPLE"
+                },
+                {
+                  "Lit": "-g++"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "If": {
+            "cond": {
+              "DirExists": {
+                "Concat": [
+                  {
+                    "Lit": "/dep/"
+                  },
+                  {
+                    "Var": "HOST_TRIPLE"
+                  },
+                  {
+                    "Lit": "-glibc/usr/"
+                  },
+                  {
+                    "Var": "HOST_TRIPLE"
+                  }
+                ]
+              }
+            },
+            "else_": [],
+            "then": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "mkdir"
+                        },
+                        {
+                          "Lit": "-p"
+                        },
+                        {
+                          "Lit": "/tmp/build-sysroot/usr"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Quoted": {
+                            "Concat": [
+                              {
+                                "Concat": [
+                                  {
+                                    "Lit": "/dep/"
+                                  },
+                                  {
+                                    "Var": "HOST_TRIPLE"
+                                  },
+                                  {
+                                    "Lit": "-glibc/usr/"
+                                  },
+                                  {
+                                    "Var": "HOST_TRIPLE"
+                                  }
+                                ]
+                              },
+                              {
+                                "Lit": "/include"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "Lit": "/tmp/build-sysroot/include"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Quoted": {
+                            "Concat": [
+                              {
+                                "Concat": [
+                                  {
+                                    "Lit": "/dep/"
+                                  },
+                                  {
+                                    "Var": "HOST_TRIPLE"
+                                  },
+                                  {
+                                    "Lit": "-glibc/usr/"
+                                  },
+                                  {
+                                    "Var": "HOST_TRIPLE"
+                                  }
+                                ]
+                              },
+                              {
+                                "Lit": "/include"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "Lit": "/tmp/build-sysroot/usr/include"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Quoted": {
+                            "Concat": [
+                              {
+                                "Concat": [
+                                  {
+                                    "Lit": "/dep/"
+                                  },
+                                  {
+                                    "Var": "HOST_TRIPLE"
+                                  },
+                                  {
+                                    "Lit": "-glibc/usr/"
+                                  },
+                                  {
+                                    "Var": "HOST_TRIPLE"
+                                  }
+                                ]
+                              },
+                              {
+                                "Lit": "/lib"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "Lit": "/tmp/build-sysroot/lib"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Quoted": {
+                            "Concat": [
+                              {
+                                "Concat": [
+                                  {
+                                    "Lit": "/dep/"
+                                  },
+                                  {
+                                    "Var": "HOST_TRIPLE"
+                                  },
+                                  {
+                                    "Lit": "-glibc/usr/"
+                                  },
+                                  {
+                                    "Var": "HOST_TRIPLE"
+                                  }
+                                ]
+                              },
+                              {
+                                "Lit": "/lib"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "Lit": "/tmp/build-sysroot/usr/lib"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Quoted": {
+                            "Concat": [
+                              {
+                                "Concat": [
+                                  {
+                                    "Lit": "/dep/"
+                                  },
+                                  {
+                                    "Var": "HOST_TRIPLE"
+                                  },
+                                  {
+                                    "Lit": "-glibc/usr/"
+                                  },
+                                  {
+                                    "Var": "HOST_TRIPLE"
+                                  }
+                                ]
+                              },
+                              {
+                                "Lit": "/lib64"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "Lit": "/tmp/build-sysroot/lib64"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Quoted": {
+                            "Concat": [
+                              {
+                                "Concat": [
+                                  {
+                                    "Lit": "/dep/"
+                                  },
+                                  {
+                                    "Var": "HOST_TRIPLE"
+                                  },
+                                  {
+                                    "Lit": "-glibc/usr/"
+                                  },
+                                  {
+                                    "Var": "HOST_TRIPLE"
+                                  }
+                                ]
+                              },
+                              {
+                                "Lit": "/lib64"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "Lit": "/tmp/build-sysroot/usr/lib64"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Set": {
+                  "name": "_build_root",
+                  "value": {
+                    "Lit": "/tmp/build-sysroot"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "Set": {
+            "name": "_bf",
+            "value": {
+              "Quoted": {
+                "Lit": "-O2 -pipe"
+              }
+            }
+          }
+        },
+        {
+          "If": {
+            "cond": {
+              "EnvSet": "_build_root"
+            },
+            "else_": [],
+            "then": [
+              {
+                "Set": {
+                  "name": "_bf",
+                  "value": {
+                    "Quoted": {
+                      "Concat": [
+                        {
+                          "Var": "_bf"
+                        },
+                        {
+                          "Lit": " --sysroot="
+                        },
+                        {
+                          "Var": "_build_root"
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              {
+                "If": {
+                  "cond": {
+                    "FileExists": {
+                      "Concat": [
+                        {
+                          "Var": "_build_root"
+                        },
+                        {
+                          "Lit": "/lib/crti.o"
+                        }
+                      ]
+                    }
+                  },
+                  "else_": [
+                    {
+                      "If": {
+                        "cond": {
+                          "FileExists": {
+                            "Concat": [
+                              {
+                                "Var": "_build_root"
+                              },
+                              {
+                                "Lit": "/lib64/crti.o"
+                              }
+                            ]
+                          }
+                        },
+                        "else_": [],
+                        "then": [
+                          {
+                            "Set": {
+                              "name": "_bf",
+                              "value": {
+                                "Quoted": {
+                                  "Concat": [
+                                    {
+                                      "Var": "_bf"
+                                    },
+                                    {
+                                      "Lit": " -B"
+                                    },
+                                    {
+                                      "Var": "_build_root"
+                                    },
+                                    {
+                                      "Lit": "/lib64"
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "then": [
+                    {
+                      "Set": {
+                        "name": "_bf",
+                        "value": {
+                          "Quoted": {
+                            "Concat": [
+                              {
+                                "Var": "_bf"
+                              },
+                              {
+                                "Lit": " -B"
+                              },
+                              {
+                                "Var": "_build_root"
+                              },
+                              {
+                                "Lit": "/lib"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "Export": {
+            "name": "CFLAGS_FOR_BUILD",
+            "value": {
+              "Quoted": {
+                "Var": "_bf"
+              }
+            }
+          }
+        },
+        {
+          "Export": {
+            "name": "CXXFLAGS_FOR_BUILD",
+            "value": {
+              "Quoted": {
+                "Var": "_bf"
+              }
+            }
+          }
+        },
+        {
+          "Export": {
+            "name": "LDFLAGS_FOR_BUILD",
+            "value": {
+              "Quoted": {
+                "Lit": "${_build_root:+--sysroot=$_build_root}"
+              }
+            }
+          }
+        },
+        {
+          "Set": {
+            "name": "SYSROOT",
+            "value": {
+              "Concat": [
+                {
+                  "Lit": "/usr/"
+                },
+                {
+                  "Var": "TRIPLE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Set": {
+            "name": "_profiledir",
+            "value": {
+              "Concat": [
+                {
+                  "Var": "BUILD"
+                },
+                {
+                  "Lit": "/pgo-profile-data"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "rm"
+                  },
+                  {
+                    "Lit": "-rf"
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Var": "BUILD"
+                      },
+                      {
+                        "Lit": "/instrumented"
+                      }
+                    ]
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Var": "BUILD"
+                      },
+                      {
+                        "Lit": "/final"
+                      }
+                    ]
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "mkdir"
+                  },
+                  {
+                    "Lit": "-p"
+                  },
+                  {
+                    "Var": "SYSROOT"
+                  },
+                  {
+                    "Var": "_profiledir"
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Var": "BUILD"
+                      },
+                      {
+                        "Lit": "/instrumented"
+                      }
+                    ]
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Var": "BUILD"
+                      },
+                      {
+                        "Lit": "/final"
+                      }
+                    ]
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "If": {
+            "cond": {
+              "DirExists": {
+                "Concat": [
+                  {
+                    "Lit": "/dep/"
+                  },
+                  {
+                    "Var": "TRIPLE"
+                  },
+                  {
+                    "Lit": "-glibc/usr/"
+                  },
+                  {
+                    "Var": "TRIPLE"
+                  }
+                ]
+              }
+            },
+            "else_": [],
+            "then": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "cp"
+                        },
+                        {
+                          "Lit": "-a"
+                        },
+                        {
+                          "Concat": [
+                            {
+                              "Concat": [
+                                {
+                                  "Lit": "/dep/"
+                                },
+                                {
+                                  "Var": "TRIPLE"
+                                },
+                                {
+                                  "Lit": "-glibc/usr/"
+                                },
+                                {
+                                  "Var": "TRIPLE"
+                                }
+                              ]
+                            },
+                            {
+                              "Lit": "/."
+                            }
+                          ]
+                        },
+                        {
+                          "Concat": [
+                            {
+                              "Var": "SYSROOT"
+                            },
+                            {
+                              "Lit": "/"
+                            }
+                          ]
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "ForEach": {
+            "body": [
+              {
+                "If": {
+                  "cond": {
+                    "Cmd": {
+                      "stages": [
+                        [
+                          {
+                            "Lit": "grep"
+                          },
+                          {
+                            "Lit": "-q"
+                          },
+                          {
+                            "Quoted": {
+                              "Lit": "GNU ld script"
+                            }
+                          },
+                          {
+                            "Var": "_so"
+                          }
+                        ]
+                      ],
+                      "stderr": null,
+                      "stdin": null,
+                      "stdout": null
+                    }
+                  },
+                  "else_": [],
+                  "then": [
+                    {
+                      "Exec": {
+                        "env": [],
+                        "pipe": {
+                          "stages": [
+                            [
+                              {
+                                "Lit": "sed"
+                              },
+                              {
+                                "Lit": "-i"
+                              },
+                              {
+                                "Quoted": {
+                                  "Lit": "s|//lib/|/lib/|g; s|//lib64/|/lib64/|g"
+                                }
+                              },
+                              {
+                                "Var": "_so"
+                              }
+                            ]
+                          ],
+                          "stderr": null,
+                          "stdin": null,
+                          "stdout": null
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "items": [
+              {
+                "Subst": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "find"
+                      },
+                      {
+                        "Var": "SYSROOT"
+                      },
+                      {
+                        "Lit": "-type"
+                      },
+                      {
+                        "Lit": "f"
+                      },
+                      {
+                        "Lit": "-name"
+                      },
+                      {
+                        "Quoted": {
+                          "Lit": "*.so"
+                        }
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            ],
+            "stdout": null,
+            "var": "_so"
+          }
+        },
+        {
+          "Set": {
+            "name": "BUILD_SYSROOT",
+            "value": {
+              "Var": "SYSROOT"
+            }
+          }
+        },
+        {
+          "Set": {
+            "name": "HDR",
+            "value": {
+              "Concat": [
+                {
+                  "Lit": "/dep/linux-headers/usr/"
+                },
+                {
+                  "Var": "TRIPLE"
+                },
+                {
+                  "Lit": "/include"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Or": {
+            "lhs": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "["
+                        },
+                        {
+                          "Lit": "-d"
+                        },
+                        {
+                          "Var": "HDR"
+                        },
+                        {
+                          "Lit": "]"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              }
+            ],
+            "rhs": [
+              {
+                "Set": {
+                  "name": "HDR",
+                  "value": {
+                    "Lit": "/dep/linux-headers/usr/include"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "mkdir"
+                  },
+                  {
+                    "Lit": "-p"
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Var": "BUILD_SYSROOT"
+                      },
+                      {
+                        "Lit": "/include"
+                      }
+                    ]
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Or": {
+            "lhs": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "cp"
+                        },
+                        {
+                          "Lit": "-a"
+                        },
+                        {
+                          "Concat": [
+                            {
+                              "Var": "HDR"
+                            },
+                            {
+                              "Lit": "/."
+                            }
+                          ]
+                        },
+                        {
+                          "Concat": [
+                            {
+                              "Var": "BUILD_SYSROOT"
+                            },
+                            {
+                              "Lit": "/include/"
+                            }
+                          ]
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              }
+            ],
+            "rhs": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "true"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "Export": {
+            "name": "CFLAGS_FOR_TARGET",
+            "value": {
+              "Quoted": {
+                "Concat": [
+                  {
+                    "Lit": "--sysroot="
+                  },
+                  {
+                    "Var": "BUILD_SYSROOT"
+                  },
+                  {
+                    "Lit": " -ftrivial-auto-var-init=uninitialized"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "Export": {
+            "name": "CXXFLAGS_FOR_TARGET",
+            "value": {
+              "Quoted": {
+                "Concat": [
+                  {
+                    "Lit": "--sysroot="
+                  },
+                  {
+                    "Var": "BUILD_SYSROOT"
+                  },
+                  {
+                    "Lit": " -ftrivial-auto-var-init=uninitialized"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "Export": {
+            "name": "LDFLAGS_FOR_TARGET",
+            "value": {
+              "Quoted": {
+                "Concat": [
+                  {
+                    "Lit": "--sysroot="
+                  },
+                  {
+                    "Var": "BUILD_SYSROOT"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "ln"
+                  },
+                  {
+                    "Lit": "-sfn"
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "/dep/"
+                      },
+                      {
+                        "Var": "TRIPLE"
+                      },
+                      {
+                        "Lit": "-binutils/usr/bin/"
+                      },
+                      {
+                        "Var": "TRIPLE"
+                      },
+                      {
+                        "Lit": "-as"
+                      }
+                    ]
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "/usr/bin/"
+                      },
+                      {
+                        "Var": "TRIPLE"
+                      },
+                      {
+                        "Lit": "-as"
+                      }
+                    ]
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "ln"
+                  },
+                  {
+                    "Lit": "-sfn"
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "/dep/"
+                      },
+                      {
+                        "Var": "TRIPLE"
+                      },
+                      {
+                        "Lit": "-binutils/usr/bin/"
+                      },
+                      {
+                        "Var": "TRIPLE"
+                      },
+                      {
+                        "Lit": "-ld"
+                      }
+                    ]
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "/usr/bin/"
+                      },
+                      {
+                        "Var": "TRIPLE"
+                      },
+                      {
+                        "Lit": "-ld"
+                      }
+                    ]
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "If": {
+            "cond": {
+              "DirExists": {
+                "Lit": "/dep/gmp/usr"
+              }
+            },
+            "else_": [
+              {
+                "Set": {
+                  "name": "GCC_LIB_FLAGS",
+                  "value": {
+                    "Lit": "--with-isl"
+                  }
+                }
+              }
+            ],
+            "then": [
+              {
+                "Set": {
+                  "name": "GCC_LIB_FLAGS",
+                  "value": {
+                    "Quoted": {
+                      "Lit": "--with-gmp=/dep/gmp/usr --with-mpfr=/dep/mpfr/usr --with-mpc=/dep/mpc/usr --with-isl=/dep/isl/usr"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "If": {
+            "cond": {
+              "DirExists": {
+                "Concat": [
+                  {
+                    "Lit": "/dep/"
+                  },
+                  {
+                    "Lit": "zlib"
+                  },
+                  {
+                    "Lit": "/usr/include"
+                  }
+                ]
+              }
+            },
+            "else_": [],
+            "then": [
+              {
+                "Export": {
+                  "name": "CFLAGS",
+                  "value": {
+                    "Quoted": {
+                      "Concat": [
+                        {
+                          "Lit": "${CFLAGS:-} -I/dep/"
+                        },
+                        {
+                          "Lit": "zlib"
+                        },
+                        {
+                          "Lit": "/usr/include"
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              {
+                "Export": {
+                  "name": "CXXFLAGS",
+                  "value": {
+                    "Quoted": {
+                      "Concat": [
+                        {
+                          "Lit": "${CXXFLAGS:-} -I/dep/"
+                        },
+                        {
+                          "Lit": "zlib"
+                        },
+                        {
+                          "Lit": "/usr/include"
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              {
+                "Export": {
+                  "name": "LDFLAGS",
+                  "value": {
+                    "Quoted": {
+                      "Concat": [
+                        {
+                          "Lit": "${LDFLAGS:-} -L/dep/"
+                        },
+                        {
+                          "Lit": "zlib"
+                        },
+                        {
+                          "Lit": "/usr/lib64 -L/dep/"
+                        },
+                        {
+                          "Lit": "zlib"
+                        },
+                        {
+                          "Lit": "/usr/lib"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "If": {
+            "cond": {
+              "DirExists": {
+                "Concat": [
+                  {
+                    "Lit": "/dep/"
+                  },
+                  {
+                    "Lit": "zstd"
+                  },
+                  {
+                    "Lit": "/usr/include"
+                  }
+                ]
+              }
+            },
+            "else_": [],
+            "then": [
+              {
+                "Export": {
+                  "name": "CFLAGS",
+                  "value": {
+                    "Quoted": {
+                      "Concat": [
+                        {
+                          "Lit": "${CFLAGS:-} -I/dep/"
+                        },
+                        {
+                          "Lit": "zstd"
+                        },
+                        {
+                          "Lit": "/usr/include"
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              {
+                "Export": {
+                  "name": "CXXFLAGS",
+                  "value": {
+                    "Quoted": {
+                      "Concat": [
+                        {
+                          "Lit": "${CXXFLAGS:-} -I/dep/"
+                        },
+                        {
+                          "Lit": "zstd"
+                        },
+                        {
+                          "Lit": "/usr/include"
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              {
+                "Export": {
+                  "name": "LDFLAGS",
+                  "value": {
+                    "Quoted": {
+                      "Concat": [
+                        {
+                          "Lit": "${LDFLAGS:-} -L/dep/"
+                        },
+                        {
+                          "Lit": "zstd"
+                        },
+                        {
+                          "Lit": "/usr/lib64 -L/dep/"
+                        },
+                        {
+                          "Lit": "zstd"
+                        },
+                        {
+                          "Lit": "/usr/lib"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "Cd": {
+            "Concat": [
+              {
+                "Var": "BUILD"
+              },
+              {
+                "Lit": "/instrumented"
+              }
+            ]
+          }
+        },
+        {
+          "Exec": {
+            "env": [
+              [
+                "CFLAGS",
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": "${CFLAGS:-} "
+                      },
+                      {
+                        "Lit": "-fprofile-generate=${_profiledir} -fprofile-update=atomic"
+                      }
+                    ]
+                  }
+                }
+              ],
+              [
+                "CXXFLAGS",
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": "${CXXFLAGS:-} "
+                      },
+                      {
+                        "Lit": "-fprofile-generate=${_profiledir} -fprofile-update=atomic"
+                      }
+                    ]
+                  }
+                }
+              ],
+              [
+                "LDFLAGS",
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": "${LDFLAGS:-} "
+                      },
+                      {
+                        "Lit": "-fprofile-generate=${_profiledir}"
+                      }
+                    ]
+                  }
+                }
+              ]
+            ],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Concat": [
+                      {
+                        "Var": "SOURCE"
+                      },
+                      {
+                        "Lit": "/configure"
+                      }
+                    ]
+                  },
+                  {
+                    "Opt": [
+                      "build",
+                      {
+                        "Var": "HOST_TRIPLE"
+                      }
+                    ]
+                  },
+                  {
+                    "Opt": [
+                      "host",
+                      {
+                        "Var": "HOST_TRIPLE"
+                      }
+                    ]
+                  },
+                  {
+                    "Opt": [
+                      "target",
+                      {
+                        "Var": "TRIPLE"
+                      }
+                    ]
+                  },
+                  {
+                    "Opt": [
+                      "program-prefix",
+                      {
+                        "Concat": [
+                          {
+                            "Var": "TRIPLE"
+                          },
+                          {
+                            "Lit": "-"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "Lit": "--prefix=/usr"
+                  },
+                  {
+                    "Opt": [
+                      "with-sysroot",
+                      {
+                        "Var": "SYSROOT"
+                      }
+                    ]
+                  },
+                  {
+                    "Opt": [
+                      "with-build-sysroot",
+                      {
+                        "Var": "BUILD_SYSROOT"
+                      }
+                    ]
+                  },
+                  {
+                    "Lit": "--with-native-system-header-dir=/include"
+                  },
+                  {
+                    "Opt": [
+                      "with-as",
+                      {
+                        "Concat": [
+                          {
+                            "Lit": "/usr/bin/"
+                          },
+                          {
+                            "Var": "TRIPLE"
+                          },
+                          {
+                            "Lit": "-as"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "Opt": [
+                      "with-ld",
+                      {
+                        "Concat": [
+                          {
+                            "Lit": "/usr/bin/"
+                          },
+                          {
+                            "Var": "TRIPLE"
+                          },
+                          {
+                            "Lit": "-ld"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "--infodir=/usr/share/info/"
+                      },
+                      {
+                        "Var": "TRIPLE"
+                      }
+                    ]
+                  },
+                  {
+                    "Lit": "--with-system-zlib"
+                  },
+                  {
+                    "Var": "GCC_LIB_FLAGS"
+                  },
+                  {
+                    "Opt": [
+                      "with-arch",
+                      {
+                        "Lit": "armv8-a"
+                      }
+                    ]
+                  },
+                  {
+                    "Lit": "--disable-nls"
+                  },
+                  {
+                    "Lit": "--disable-werror"
+                  },
+                  {
+                    "Lit": "--disable-libssp"
+                  },
+                  {
+                    "Lit": "--disable-libstdcxx-pch"
+                  },
+                  {
+                    "Lit": "--disable-bootstrap"
+                  },
+                  {
+                    "Lit": "--disable-multilib"
+                  },
+                  {
+                    "Lit": "--disable-libsanitizer"
+                  },
+                  {
+                    "Lit": "--enable-plugin"
+                  },
+                  {
+                    "Lit": "--enable-languages=c,c++"
+                  },
+                  {
+                    "Lit": "--enable-lto"
+                  },
+                  {
+                    "Lit": "--enable-checking=release"
+                  },
+                  {
+                    "Lit": "--enable-__cxa_atexit"
+                  },
+                  {
+                    "Lit": "--enable-threads=posix"
+                  },
+                  {
+                    "Lit": "--enable-shared"
+                  },
+                  {
+                    "Lit": "--enable-default-pie"
+                  },
+                  {
+                    "Lit": "--enable-default-ssp"
+                  },
+                  {
+                    "Lit": "--with-linker-hash-style=gnu"
+                  },
+                  {
+                    "Lit": "--enable-linker-build-id"
+                  },
+                  {
+                    "Lit": "--enable-gnu-indirect-function"
+                  },
+                  {
+                    "Lit": "--enable-gnu-unique-object"
+                  },
+                  {
+                    "Lit": "--enable-initfini-array"
+                  },
+                  {
+                    "Lit": "--enable-libstdcxx-backtrace"
+                  },
+                  {
+                    "Lit": "--enable-host-pie"
+                  },
+                  {
+                    "Lit": "--enable-host-bind-now"
+                  },
+                  {
+                    "Opt": [
+                      "with-specs",
+                      {
+                        "Lit": "'%{!fno-hardened:-fhardened} -Wno-hardened'"
+                      }
+                    ]
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Make": {
+            "args": [],
+            "jobs": true
+          }
+        },
+        {
+          "Set": {
+            "name": "_xgcc",
+            "value": {
+              "Concat": [
+                {
+                  "Var": "BUILD"
+                },
+                {
+                  "Lit": "/instrumented/gcc/xgcc"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Set": {
+            "name": "_xgpp",
+            "value": {
+              "Concat": [
+                {
+                  "Var": "BUILD"
+                },
+                {
+                  "Lit": "/instrumented/gcc/xg++"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Set": {
+            "name": "_B",
+            "value": {
+              "Concat": [
+                {
+                  "Var": "BUILD"
+                },
+                {
+                  "Lit": "/instrumented/gcc/"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Set": {
+            "name": "_ts",
+            "value": {
+              "Concat": [
+                {
+                  "Var": "SOURCE"
+                },
+                {
+                  "Lit": "/gcc/testsuite"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "ForEach": {
+            "body": [
+              {
+                "Or": {
+                  "lhs": [
+                    {
+                      "Exec": {
+                        "env": [],
+                        "pipe": {
+                          "stages": [
+                            [
+                              {
+                                "Lit": "find"
+                              },
+                              {
+                                "Concat": [
+                                  {
+                                    "Var": "_ts"
+                                  },
+                                  {
+                                    "Lit": "/gcc.c-torture/compile"
+                                  }
+                                ]
+                              },
+                              {
+                                "Lit": "-maxdepth"
+                              },
+                              {
+                                "Lit": "1"
+                              },
+                              {
+                                "Lit": "-name"
+                              },
+                              {
+                                "Quoted": {
+                                  "Lit": "*.c"
+                                }
+                              },
+                              {
+                                "Lit": "-print0"
+                              }
+                            ],
+                            [
+                              {
+                                "Lit": "xargs"
+                              },
+                              {
+                                "Lit": "-0"
+                              },
+                              {
+                                "Concat": [
+                                  {
+                                    "Lit": "-P"
+                                  },
+                                  {
+                                    "Subst": {
+                                      "stages": [
+                                        [
+                                          {
+                                            "Lit": "nproc"
+                                          }
+                                        ]
+                                      ],
+                                      "stderr": null,
+                                      "stdin": null,
+                                      "stdout": null
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "Lit": "-I{}"
+                              },
+                              {
+                                "Var": "_xgcc"
+                              },
+                              {
+                                "Concat": [
+                                  {
+                                    "Lit": "-B"
+                                  },
+                                  {
+                                    "Var": "_B"
+                                  }
+                                ]
+                              },
+                              {
+                                "Var": "_opt"
+                              },
+                              {
+                                "Lit": "-S"
+                              },
+                              {
+                                "Lit": "-o"
+                              },
+                              {
+                                "Lit": "/dev/null"
+                              },
+                              {
+                                "Lit": "-w"
+                              },
+                              {
+                                "Lit": "{}"
+                              }
+                            ]
+                          ],
+                          "stderr": {
+                            "Lit": "/dev/null"
+                          },
+                          "stdin": null,
+                          "stdout": null
+                        }
+                      }
+                    }
+                  ],
+                  "rhs": [
+                    {
+                      "Exec": {
+                        "env": [],
+                        "pipe": {
+                          "stages": [
+                            [
+                              {
+                                "Lit": "true"
+                              }
+                            ]
+                          ],
+                          "stderr": null,
+                          "stdin": null,
+                          "stdout": null
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "items": [
+              {
+                "Lit": "-O0"
+              },
+              {
+                "Lit": "-O1"
+              },
+              {
+                "Lit": "-O2"
+              },
+              {
+                "Lit": "-O3"
+              },
+              {
+                "Lit": "-Os"
+              }
+            ],
+            "stdout": null,
+            "var": "_opt"
+          }
+        },
+        {
+          "Or": {
+            "lhs": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "find"
+                        },
+                        {
+                          "Concat": [
+                            {
+                              "Var": "_ts"
+                            },
+                            {
+                              "Lit": "/g++.dg"
+                            }
+                          ]
+                        },
+                        {
+                          "Lit": "-maxdepth"
+                        },
+                        {
+                          "Lit": "1"
+                        },
+                        {
+                          "Lit": "-name"
+                        },
+                        {
+                          "Quoted": {
+                            "Lit": "*.C"
+                          }
+                        },
+                        {
+                          "Lit": "-print0"
+                        }
+                      ],
+                      [
+                        {
+                          "Lit": "xargs"
+                        },
+                        {
+                          "Lit": "-0"
+                        },
+                        {
+                          "Concat": [
+                            {
+                              "Lit": "-P"
+                            },
+                            {
+                              "Subst": {
+                                "stages": [
+                                  [
+                                    {
+                                      "Lit": "nproc"
+                                    }
+                                  ]
+                                ],
+                                "stderr": null,
+                                "stdin": null,
+                                "stdout": null
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "Lit": "-I{}"
+                        },
+                        {
+                          "Var": "_xgpp"
+                        },
+                        {
+                          "Concat": [
+                            {
+                              "Lit": "-B"
+                            },
+                            {
+                              "Var": "_B"
+                            }
+                          ]
+                        },
+                        {
+                          "Lit": "-O2"
+                        },
+                        {
+                          "Lit": "-S"
+                        },
+                        {
+                          "Lit": "-o"
+                        },
+                        {
+                          "Lit": "/dev/null"
+                        },
+                        {
+                          "Lit": "-w"
+                        },
+                        {
+                          "Lit": "{}"
+                        }
+                      ]
+                    ],
+                    "stderr": {
+                      "Lit": "/dev/null"
+                    },
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              }
+            ],
+            "rhs": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "true"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "Cd": {
+            "Concat": [
+              {
+                "Var": "BUILD"
+              },
+              {
+                "Lit": "/final"
+              }
+            ]
+          }
+        },
+        {
+          "Exec": {
+            "env": [
+              [
+                "CFLAGS",
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": "${CFLAGS:-} "
+                      },
+                      {
+                        "Lit": "-fprofile-use=${_profiledir} -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"
+                      }
+                    ]
+                  }
+                }
+              ],
+              [
+                "CXXFLAGS",
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": "${CXXFLAGS:-} "
+                      },
+                      {
+                        "Lit": "-fprofile-use=${_profiledir} -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"
+                      }
+                    ]
+                  }
+                }
+              ],
+              [
+                "LDFLAGS",
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": "${LDFLAGS:-} "
+                      },
+                      {
+                        "Lit": "-fprofile-use"
+                      }
+                    ]
+                  }
+                }
+              ]
+            ],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Concat": [
+                      {
+                        "Var": "SOURCE"
+                      },
+                      {
+                        "Lit": "/configure"
+                      }
+                    ]
+                  },
+                  {
+                    "Opt": [
+                      "build",
+                      {
+                        "Var": "HOST_TRIPLE"
+                      }
+                    ]
+                  },
+                  {
+                    "Opt": [
+                      "host",
+                      {
+                        "Var": "HOST_TRIPLE"
+                      }
+                    ]
+                  },
+                  {
+                    "Opt": [
+                      "target",
+                      {
+                        "Var": "TRIPLE"
+                      }
+                    ]
+                  },
+                  {
+                    "Opt": [
+                      "program-prefix",
+                      {
+                        "Concat": [
+                          {
+                            "Var": "TRIPLE"
+                          },
+                          {
+                            "Lit": "-"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "Lit": "--prefix=/usr"
+                  },
+                  {
+                    "Opt": [
+                      "with-sysroot",
+                      {
+                        "Var": "SYSROOT"
+                      }
+                    ]
+                  },
+                  {
+                    "Opt": [
+                      "with-build-sysroot",
+                      {
+                        "Var": "BUILD_SYSROOT"
+                      }
+                    ]
+                  },
+                  {
+                    "Lit": "--with-native-system-header-dir=/include"
+                  },
+                  {
+                    "Opt": [
+                      "with-as",
+                      {
+                        "Concat": [
+                          {
+                            "Lit": "/usr/bin/"
+                          },
+                          {
+                            "Var": "TRIPLE"
+                          },
+                          {
+                            "Lit": "-as"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "Opt": [
+                      "with-ld",
+                      {
+                        "Concat": [
+                          {
+                            "Lit": "/usr/bin/"
+                          },
+                          {
+                            "Var": "TRIPLE"
+                          },
+                          {
+                            "Lit": "-ld"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "--infodir=/usr/share/info/"
+                      },
+                      {
+                        "Var": "TRIPLE"
+                      }
+                    ]
+                  },
+                  {
+                    "Lit": "--with-system-zlib"
+                  },
+                  {
+                    "Var": "GCC_LIB_FLAGS"
+                  },
+                  {
+                    "Opt": [
+                      "with-arch",
+                      {
+                        "Lit": "armv8-a"
+                      }
+                    ]
+                  },
+                  {
+                    "Lit": "--disable-nls"
+                  },
+                  {
+                    "Lit": "--disable-werror"
+                  },
+                  {
+                    "Lit": "--disable-libssp"
+                  },
+                  {
+                    "Lit": "--disable-libstdcxx-pch"
+                  },
+                  {
+                    "Lit": "--disable-bootstrap"
+                  },
+                  {
+                    "Lit": "--disable-multilib"
+                  },
+                  {
+                    "Lit": "--disable-libsanitizer"
+                  },
+                  {
+                    "Lit": "--enable-plugin"
+                  },
+                  {
+                    "Lit": "--enable-languages=c,c++"
+                  },
+                  {
+                    "Lit": "--enable-lto"
+                  },
+                  {
+                    "Lit": "--enable-checking=release"
+                  },
+                  {
+                    "Lit": "--enable-__cxa_atexit"
+                  },
+                  {
+                    "Lit": "--enable-threads=posix"
+                  },
+                  {
+                    "Lit": "--enable-shared"
+                  },
+                  {
+                    "Lit": "--enable-default-pie"
+                  },
+                  {
+                    "Lit": "--enable-default-ssp"
+                  },
+                  {
+                    "Lit": "--with-linker-hash-style=gnu"
+                  },
+                  {
+                    "Lit": "--enable-linker-build-id"
+                  },
+                  {
+                    "Lit": "--enable-gnu-indirect-function"
+                  },
+                  {
+                    "Lit": "--enable-gnu-unique-object"
+                  },
+                  {
+                    "Lit": "--enable-initfini-array"
+                  },
+                  {
+                    "Lit": "--enable-libstdcxx-backtrace"
+                  },
+                  {
+                    "Lit": "--enable-host-pie"
+                  },
+                  {
+                    "Lit": "--enable-host-bind-now"
+                  },
+                  {
+                    "Opt": [
+                      "with-specs",
+                      {
+                        "Lit": "'%{!fno-hardened:-fhardened} -Wno-hardened'"
+                      }
+                    ]
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Make": {
+            "args": [],
+            "jobs": true
+          }
+        },
+        {
+          "Make": {
+            "args": [
+              "DESTDIR=\"$OUT\"",
+              "install"
+            ],
+            "jobs": false
+          }
+        }
+      ],
+      "sysroot": true,
+      "workdir": "None"
+    }
+  }
+}

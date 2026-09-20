@@ -1,0 +1,150 @@
+{
+  "Steps": {
+    "env": "Autotools",
+    "pgo": {
+      "Autotools": [
+        {
+          "ForEach": {
+            "body": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "./src/m4"
+                        },
+                        {
+                          "Lit": "\"$_m\""
+                        }
+                      ]
+                    ],
+                    "stderr": {
+                      "Lit": "/dev/null"
+                    },
+                    "stdin": null,
+                    "stdout": {
+                      "append": false,
+                      "target": {
+                        "Lit": "/dev/null"
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "items": [
+              {
+                "Subst": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "find"
+                      },
+                      {
+                        "Lit": "\"$SOURCE\""
+                      },
+                      {
+                        "Lit": "-name"
+                      },
+                      {
+                        "Lit": "'*.m4'"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            ],
+            "stdout": null,
+            "var": "_m"
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "echo"
+                  },
+                  {
+                    "Lit": "\"define(\\`x', \\`1')dnl x\""
+                  }
+                ],
+                [
+                  {
+                    "Lit": "./src/m4"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": {
+                "append": false,
+                "target": {
+                  "Lit": "/dev/null"
+                }
+              }
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "./src/m4"
+                  },
+                  {
+                    "Lit": "-P"
+                  },
+                  {
+                    "Lit": "\"$SOURCE\"/m4/*.m4"
+                  }
+                ]
+              ],
+              "stderr": {
+                "Lit": "/dev/null"
+              },
+              "stdin": null,
+              "stdout": {
+                "append": false,
+                "target": {
+                  "Lit": "/dev/null"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Configure": [
+          "--prefix=/usr"
+        ]
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

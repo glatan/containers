@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Recipe};
+use crate::package::recipe::{BuildContext, Recipe, Step};
 use crate::package::{Package, Source};
 
 pub struct Gmp;
@@ -34,7 +34,7 @@ impl Package for Gmp {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled("make check")
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, ctx: &BuildContext) -> Recipe {
@@ -48,7 +48,10 @@ impl Package for Gmp {
         Recipe::autotools_pgo_args(
             crate::package::recipe::Env::Lto,
             vec!["--prefix=/usr".into(), format!("ABI={abi}")],
-            "make check",
+            vec![Step::Make {
+                jobs: false,
+                args: vec!["check".into()],
+            }],
         )
     }
 }

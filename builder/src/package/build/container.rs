@@ -5,8 +5,8 @@ use std::sync::{Arc, Mutex};
 
 use crate::error::{Error, Result};
 use crate::flags::Ldflag;
-use crate::package::recipe::{BuildContext, Recipe};
-use crate::package::{self, Bootstrap, Package, Role, Stage};
+use crate::package::recipe::{Arg, BuildContext, BuildPlan, Cond, Env, Pipe, Recipe, Step, argv};
+use crate::package::{self, Bootstrap, Package, Role};
 use crate::process;
 use crate::target::Target;
 use crate::util;
@@ -109,13 +109,7 @@ pub(super) fn build_target(
             continue;
         }
         let found = package::find(&name)?;
-        let mounted_target = if matches!(
-            found.role(),
-            Role::Toolchain {
-                stage: Stage::GlibcHeaders | Stage::Glibc,
-                ..
-            }
-        ) {
+        let mounted_target = if found.target_artifact() {
             artifact_target(found, target)
         } else {
             Target::BUILD_ENV
@@ -142,13 +136,7 @@ pub(super) fn build_target(
             continue;
         }
         let found = package::find(name)?;
-        let mounted_target = if matches!(
-            found.role(),
-            Role::Toolchain {
-                stage: Stage::GlibcHeaders | Stage::Glibc,
-                ..
-            }
-        ) {
+        let mounted_target = if found.target_artifact() {
             artifact_target(found, target)
         } else {
             Target::BUILD_ENV
@@ -245,7 +233,40 @@ pub(super) fn build_target(
     } else {
         crate::package::env::BUILD_IMAGE.reference()
     };
-    let script = wrap_script(package, !own, target, &mounts, &prep);
+    // 実行経路: 既定はコンテナ内 runner（`run-recipe` が plan を直接解釈）。
+    // `CONTAINERS_BUILDER_EXEC=bash` で生成スクリプト経路へフォールバック。
+    let entrypoint: Vec<String> = match std::env::var("CONTAINERS_BUILDER_EXEC").as_deref() {
+        Ok("bash") => vec![
+            "/usr/bin/bash".to_string(),
+            "-c".to_string(),
+            wrap_script(package, !own, target, &mounts, &prep),
+        ],
+        _ => {
+            let plan = build_plan(package, !own, target, &mounts, &prep);
+            let plan_path = gen_dir.join("plan.json");
+            fs::create_dir_all(&gen_dir).map_err(|source| Error::io(&gen_dir, source))?;
+            fs::write(&plan_path, serde_json::to_string(&plan)?)
+                .map_err(|source| Error::io(&plan_path, source))?;
+            command
+                .args(["-v"])
+                .arg(format!("{}:/tmp/plan.json:ro", plan_path.display()));
+            // runner 自身をコンテナへマウント（バイナリ互換は
+            // イメージ側 glibc に依存する。不整合なら bash 経路へ）
+            let exe = std::env::current_exe()
+                .and_then(fs::canonicalize)
+                .map_err(|source| Error::message(format!("current_exe: {source}")))?;
+            command
+                .args(["-v"])
+                .arg(format!("{}:/tmp/runner:ro", exe.display()));
+            vec![
+                "/tmp/runner".to_string(),
+                "run-recipe".to_string(),
+                "/tmp/plan.json".to_string(),
+                "-t".to_string(),
+                format!("{architecture}/{variant}"),
+            ]
+        }
+    };
     let log_path = workspace::log_path(package.name(), package.version(), target);
     if let Some(parent) = log_path.parent() {
         fs::create_dir_all(parent).map_err(|source| Error::io(parent, source))?;
@@ -277,10 +298,7 @@ pub(super) fn build_target(
             );
         }
         process::tee_status(
-            command
-                .arg(&image)
-                .args(["/usr/bin/bash", "-c"])
-                .arg(script),
+            command.arg(&image).args(&entrypoint),
             "podman",
             &mut log,
             combined.as_deref_mut(),
@@ -410,37 +428,13 @@ pub(super) fn extra_host_tool_names(package: &dyn Package, target: Target) -> Ve
     let mut names = package.host_tools(target);
     let role = package.role();
     if !matches!(role, Role::LinuxHeaders)
-        && (!matches!(
-            role,
-            Role::Toolchain {
-                triple: "x86_64-linux-gnu",
-                ..
-            }
-        ) || !matches!(target, Target::Amd64(_)))
+        && (package.gnu_triple() != Some("x86_64-linux-gnu") || !matches!(target, Target::Amd64(_)))
     {
         names.push("x86_64-linux-gnu-gcc");
         names.push("x86_64-linux-gnu-binutils");
     }
-    let is_target_glibc = matches!(
-        role,
-        Role::Toolchain {
-            triple,
-            stage: Stage::Glibc
-        } if triple == target.gnu_triple()
-    );
-    if target != Target::BUILD_ENV && !is_target_glibc {
+    if target != Target::BUILD_ENV && package.name() != target.glibc_package() {
         names.push(target.glibc_package());
-    }
-    if matches!(
-        role,
-        Role::Toolchain {
-            stage: Stage::Gcc,
-            ..
-        }
-    ) && target != Target::BUILD_ENV
-        && !names.contains(&package.name())
-    {
-        names.push(package.name());
     }
     names
 }
@@ -778,14 +772,7 @@ pub(super) fn stage_generated(
     let cc = &ctx.package_host;
     let cc_binutils = format!("{cc}-binutils");
     let cc_gcc = format!("{cc}-gcc");
-    let inject = !matches!(
-        package.role(),
-        Role::LinuxHeaders
-            | Role::Toolchain {
-                stage: Stage::Gcc | Stage::Glibc,
-                ..
-            }
-    );
+    let inject = !matches!(package.role(), Role::LinuxHeaders) && package.uses_cc_wrapper();
     let mount = |name: &str| mounts.iter().find(|m| m.name == name);
 
     // pkg-config ラッパ。/dep/pkgconf があればホスト側で生成。
@@ -999,38 +986,50 @@ fn rewrite_pc(content: &str, pref: &str) -> String {
     out
 }
 
-pub(super) fn wrap_script(
+/// `wrap_script` のプリリュードと recipe 本体を束ねた実行計画を
+/// 構築する。bash バックエンドでは `wrap_script` がこれを render し、
+/// コンテナ内 runner は `run-recipe` がこれを直接解釈する。
+pub(crate) fn build_plan(
     package: &dyn Package,
     seed: bool,
     target: Target,
     mounts: &[Mount],
     prep: &Prep,
-) -> String {
-    let script = package.rendered_script(target);
+) -> BuildPlan {
     let ctx = build_context(package, target);
+    let recipe = package.recipe(&ctx);
+    let errors = recipe.validate();
+    assert!(
+        errors.is_empty(),
+        "{} の recipe が不変条件違反: {errors:?}",
+        package.name()
+    );
     let cc = &ctx.package_host;
-    let inject = !matches!(
-        package.role(),
-        Role::LinuxHeaders
-            | Role::Toolchain {
-                stage: Stage::Gcc | Stage::Glibc,
-                ..
-            }
-    );
+    let inject = !matches!(package.role(), Role::LinuxHeaders) && package.uses_cc_wrapper();
     let host_gcc = format!("{}-gcc", ctx.host_triple);
-    let mut prefix = String::new();
-    prefix.push_str(
-        r#"_cc_triple="${PACKAGE_HOST:-$TRIPLE}"
-# Never export LD=*-gcc: libtool then reports "is GNU ld... no" and skips
-# the real -shared link (gmp install: dangling libgmp.so.*).
-"#,
-    );
+    let exec = |args: &[&'static str]| Step::Exec {
+        env: vec![],
+        pipe: Pipe::cmd(argv(args)),
+    };
+    let export = |name: &'static str, value: String| Step::Export {
+        name,
+        value: Arg::owned(value),
+    };
+    let mut steps = vec![
+        Step::Set {
+            name: "_cc_triple",
+            value: Arg::lit("\"${PACKAGE_HOST:-$TRIPLE}\""),
+        },
+        Step::Comment(
+            "Never export LD=*-gcc: libtool then reports \"is GNU ld... no\" and skips\nthe real -shared link (gmp install: dangling libgmp.so.*).".into(),
+        ),
+    ];
 
     // PATH: dep の usr/bin をバイト順に prepend = 逆順結合
     let dep_bins = dep_paths(mounts, "usr/bin");
     if !dep_bins.is_empty() {
         let joined = dep_bins.into_iter().rev().collect::<Vec<_>>().join(":");
-        prefix.push_str(&format!("export PATH=\"{joined}:$PATH\"\n"));
+        steps.push(export("PATH", format!("\"{joined}:$PATH\"")));
     }
     // LD_LIBRARY_PATH: HOST 実行ライブラリのみ（case フィルタをホスト側で再現）
     let dep_lib_ok = |name: &str| {
@@ -1049,8 +1048,9 @@ pub(super) fn wrap_script(
         .collect();
     if !dep_libs.is_empty() {
         let joined = dep_libs.into_iter().rev().collect::<Vec<_>>().join(":");
-        prefix.push_str(&format!(
-            "export LD_LIBRARY_PATH=\"{joined}${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}\"\n"
+        steps.push(export(
+            "LD_LIBRARY_PATH",
+            format!("\"{joined}${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}\""),
         ));
     }
     // PKG_CONFIG_PATH: pkgconfig ディレクトリを順に append
@@ -1059,8 +1059,9 @@ pub(super) fn wrap_script(
     pc_dirs.extend(dep_paths(mounts, "usr/share/pkgconfig"));
     if !pc_dirs.is_empty() {
         let joined = pc_dirs.join(":");
-        prefix.push_str(&format!(
-            "export PKG_CONFIG_PATH=\"{joined}${{PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}}\"\n"
+        steps.push(export(
+            "PKG_CONFIG_PATH",
+            format!("\"{joined}${{PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}}\""),
         ));
     }
     // -I: include ディレクトリ（case 除外をホスト側で再現）
@@ -1088,11 +1089,9 @@ pub(super) fn wrap_script(
         .collect();
     if !incs.is_empty() {
         let flags = incs.iter().map(|i| format!(" -I{i}")).collect::<String>();
-        prefix.push_str(&format!(
-            "export CPPFLAGS=\"${{CPPFLAGS:-}}{flags}\"\n\
-             export CFLAGS=\"${{CFLAGS:-}}{flags}\"\n\
-             export CXXFLAGS=\"${{CXXFLAGS:-}}{flags}\"\n"
-        ));
+        steps.push(export("CPPFLAGS", format!("\"${{CPPFLAGS:-}}{flags}\"")));
+        steps.push(export("CFLAGS", format!("\"${{CFLAGS:-}}{flags}\"")));
+        steps.push(export("CXXFLAGS", format!("\"${{CXXFLAGS:-}}{flags}\"")));
     }
     // -L/-rpath-link: lib ディレクトリ（case 除外をホスト側で再現）
     let lib_skip = |name: &str| {
@@ -1113,10 +1112,11 @@ pub(super) fn wrap_script(
             .iter()
             .map(|l| format!(" -L{l} -Wl,-rpath-link={l}"))
             .collect::<String>();
-        prefix.push_str(&format!("export LDFLAGS=\"${{LDFLAGS:-}}{flags}\"\n"));
+        steps.push(export("LDFLAGS", format!("\"${{LDFLAGS:-}}{flags}\"")));
         let joined = libs.into_iter().rev().collect::<Vec<_>>().join(":");
-        prefix.push_str(&format!(
-            "export LIBRARY_PATH=\"{joined}${{LIBRARY_PATH:+:$LIBRARY_PATH}}\"\n"
+        steps.push(export(
+            "LIBRARY_PATH",
+            format!("\"{joined}${{LIBRARY_PATH:+:$LIBRARY_PATH}}\""),
         ));
     }
     // glibc sysroot libdir（_t in cc, triple の順、重複も元通り再現）
@@ -1130,8 +1130,11 @@ pub(super) fn wrap_script(
                 "usr/lib64".to_owned(),
             ] {
                 if m.dir.join(&sub).is_dir() {
-                    prefix.push_str(&format!(
-                        "export LDFLAGS=\"${{LDFLAGS:-}} -L/dep/{glibc}/{sub} -Wl,-rpath-link=/dep/{glibc}/{sub}\"\n"
+                    steps.push(export(
+                        "LDFLAGS",
+                        format!(
+                            "\"${{LDFLAGS:-}} -L/dep/{glibc}/{sub} -Wl,-rpath-link=/dep/{glibc}/{sub}\""
+                        ),
                     ));
                 }
             }
@@ -1143,73 +1146,103 @@ pub(super) fn wrap_script(
         for sub in [format!("usr/{cc}/lib"), format!("usr/{cc}/lib64")] {
             if m.dir.join(&sub).join("crti.o").exists() {
                 let slib = format!("/dep/{cc_glibc}/{sub}");
-                prefix.push_str(&format!(
-                    "export CFLAGS=\"${{CFLAGS:-}} -B{slib}\"\n\
-                     export CXXFLAGS=\"${{CXXFLAGS:-}} -B{slib}\"\n\
-                     export LDFLAGS=\"${{LDFLAGS:-}} -B{slib}\"\n"
-                ));
+                steps.push(export("CFLAGS", format!("\"${{CFLAGS:-}} -B{slib}\"")));
+                steps.push(export("CXXFLAGS", format!("\"${{CXXFLAGS:-}} -B{slib}\"")));
+                steps.push(export("LDFLAGS", format!("\"${{LDFLAGS:-}} -B{slib}\"")));
                 break;
             }
         }
     }
 
     // オーバーレイ（中身は /tmp にマウント済み）
-    prefix.push_str("mkdir -p /tmp/la-overlay /tmp/pc-overlay\n");
+    steps.push(exec(&["mkdir", "-p", "/tmp/la-overlay", "/tmp/pc-overlay"]));
     if prep.la {
-        prefix.push_str(
-            r#"export LDFLAGS="-L/tmp/la-overlay ${LDFLAGS:-}"
-export LIBRARY_PATH="/tmp/la-overlay${LIBRARY_PATH:+:$LIBRARY_PATH}"
-"#,
-        );
+        steps.push(export(
+            "LDFLAGS",
+            "\"-L/tmp/la-overlay ${LDFLAGS:-}\"".to_owned(),
+        ));
+        steps.push(export(
+            "LIBRARY_PATH",
+            "\"/tmp/la-overlay${LIBRARY_PATH:+:$LIBRARY_PATH}\"".to_owned(),
+        ));
     }
     if prep.pc {
-        prefix.push_str(
-            r#"export PKG_CONFIG_PATH="/tmp/pc-overlay${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
-"#,
-        );
+        steps.push(export(
+            "PKG_CONFIG_PATH",
+            "\"/tmp/pc-overlay${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}\"".to_owned(),
+        ));
     }
     if prep.pkg_config {
-        prefix.push_str("export PATH=\"/tmp/pkg-config-bin:$PATH\"\n");
+        steps.push(export("PATH", "\"/tmp/pkg-config-bin:$PATH\"".to_owned()));
     } else {
         // /dep/pkgconf が無い場合の command -v フォールバックはイメージ依存
-        prefix.push_str(
-            r#"_pc_wrap=/tmp/pkg-config-bin
-mkdir -p "$_pc_wrap"
-if command -v pkgconf >/dev/null 2>&1; then
-  printf '#!/bin/sh\nexec pkgconf "$@"\n' > "$_pc_wrap/pkg-config"
-elif command -v pkg-config >/dev/null 2>&1; then
-  printf '#!/bin/sh\nexec pkg-config "$@"\n' > "$_pc_wrap/pkg-config"
-fi
-if [ -f "$_pc_wrap/pkg-config" ]; then
-  chmod +x "$_pc_wrap/pkg-config"
-  export PATH="$_pc_wrap:$PATH"
-fi
-"#,
-        );
+        steps.push(Step::Set {
+            name: "_pc_wrap",
+            value: Arg::lit("/tmp/pkg-config-bin"),
+        });
+        steps.push(exec(&["mkdir", "-p", "\"$_pc_wrap\""]));
+        let wrapper = |body: &'static str| Step::WriteFile {
+            path: Arg::lit("\"$_pc_wrap/pkg-config\""),
+            lines: argv(&["#!/bin/sh", body]),
+            append: false,
+            expand: false,
+        };
+        steps.push(Step::If {
+            cond: Cond::Cmd(
+                Pipe::cmd(argv(&["command", "-v", "pkgconf"]))
+                    .stdout(Arg::lit("/dev/null"))
+                    .stderr(Arg::lit("/dev/null")),
+            ),
+            then: vec![wrapper("exec pkgconf \"$@\"")],
+            else_: vec![Step::If {
+                cond: Cond::Cmd(
+                    Pipe::cmd(argv(&["command", "-v", "pkg-config"]))
+                        .stdout(Arg::lit("/dev/null"))
+                        .stderr(Arg::lit("/dev/null")),
+                ),
+                then: vec![wrapper("exec pkg-config \"$@\"")],
+                else_: vec![],
+            }],
+        });
+        steps.push(Step::If {
+            cond: Cond::FileExists(Arg::lit("\"$_pc_wrap/pkg-config\"")),
+            then: vec![
+                exec(&["chmod", "+x", "\"$_pc_wrap/pkg-config\""]),
+                export("PATH", "\"$_pc_wrap:$PATH\"".to_owned()),
+            ],
+            else_: vec![],
+        });
     }
     if let Some(py) = &prep.meson {
         // meson 本体は /tmp/meson-bin にマウント済み。コンテナ rootfs への
-        // python3 リンク作成だけイメージ依存なのでシェルに残す。
-        prefix.push_str(&format!(
-            r#"_py={py}
-if [ ! -e /usr/sbin/python3 ]; then
-  mkdir -p /usr/sbin
-  ln -sfn "$_py" /usr/sbin/python3
-fi
-if [ ! -e /usr/bin/python3 ]; then
-  ln -sfn "$_py" /usr/bin/python3
-fi
-export PATH="/tmp/meson-bin:$PATH"
-"#,
-        ));
+        // python3 リンク作成はイメージ依存なので存在確認つきにする。
+        steps.push(Step::Set {
+            name: "_py",
+            value: Arg::owned(format!("\"{py}\"")),
+        });
+        steps.push(Step::If {
+            cond: Cond::Not(Box::new(Cond::Exists(Arg::lit("/usr/sbin/python3")))),
+            then: vec![
+                exec(&["mkdir", "-p", "/usr/sbin"]),
+                exec(&["ln", "-sfn", "\"$_py\"", "/usr/sbin/python3"]),
+            ],
+            else_: vec![],
+        });
+        steps.push(Step::If {
+            cond: Cond::Not(Box::new(Cond::Exists(Arg::lit("/usr/bin/python3")))),
+            then: vec![exec(&["ln", "-sfn", "\"$_py\"", "/usr/bin/python3"])],
+            else_: vec![],
+        });
+        steps.push(export("PATH", "\"/tmp/meson-bin:$PATH\"".to_owned()));
     }
     // PYTHONPATH: prepend 各 = 逆順結合
     let mut py_dirs = dep_paths(mounts, "usr/lib/python*/site-packages");
     py_dirs.extend(dep_paths(mounts, "usr/lib64/python*/site-packages"));
     if !py_dirs.is_empty() {
         let joined = py_dirs.into_iter().rev().collect::<Vec<_>>().join(":");
-        prefix.push_str(&format!(
-            "export PYTHONPATH=\"{joined}${{PYTHONPATH:+:$PYTHONPATH}}\"\n"
+        steps.push(export(
+            "PYTHONPATH",
+            format!("\"{joined}${{PYTHONPATH:+:$PYTHONPATH}}\""),
         ));
     }
     // PERL5LIB: perl5 のバージョン/アーキディレクトリ（ls -d | head -n1 相当）
@@ -1253,65 +1286,81 @@ export PATH="/tmp/meson-bin:$PATH"
                 names.into_iter().next()
             });
             if let (Some(arch), Some(ver)) = (arch, ver) {
-                prefix.push_str(&format!(
-                    "export PERL5LIB=\"/dep/perl/usr/lib/perl5/{ver}/{arch}:/dep/perl/usr/lib/perl5/{ver}${{PERL5LIB:+:$PERL5LIB}}\"\n"
+                steps.push(export(
+                    "PERL5LIB",
+                    format!(
+                        "\"/dep/perl/usr/lib/perl5/{ver}/{arch}:/dep/perl/usr/lib/perl5/{ver}${{PERL5LIB:+:$PERL5LIB}}\""
+                    ),
                 ));
             }
         }
     }
     // 以降の PATH 追加順は元プリアンブルの prepend 順をそのまま再現する。
     if prep.cc_binutils {
-        prefix.push_str(&format!(
-            "export PATH=\"/dep/{cc}-binutils/usr/bin:$PATH\"\n"
+        steps.push(export(
+            "PATH",
+            format!("\"/dep/{cc}-binutils/usr/bin:$PATH\""),
         ));
         if prep.host_strip {
-            prefix.push_str("export PATH=\"/tmp/host-strip:$PATH\"\n");
+            steps.push(export("PATH", "\"/tmp/host-strip:$PATH\"".to_owned()));
         }
     }
     if prep.triple_binutils {
-        prefix.push_str(&format!(
-            "export PATH=\"/dep/{}-binutils/usr/bin:$PATH\"\n",
-            ctx.triple
+        steps.push(export(
+            "PATH",
+            format!("\"/dep/{}-binutils/usr/bin:$PATH\"", ctx.triple),
         ));
     }
     if prep.cc_gcc {
-        prefix.push_str(&format!("export PATH=\"/dep/{cc}-gcc/usr/bin:$PATH\"\n"));
+        steps.push(export("PATH", format!("\"/dep/{cc}-gcc/usr/bin:$PATH\"")));
         if inject {
             if let Some(gcc_lib) = &prep.gcc_lib {
-                prefix.push_str(&format!(
-                    r#"export PATH="/tmp/gcc-b:$PATH"
-export CFLAGS="${{CFLAGS:-}} -B{gcc_lib}"
-export CXXFLAGS="${{CXXFLAGS:-}} -B{gcc_lib}"
-export LDFLAGS="${{LDFLAGS:-}} -B{gcc_lib} -L{gcc_lib}"
-export LIBRARY_PATH="{gcc_lib}${{LIBRARY_PATH:+:$LIBRARY_PATH}}"
-export COMPILER_PATH="{gcc_lib}${{COMPILER_PATH:+:$COMPILER_PATH}}"
-"#
+                steps.push(export("PATH", "\"/tmp/gcc-b:$PATH\"".to_owned()));
+                steps.push(export("CFLAGS", format!("\"${{CFLAGS:-}} -B{gcc_lib}\"")));
+                steps.push(export(
+                    "CXXFLAGS",
+                    format!("\"${{CXXFLAGS:-}} -B{gcc_lib}\""),
+                ));
+                steps.push(export(
+                    "LDFLAGS",
+                    format!("\"${{LDFLAGS:-}} -B{gcc_lib} -L{gcc_lib}\""),
+                ));
+                steps.push(export(
+                    "LIBRARY_PATH",
+                    format!("\"{gcc_lib}${{LIBRARY_PATH:+:$LIBRARY_PATH}}\""),
+                ));
+                steps.push(export(
+                    "COMPILER_PATH",
+                    format!("\"{gcc_lib}${{COMPILER_PATH:+:$COMPILER_PATH}}\""),
                 ));
             }
             if prep.lto_binutils {
-                prefix.push_str("export PATH=\"/tmp/lto-binutils:$PATH\"\n");
+                steps.push(export("PATH", "\"/tmp/lto-binutils:$PATH\"".to_owned()));
             }
         }
     }
     if prep.triple_gcc {
-        prefix.push_str(&format!(
-            "export PATH=\"/dep/{}-gcc/usr/bin:$PATH\"\n",
-            ctx.triple
+        steps.push(export(
+            "PATH",
+            format!("\"/dep/{}-gcc/usr/bin:$PATH\"", ctx.triple),
         ));
     }
     if prep.unprefixed {
-        prefix.push_str("export PATH=\"/tmp/unprefixed-binutils:$PATH\"\n");
+        steps.push(export(
+            "PATH",
+            "\"/tmp/unprefixed-binutils:$PATH\"".to_owned(),
+        ));
     }
     if prep.host_cc {
-        prefix.push_str("export PATH=\"/tmp/host-cc:$PATH\"\n");
+        steps.push(export("PATH", "\"/tmp/host-cc:$PATH\"".to_owned()));
     }
     if prep.mold {
-        prefix.push_str("export PATH=\"/dep/mold/usr/bin:$PATH\"\n");
+        steps.push(export("PATH", "\"/dep/mold/usr/bin:$PATH\"".to_owned()));
     }
-    // recipe::SYSROOT_ENV 相当: Steps{sysroot:true} のみ。実パス検出は
+    // sysroot/カーネルヘッダ付与: Steps{sysroot:true} のみ。実パス検出は
     // マウント一覧からホスト側で行う。
-    if let Recipe::Steps(steps) = package.recipe(&ctx)
-        && steps.sysroot
+    if let Recipe::Steps(steps_) = &recipe
+        && steps_.sysroot
     {
         let candidates = [
             (format!("{cc}-glibc"), format!("usr/{cc}")),
@@ -1333,13 +1382,60 @@ export COMPILER_PATH="{gcc_lib}${{COMPILER_PATH:+:$COMPILER_PATH}}"
                 } else {
                     format!("/dep/{name}/{sub}")
                 };
-                prefix.push_str(&format!(
-                    "SYSROOT={sysroot}\n\
-                         export CFLAGS=\"${{CFLAGS:-}} --sysroot=$SYSROOT\"\n\
-                         export CXXFLAGS=\"${{CXXFLAGS:-}} --sysroot=$SYSROOT\"\n\
-                         export CPPFLAGS=\"${{CPPFLAGS:-}} --sysroot=$SYSROOT\"\n\
-                         export LDFLAGS=\"${{LDFLAGS:-}} --sysroot=$SYSROOT\"\n"
+                steps.push(Step::Set {
+                    name: "SYSROOT",
+                    value: Arg::owned(sysroot),
+                });
+                // dep glibc の layout は usr/{triple}/{include,lib} で、
+                // distro/host gcc が見る $SYSROOT/usr/include にはヘッダが
+                // ない。C++ の #include_next は -isystem/-idirafter には
+                // 届かないため、標準 layout を模した shadow sysroot を
+                // /tmp/sysroot に張って SYSROOT を差し替える。
+                steps.push(exec(&["mkdir", "-p", "/tmp/sysroot/usr"]));
+                for (link, target) in [
+                    ("/tmp/sysroot/include", "$SYSROOT/include"),
+                    ("/tmp/sysroot/usr/include", "$SYSROOT/include"),
+                    ("/tmp/sysroot/lib", "$SYSROOT/lib"),
+                    ("/tmp/sysroot/usr/lib", "$SYSROOT/lib"),
+                    ("/tmp/sysroot/lib64", "$SYSROOT/lib64"),
+                    ("/tmp/sysroot/usr/lib64", "$SYSROOT/lib64"),
+                ] {
+                    steps.push(Step::Exec {
+                        env: vec![],
+                        pipe: Pipe::cmd(vec![
+                            Arg::lit("ln"),
+                            Arg::lit("-sfn"),
+                            Arg::owned(format!("\"{target}\"")),
+                            Arg::lit(link),
+                        ]),
+                    });
+                }
+                steps.push(Step::Set {
+                    name: "SYSROOT",
+                    value: Arg::lit("/tmp/sysroot"),
+                });
+                steps.push(export(
+                    "CFLAGS",
+                    "\"${CFLAGS:-} --sysroot=$SYSROOT\"".to_owned(),
                 ));
+                steps.push(export(
+                    "CXXFLAGS",
+                    "\"${CXXFLAGS:-} --sysroot=$SYSROOT\"".to_owned(),
+                ));
+                steps.push(export(
+                    "CPPFLAGS",
+                    "\"${CPPFLAGS:-} --sysroot=$SYSROOT\"".to_owned(),
+                ));
+                steps.push(export(
+                    "LDFLAGS",
+                    "\"${LDFLAGS:-} --sysroot=$SYSROOT\"".to_owned(),
+                ));
+                // -isystem/-idirafter $SYSROOT/include は付けない:
+                // shadow の usr/include と同一 inode に解決されて dedup
+                // され、C++ の #include_next が届くべき標準位置
+                // （$SYSROOT/usr/include）が消えてしまう（isl の
+                // cstdlib→stdlib.h で実害）。shadow sysroot 単体で
+                // host/repo 双方の gcc がヘッダを見つける。
                 break;
             }
         }
@@ -1351,52 +1447,147 @@ export COMPILER_PATH="{gcc_lib}${{COMPILER_PATH:+:$COMPILER_PATH}}"
             ] {
                 if headers.dir.join(&sub).is_dir() {
                     let hdr = format!("/dep/linux-headers/{sub}");
-                    prefix.push_str(&format!(
-                        "export CFLAGS=\"${{CFLAGS:-}} -idirafter {hdr}\"\n\
-                             export CXXFLAGS=\"${{CXXFLAGS:-}} -idirafter {hdr}\"\n\
-                             export CPPFLAGS=\"${{CPPFLAGS:-}} -idirafter {hdr}\"\n"
+                    steps.push(export(
+                        "CFLAGS",
+                        format!("\"${{CFLAGS:-}} -idirafter {hdr}\""),
+                    ));
+                    steps.push(export(
+                        "CXXFLAGS",
+                        format!("\"${{CXXFLAGS:-}} -idirafter {hdr}\""),
+                    ));
+                    steps.push(export(
+                        "CPPFLAGS",
+                        format!("\"${{CPPFLAGS:-}} -idirafter {hdr}\""),
                     ));
                     break;
                 }
             }
         }
     }
-    let mold_wrap = if uses_mold(package, target) {
-        r#"
-_mold_wrap=/tmp/mold-ld-cc
-mkdir -p "$_mold_wrap"
-if command -v mold >/dev/null 2>&1; then
-  for _name in gcc cc g++ c++ "${_cc_triple}-gcc" "${_cc_triple}-g++" "${TRIPLE}-gcc" "${TRIPLE}-g++" "${HOST_TRIPLE}-gcc" "${HOST_TRIPLE}-g++"; do
-    _src=$(command -v "$_name" || true)
-    [ -n "$_src" ] && [ -x "$_src" ] || continue
-    case "$_src" in
-      "$_mold_wrap"/*) continue ;;
-    esac
-    printf '#!/bin/sh\nexec %s -fuse-ld=mold "$@"\n' "$_src" > "$_mold_wrap/$_name"
-    chmod +x "$_mold_wrap/$_name"
-  done
-  export PATH="$_mold_wrap:$PATH"
-fi
-"#
+    let mold_steps: Vec<Step> = if uses_mold(package, target) {
+        vec![
+            Step::Set {
+                name: "_mold_wrap",
+                value: Arg::lit("/tmp/mold-ld-cc"),
+            },
+            exec(&["mkdir", "-p", "\"$_mold_wrap\""]),
+            Step::If {
+                cond: Cond::Cmd(
+                    Pipe::cmd(argv(&["command", "-v", "mold"]))
+                        .stdout(Arg::lit("/dev/null"))
+                        .stderr(Arg::lit("/dev/null")),
+                ),
+                then: vec![
+                    Step::ForEach {
+                        var: "_name",
+                        items: argv(&[
+                            "gcc",
+                            "cc",
+                            "g++",
+                            "c++",
+                            "\"${_cc_triple}-gcc\"",
+                            "\"${_cc_triple}-g++\"",
+                            "\"${TRIPLE}-gcc\"",
+                            "\"${TRIPLE}-g++\"",
+                            "\"${HOST_TRIPLE}-gcc\"",
+                            "\"${HOST_TRIPLE}-g++\"",
+                        ]),
+                        body: vec![
+                            Step::Set {
+                                name: "_src",
+                                value: Arg::SubstOr(Box::new(Pipe::cmd(argv(&[
+                                    "command",
+                                    "-v",
+                                    "\"$_name\"",
+                                ])))),
+                            },
+                            // 元スクリプトの `case "$_src" in "$_mold_wrap"/*)
+                            // continue` ガードは _mold_wrap がコンテナ毎に
+                            // 新規空ディレクトリのため到達不能。省略。
+                            Step::If {
+                                cond: Cond::And(vec![
+                                    Cond::NonEmpty(Arg::lit("\"$_src\"")),
+                                    Cond::Executable(Arg::lit("\"$_src\"")),
+                                ]),
+                                then: vec![
+                                    Step::Exec {
+                                        env: vec![],
+                                        pipe: Pipe::cmd(argv(&[
+                                            "printf",
+                                            "'#!/bin/sh\\nexec %s -fuse-ld=mold \"$@\"\\n'",
+                                            "\"$_src\"",
+                                        ]))
+                                        .stdout(Arg::lit("\"$_mold_wrap/$_name\"")),
+                                    },
+                                    exec(&["chmod", "+x", "\"$_mold_wrap/$_name\""]),
+                                ],
+                                else_: vec![],
+                            },
+                        ],
+                        stdout: None,
+                    },
+                    export("PATH", "\"$_mold_wrap:$PATH\"".to_owned()),
+                ],
+                else_: vec![],
+            },
+        ]
     } else {
-        ""
+        vec![]
     };
-    if !seed {
-        prefix.push_str(mold_wrap);
-        prefix.push_str(&script);
-        return prefix;
-    }
-    let pkgs = seed_pacman(package, target);
+    let pkgs = if seed {
+        seed_pacman(package, target)
+    } else {
+        Vec::new()
+    };
     if pkgs.is_empty() {
-        prefix.push_str(mold_wrap);
-        prefix.push_str(&script);
-        return prefix;
+        steps.extend(mold_steps);
+    } else {
+        // 旧 `pacman ... &&` は直後の変数代入のみをゲートしていたが、
+        // 意図は pacman 成功時のみ mold 設定を行うことなので `if` で明示する
+        // （pacman 失敗時もレシピ本体は実行する）。
+        let mut pacman_argv = argv(&["pacman", "-Sy", "--noconfirm"]);
+        pacman_argv.extend(pkgs.iter().map(|pkg| Arg::owned(pkg.clone())));
+        if mold_steps.is_empty() {
+            // gate 対象が無い場合は pacman だけ実行する。空 then の
+            // `if ...; then fi` は bash の構文エラーになるため If は使わない
+            // （Cond::Cmd の `>/dev/null` と同じく stdout は捨てる）。
+            steps.push(Step::Exec {
+                env: vec![],
+                pipe: Pipe::cmd(pacman_argv).stdout(Arg::lit("/dev/null")),
+            });
+        } else {
+            steps.push(Step::If {
+                cond: Cond::Cmd(Pipe::cmd(pacman_argv)),
+                then: mold_steps,
+                else_: vec![],
+            });
+        }
     }
-    prefix.push_str(&format!("pacman -Sy --noconfirm {} && ", pkgs.join(" ")));
-    prefix.push_str(mold_wrap);
-    prefix.push_str(&script);
-    prefix
+    BuildPlan {
+        prelude: steps,
+        recipe,
+    }
 }
+
+/// 計画を bash スクリプトへ render する互換バックエンド。
+/// golden・デバッグ・`CONTAINERS_BUILDER_EXEC=bash` フォールバック用。
+pub(super) fn wrap_script(
+    package: &dyn Package,
+    seed: bool,
+    target: Target,
+    mounts: &[Mount],
+    prep: &Prep,
+) -> String {
+    let ctx = build_context(package, target);
+    let plan = build_plan(package, seed, target, mounts, prep);
+    let mut out = String::new();
+    for step in &plan.prelude {
+        step.render(&mut out, Env::None);
+    }
+    out.push_str(&plan.recipe.render(&ctx));
+    out
+}
+
 pub(super) fn own_image_ref() -> Result<String> {
     let current =
         workspace::compose_current_link(workspace::BUILD_ENV_NAME, workspace::BUILD_ENV_ARCH);

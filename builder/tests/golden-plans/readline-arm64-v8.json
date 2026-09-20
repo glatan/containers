@@ -1,0 +1,117 @@
+{
+  "Steps": {
+    "env": "Autotools",
+    "pgo": {
+      "Autotools": [
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "make"
+                  },
+                  {
+                    "Lit": "-C"
+                  },
+                  {
+                    "Lit": "examples"
+                  },
+                  {
+                    "Lit": "SHLIB_LIBS=-lncursesw"
+                  }
+                ]
+              ],
+              "stderr": {
+                "Lit": "/dev/null"
+              },
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "printf"
+                  },
+                  {
+                    "Lit": "'exit\\n'"
+                  }
+                ],
+                [
+                  {
+                    "Lit": "./examples/rl"
+                  }
+                ]
+              ],
+              "stderr": {
+                "Lit": "/dev/null"
+              },
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "printf"
+                  },
+                  {
+                    "Lit": "'version\\n'"
+                  }
+                ],
+                [
+                  {
+                    "Lit": "./examples/rlversion"
+                  }
+                ]
+              ],
+              "stderr": {
+                "Lit": "/dev/null"
+              },
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        }
+      ]
+    },
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Configure": [
+          "--prefix=/usr",
+          "--with-curses"
+        ]
+      },
+      {
+        "Make": {
+          "args": [
+            "SHLIB_LIBS=-lncursesw"
+          ],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": [
+            "SHLIB_LIBS=-lncursesw"
+          ]
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

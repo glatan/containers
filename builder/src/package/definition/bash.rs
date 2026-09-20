@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Env, Recipe, Step, Steps};
+use crate::package::recipe::{Arg, BuildContext, Env, Recipe, Step, Steps};
 use crate::package::{Bootstrap, Package, Source};
 
 pub struct Bash;
@@ -40,19 +40,21 @@ impl Package for Bash {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
         Recipe::Steps(
             Steps::new(Env::Lto)
-                .pgo(crate::package::recipe::PgoTemplate::Autotools(PGO_WORKLOAD))
+                .pgo(crate::package::recipe::PgoTemplate::Autotools(
+                    pgo_workload(),
+                ))
                 .step(Step::configure(&["--prefix=/usr", "--without-bash-malloc"]))
                 .step(Step::make(&[]))
                 .step(Step::make_install(&[]))
                 .step(Step::Symlink {
-                    target: "bash",
-                    link: "\"$OUT\"/usr/bin/sh",
+                    target: "bash".into(),
+                    link: "\"$OUT\"/usr/bin/sh".into(),
                     force: true,
                 }),
         )
@@ -61,7 +63,21 @@ impl Package for Bash {
 
 impl Bootstrap for Bash {}
 
-const PGO_WORKLOAD: &str = r#"./bash -c '
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::Pipe;
+
+    vec![Step::Exec {
+        env: vec![],
+        pipe: Pipe::cmd(vec![
+            Arg::lit("./bash"),
+            Arg::lit("-c"),
+            Arg::lit(BASH_C_PROGRAM),
+        ]),
+    }]
+}
+
+/// ワークロードプログラム（シングルクォート込みの字面）。
+const BASH_C_PROGRAM: &str = r#"'
 x=0; for i in $(seq 1 10000); do x=$((x+i)); done; echo "$x" > /dev/null
 s=""; for f in "$SOURCE"/*; do s="$s${f##*/}"; done; echo "${#s}" > /dev/null
 for i in $(seq 1 2000); do v="abc$i"; printf "%s" "${v%[0-9]*}${v##*[a-z]}" > /dev/null; done

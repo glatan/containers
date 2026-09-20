@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Recipe};
+use crate::package::recipe::{BuildContext, Recipe, Step};
 use crate::package::{Bootstrap, Package, Source};
 
 pub struct Make;
@@ -34,27 +34,58 @@ impl Package for Make {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
+        Recipe::autotools_pgo(&["--prefix=/usr"], pgo_workload())
     }
 }
 
-const PGO_WORKLOAD: &str = r#"mkdir -p /tmp/mk-work
-cat > /tmp/mk-work/Makefile <<'EOF'
-SRCS := $(wildcard *.c)
-OBJS := $(SRCS:.c=.o)
-all: $(OBJS)
-	@echo done $(words $(OBJS))
-%.o: %.c
-	@echo cc $<
-clean:
-	@rm -f *.o
-EOF
-for _i in 1 2 3 4 5; do echo "int f$_i(void){return $_i;}" > /tmp/mk-work/f$_i.c; done
-./make -C /tmp/mk-work all clean all
-./make -C /tmp/mk-work -n all > /dev/null"#;
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::{Arg, Pipe, argv};
+
+    let exec = |pipe: Pipe| Step::Exec { env: vec![], pipe };
+    vec![
+        exec(Pipe::cmd(argv(&["mkdir", "-p", "/tmp/mk-work"]))),
+        Step::WriteFile {
+            path: Arg::lit("/tmp/mk-work/Makefile"),
+            lines: vec![
+                Arg::lit("SRCS := $(wildcard *.c)"),
+                Arg::lit("OBJS := $(SRCS:.c=.o)"),
+                Arg::lit("all: $(OBJS)"),
+                Arg::lit("\t@echo done $(words $(OBJS))"),
+                Arg::lit("%.o: %.c"),
+                Arg::lit("\t@echo cc $<"),
+                Arg::lit("clean:"),
+                Arg::lit("\t@rm -f *.o"),
+            ],
+            append: false,
+            expand: false,
+        },
+        Step::ForEach {
+            var: "_i",
+            items: argv(&["1", "2", "3", "4", "5"]),
+            body: vec![exec(
+                Pipe::cmd(argv(&["echo", "\"int f$_i(void){return $_i;}\""])).stdout(Arg::Concat(
+                    vec![Arg::lit("/tmp/mk-work/f"), Arg::Var("_i"), Arg::lit(".c")],
+                )),
+            )],
+            stdout: None,
+        },
+        exec(Pipe::cmd(argv(&[
+            "./make",
+            "-C",
+            "/tmp/mk-work",
+            "all",
+            "clean",
+            "all",
+        ]))),
+        exec(
+            Pipe::cmd(argv(&["./make", "-C", "/tmp/mk-work", "-n", "all"]))
+                .stdout(Arg::lit("/dev/null")),
+        ),
+    ]
+}
 
 impl Bootstrap for Make {}

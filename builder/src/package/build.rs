@@ -6,7 +6,7 @@ use std::io::Write;
 use std::sync::{Arc, Mutex};
 
 use crate::error::{Error, Result};
-use crate::package::{self, Dependency, Package, Role, Stage};
+use crate::package::{self, Dependency, Package, Role};
 use crate::target::Target;
 use crate::workspace;
 
@@ -364,14 +364,14 @@ pub(crate) fn fetch_closure(roots: &[&'static dyn Package]) -> Result<Vec<&'stat
 }
 
 /// 実行時依存とビルド依存のペアを返す。
-/// toolchain パッケージは `Bootstrap::seed_dependencies` でシード相の
-/// グラフ差分（glibc 循環回避）を上書きできる。
+/// `find_bootstrap` 登録パッケージは
+/// `Bootstrap::seed_dependencies` でグラフを無条件に上書きできる
+/// （binutils が glibc との循環を避けて実行時依存を空にする用途）。
 pub(crate) fn graph_deps(
     package: &dyn Package,
     target: Target,
 ) -> (Vec<Dependency>, Vec<Dependency>) {
-    if matches!(package.role(), Role::Toolchain { .. })
-        && let Some(bootstrap) = package::find_bootstrap(package.name())
+    if let Some(bootstrap) = package::find_bootstrap(package.name())
         && let Some(deps) = bootstrap.seed_dependencies(target)
     {
         return deps;
@@ -389,13 +389,7 @@ pub(crate) fn artifact_target(package: &dyn Package, depender: Target) -> Target
     if package.runs_on_host() && package.supports(Target::BUILD_ENV) {
         return Target::BUILD_ENV;
     }
-    if matches!(
-        package.role(),
-        Role::Toolchain {
-            stage: Stage::Binutils | Stage::GccStage1 | Stage::GccStage2 | Stage::Gcc,
-            ..
-        }
-    ) {
+    if package.gnu_triple().is_some() && !package.target_artifact() {
         return Target::BUILD_ENV;
     }
     if package.supports(depender) {
@@ -594,8 +588,8 @@ fn blocked_reason(
 #[cfg(test)]
 mod tests {
     use super::container::{
-        Mount, Prep, allow_network, compiler_cc, dep_paths, extra_host_tool_names, stage_generated,
-        wrap_script,
+        Mount, Prep, allow_network, build_plan, compiler_cc, dep_paths, extra_host_tool_names,
+        stage_generated, wrap_script,
     };
     use super::*;
     use crate::package::{Dependency, Role, Source};
@@ -611,7 +605,6 @@ mod tests {
         build_dependencies: &'static [Dependency],
         source_dir: PathBuf,
         artifacts: PathBuf,
-        build_script: &'static str,
         role: Role,
     }
 
@@ -642,8 +635,16 @@ mod tests {
         fn build_dependencies(&self, _target: Target) -> Vec<Dependency> {
             self.build_dependencies.to_vec()
         }
-        fn build_script(&self) -> &'static str {
-            self.build_script
+        /// 失敗するビルドを再現するため常に `false` を実行する。
+        fn recipe(
+            &self,
+            _ctx: &crate::package::recipe::BuildContext,
+        ) -> crate::package::recipe::Recipe {
+            use crate::package::recipe::{Arg, Env, Pipe, Recipe, Step, Steps};
+            Recipe::Steps(Steps::new(Env::None).step(Step::Exec {
+                env: vec![],
+                pipe: Pipe::cmd(vec![Arg::lit("false")]),
+            }))
         }
         fn flags(&self, _target: Target) -> crate::flags::Flag {
             crate::flags::Flag::new(vec![], vec![])
@@ -671,7 +672,6 @@ mod tests {
             build_dependencies,
             source_dir,
             artifacts,
-            build_script: "false",
             role: Role::Package,
         }
     }
@@ -899,6 +899,104 @@ mod tests {
         let x86_glibc = crate::package::find("x86_64-linux-gnu-glibc").unwrap();
         let names = extra_host_tool_names(x86_glibc, Target::Amd64(Amd64Variant::V4));
         assert!(!names.contains(&"x86_64-linux-gnu-gcc"), "{names:?}");
+    }
+
+    /// プリリュード（`build_plan` の `prelude`）を正準 JSON で
+    /// `tests/golden-plans/prelude/` と byte 比較する。`mounts`/`prep` は
+    /// 空固定（実依存は fixture 不要の構造カバレッジのみ）。
+    /// UPDATE_GOLDEN=1 で再生成。孤立ファイルも検出する。
+    #[test]
+    fn prelude_plans_match_golden() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden-plans/prelude");
+        std::fs::create_dir_all(&dir).unwrap();
+        let bless = std::env::var_os("UPDATE_GOLDEN").is_some();
+        let mut expected = std::collections::BTreeSet::new();
+        let mut mismatches = Vec::new();
+        for package in crate::package::definition::all() {
+            let targets: &[Target] = if package.gnu_triple().is_some() {
+                &[Target::Amd64(Amd64Variant::V4)]
+            } else {
+                &[
+                    Target::Amd64(Amd64Variant::V4),
+                    Target::Arm64(Arm64Variant::V8),
+                ]
+            };
+            for target in targets {
+                if !package.supports(*target) {
+                    continue;
+                }
+                let slug = match target {
+                    Target::Amd64(Amd64Variant::V4) => "amd64-v4",
+                    Target::Arm64(Arm64Variant::V8) => "arm64-v8",
+                    _ => continue,
+                };
+                let file = format!("{}-{slug}.json", package.name());
+                expected.insert(file.clone());
+                let plan = build_plan(*package, false, *target, &[], &Prep::default());
+                let value = serde_json::to_value(&plan)
+                    .unwrap_or_else(|_| panic!("{} の plan シリアライズに失敗", package.name()));
+                let json = format!("{}\n", serde_json::to_string_pretty(&value).unwrap());
+                let path = dir.join(&file);
+                if bless {
+                    std::fs::write(&path, &json).unwrap();
+                    continue;
+                }
+                let actual = std::fs::read(&path).unwrap_or_else(|_| {
+                    panic!(
+                        "golden が無い: {}（UPDATE_GOLDEN=1 で生成）",
+                        path.display()
+                    )
+                });
+                if actual != json.as_bytes() {
+                    mismatches.push(file);
+                }
+            }
+        }
+        let mut orphans = Vec::new();
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let name = entry.unwrap().file_name().into_string().unwrap();
+            if name.ends_with(".json") && !expected.contains(&name) {
+                orphans.push(name);
+            }
+        }
+        assert!(orphans.is_empty(), "孤立 prelude golden: {orphans:?}");
+        assert!(
+            mismatches.is_empty(),
+            "prelude golden と不一致: {mismatches:?}（意図的な変更なら UPDATE_GOLDEN=1 で再生成）"
+        );
+    }
+
+    #[test]
+    fn wrap_script_passes_bash_n() {
+        use std::io::Write;
+        let cmake = crate::package::find("cmake").unwrap();
+        for seed in [false, true] {
+            let script = wrap_script(cmake, seed, Target::BUILD_ENV, &[], &Prep::default());
+            let mut child = std::process::Command::new("bash")
+                .arg("-n")
+                .stdin(std::process::Stdio::piped())
+                .spawn()
+                .expect("bash -n の起動に失敗");
+            child
+                .stdin
+                .as_mut()
+                .unwrap()
+                .write_all(script.as_bytes())
+                .unwrap();
+            let output = child.wait_with_output().unwrap();
+            if !output.status.success() {
+                let lines: Vec<&str> = script.lines().collect();
+                panic!(
+                    "{}
+{}",
+                    lines[..30].join(
+                        "
+"
+                    ),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+        }
     }
 
     #[test]
@@ -1170,23 +1268,25 @@ libdir=/usr/lib
         );
         let perl_script = perl.rendered_script(Target::BUILD_ENV);
         assert!(
-            perl_script.contains("-Accflags=\"$CFLAGS\""),
+            perl_script.contains("-Accflags=\"${CFLAGS}\""),
             "{perl_script}"
         );
         assert!(
-            perl_script.contains("-Aldflags=\"$LDFLAGS\""),
-            "{perl_script}"
-        );
-        assert!(
-            perl_script.contains("-Dhostperl=/tmp/perl-host/miniperl"),
+            perl_script.contains("-Aldflags=\"${LDFLAGS}\""),
             "{perl_script}"
         );
         assert!(
             perl_script.contains("PERL_USE_UNSAFE_INC=1"),
             "{perl_script}"
         );
+        // cross 専用ステップは静的特化によりクロス向けレンダーにのみ出る。
+        let perl_script = perl.rendered_script(Target::Arm64(Arm64Variant::V8));
         assert!(
-            perl_script.contains("-Dtargetarch=\"$TRIPLE\""),
+            perl_script.contains("-Dhostperl=/tmp/perl-host/miniperl"),
+            "{perl_script}"
+        );
+        assert!(
+            perl_script.contains("-Dtargetarch=\"${TRIPLE}\""),
             "{perl_script}"
         );
         assert!(perl_script.contains("run=:"), "{perl_script}");
@@ -1331,5 +1431,20 @@ includedir=/usr/include
         assert!(names.contains(&"x86_64-linux-gnu-glibc"));
         assert!(names.contains(&"aarch64-linux-gnu-glibc"));
         assert!(names.contains(&"linux-headers"));
+    }
+
+    #[test]
+    fn graph_deps_binutils_override_applies_unconditionally() {
+        // `seed_dependencies` は名前に反して seed 相限定ではなく、
+        // `find_bootstrap` 登録パッケージの全ターゲットでグラフを
+        // 上書きする（旧 Prefixed と同じ契約）。aarch64 のような
+        // non-seed タプルでも実行時依存は空になる。
+        let binutils = crate::package::find("aarch64-linux-gnu-binutils").unwrap();
+        let (runtime, _build) = super::graph_deps(binutils, Target::Arm64(Arm64Variant::V8));
+        assert!(runtime.is_empty(), "{runtime:?}");
+        // 非登録パッケージは `Package` の宣言がそのまま使われる。
+        let zlib = crate::package::find("zlib").unwrap();
+        let (runtime, _) = super::graph_deps(zlib, Target::Arm64(Arm64Variant::V8));
+        assert!(runtime.iter().any(|d| d.name == "aarch64-linux-gnu-glibc"));
     }
 }

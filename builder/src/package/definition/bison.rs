@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Recipe};
+use crate::package::recipe::{BuildContext, Recipe, Step};
 use crate::package::{Package, Source};
 
 pub struct Bison;
@@ -39,15 +39,39 @@ impl Package for Bison {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
+        Recipe::autotools_pgo(&["--prefix=/usr"], pgo_workload())
     }
 }
 
-const PGO_WORKLOAD: &str = r#"export BISON_PKGDATADIR="$SOURCE/data"
-for _y in "$SOURCE"/src/parse-gram.y "$SOURCE"/examples/*/calc.y "$SOURCE"/tests/*.y; do
-  [ -f "$_y" ] && ./src/bison -o /tmp/bison-out.c "$_y" 2>/dev/null
-done"#;
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::{Arg, Cond, Pipe, argv};
+
+    let exec = |pipe: Pipe| Step::Exec { env: vec![], pipe };
+    vec![
+        Step::Export {
+            name: "BISON_PKGDATADIR",
+            value: Arg::lit("\"$SOURCE/data\""),
+        },
+        Step::ForEach {
+            var: "_y",
+            items: argv(&[
+                "\"$SOURCE\"/src/parse-gram.y",
+                "\"$SOURCE\"/examples/*/calc.y",
+                "\"$SOURCE\"/tests/*.y",
+            ]),
+            body: vec![Step::If {
+                cond: Cond::FileExists(Arg::lit("\"$_y\"")),
+                then: vec![exec(
+                    Pipe::cmd(argv(&["./src/bison", "-o", "/tmp/bison-out.c", "\"$_y\""]))
+                        .stderr(Arg::lit("/dev/null")),
+                )],
+                else_: vec![],
+            }],
+            stdout: None,
+        },
+    ]
+}

@@ -1,0 +1,179 @@
+{
+  "Steps": {
+    "env": "Autotools",
+    "pgo": {
+      "Autotools": [
+        {
+          "ForEach": {
+            "body": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "./sed/sed"
+                        },
+                        {
+                          "Lit": "-e"
+                        },
+                        {
+                          "Lit": "'s/int/INT/g'"
+                        },
+                        {
+                          "Lit": "-e"
+                        },
+                        {
+                          "Lit": "'s/return/RET/g'"
+                        },
+                        {
+                          "Lit": "\"$_f\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": {
+                      "append": false,
+                      "target": {
+                        "Lit": "/dev/null"
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "items": [
+              {
+                "Subst": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "find"
+                      },
+                      {
+                        "Lit": "\"$SOURCE\""
+                      },
+                      {
+                        "Lit": "-name"
+                      },
+                      {
+                        "Lit": "'*.c'"
+                      },
+                      {
+                        "Lit": "-o"
+                      },
+                      {
+                        "Lit": "-name"
+                      },
+                      {
+                        "Lit": "'*.h'"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            ],
+            "stdout": null,
+            "var": "_f"
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "./sed/sed"
+                  },
+                  {
+                    "Lit": "-n"
+                  },
+                  {
+                    "Lit": "'1,50p'"
+                  },
+                  {
+                    "Lit": "\"$SOURCE\"/configure"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": {
+                "append": false,
+                "target": {
+                  "Lit": "/dev/null"
+                }
+              }
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "./sed/sed"
+                  },
+                  {
+                    "Lit": "-e"
+                  },
+                  {
+                    "Lit": "'y/abc/ABC/'"
+                  },
+                  {
+                    "Lit": "-e"
+                  },
+                  {
+                    "Lit": "'/^#/d'"
+                  },
+                  {
+                    "Lit": "\"$SOURCE\"/config.h.in"
+                  }
+                ]
+              ],
+              "stderr": {
+                "Lit": "/dev/null"
+              },
+              "stdin": null,
+              "stdout": {
+                "append": false,
+                "target": {
+                  "Lit": "/dev/null"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Configure": [
+          "--prefix=/usr"
+        ]
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

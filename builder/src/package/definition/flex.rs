@@ -1,4 +1,6 @@
-use crate::package::recipe::{BuildContext, Env, Recipe, Std, Step, Steps, Workdir};
+use crate::package::recipe::{
+    Arg, BuildContext, Cond, Env, Pipe, Recipe, Std, Step, Steps, Workdir,
+};
 use crate::package::{Package, Source};
 
 pub struct Flex;
@@ -39,7 +41,7 @@ impl Package for Flex {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
@@ -49,31 +51,71 @@ impl Package for Flex {
                 .std(Std::Gnu11)
                 .workdir(Workdir::InSource)
                 // config.h fixup（configure〜make 間ステップ）は両フェーズで replay される
-                .pgo(crate::package::recipe::PgoTemplate::Autotools(PGO_WORKLOAD))
-                .step(Step::Shell(
-                    r#"if [ -f lib/malloc.c ]; then
-  cat > lib/malloc.c <<'EOF'
-#include <stdlib.h>
-void *rpl_malloc(size_t n) { if (n == 0) n = 1; return malloc(n); }
-EOF
-fi
-if [ -f lib/realloc.c ]; then
-  cat > lib/realloc.c <<'EOF'
-#include <stdlib.h>
-void *rpl_realloc(void *p, size_t n) { if (n == 0) n = 1; return realloc(p, n); }
-EOF
-fi"#,
-                ))
+                .pgo(crate::package::recipe::PgoTemplate::Autotools(pgo_workload()))
+                .step(Step::If {
+                    cond: Cond::FileExists(Arg::lit("lib/malloc.c")),
+                    then: vec![Step::WriteFile {
+                        path: Arg::lit("lib/malloc.c"),
+                        lines: vec![
+                            Arg::lit("#include <stdlib.h>"),
+                            Arg::lit("void *rpl_malloc(size_t n) { if (n == 0) n = 1; return malloc(n); }"),
+                        ],
+                        append: false,
+                        expand: false,
+                    }],
+                    else_: vec![],
+                })
+                .step(Step::If {
+                    cond: Cond::FileExists(Arg::lit("lib/realloc.c")),
+                    then: vec![Step::WriteFile {
+                        path: Arg::lit("lib/realloc.c"),
+                        lines: vec![
+                            Arg::lit("#include <stdlib.h>"),
+                            Arg::lit("void *rpl_realloc(void *p, size_t n) { if (n == 0) n = 1; return realloc(p, n); }"),
+                        ],
+                        append: false,
+                        expand: false,
+                    }],
+                    else_: vec![],
+                })
                 .step(Step::configure(&["--prefix=/usr"]))
-                .step(Step::Shell(
-                    "find . -name config.h -exec sed -i '/rpl_malloc/d;/rpl_realloc/d' {} +",
-                ))
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("find"),
+                        Arg::lit("."),
+                        Arg::lit("-name"),
+                        Arg::lit("config.h"),
+                        Arg::lit("-exec"),
+                        Arg::lit("sed"),
+                        Arg::lit("-i"),
+                        Arg::lit("'/rpl_malloc/d;/rpl_realloc/d'"),
+                        Arg::lit("{}"),
+                        Arg::lit("+"),
+                    ]),
+                })
                 .step(Step::make(&[]))
                 .step(Step::make_install(&[])),
         )
     }
 }
 
-const PGO_WORKLOAD: &str = r#"find "$SOURCE" -name '*.l' | while read -r _l; do
-  ./src/flex -o /tmp/flex-out.c "$_l" 2>/dev/null
-done"#;
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::{Arg, Pipe, argv};
+
+    let exec = |pipe: Pipe| Step::Exec { env: vec![], pipe };
+    vec![Step::ForEach {
+        var: "_l",
+        items: vec![Arg::Subst(Box::new(Pipe::cmd(argv(&[
+            "find",
+            "\"$SOURCE\"",
+            "-name",
+            "'*.l'",
+        ]))))],
+        body: vec![exec(
+            Pipe::cmd(argv(&["./src/flex", "-o", "/tmp/flex-out.c", "\"$_l\""]))
+                .stderr(Arg::lit("/dev/null")),
+        )],
+        stdout: None,
+    }]
+}

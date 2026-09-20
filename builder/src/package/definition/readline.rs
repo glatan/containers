@@ -40,13 +40,15 @@ impl Package for Readline {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
         Recipe::Steps(
             Steps::new(Env::Autotools)
-                .pgo(crate::package::recipe::PgoTemplate::Autotools(PGO_WORKLOAD))
+                .pgo(crate::package::recipe::PgoTemplate::Autotools(
+                    pgo_workload(),
+                ))
                 .step(Step::configure(&["--prefix=/usr", "--with-curses"]))
                 .step(Step::make(&["SHLIB_LIBS=-lncursesw"]))
                 .step(Step::make_install(&["SHLIB_LIBS=-lncursesw"])),
@@ -54,6 +56,28 @@ impl Package for Readline {
     }
 }
 
-const PGO_WORKLOAD: &str = r#"make -C examples SHLIB_LIBS=-lncursesw 2>/dev/null
-printf 'exit\n' | ./examples/rl 2>/dev/null
-printf 'version\n' | ./examples/rlversion 2>/dev/null"#;
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::{Arg, Pipe, argv};
+
+    let exec = |pipe: Pipe| Step::Exec { env: vec![], pipe };
+    vec![
+        exec(
+            Pipe::cmd(argv(&["make", "-C", "examples", "SHLIB_LIBS=-lncursesw"]))
+                .stderr(Arg::lit("/dev/null")),
+        ),
+        exec(
+            Pipe::new(vec![
+                argv(&["printf", "'exit\\n'"]),
+                argv(&["./examples/rl"]),
+            ])
+            .stderr(Arg::lit("/dev/null")),
+        ),
+        exec(
+            Pipe::new(vec![
+                argv(&["printf", "'version\\n'"]),
+                argv(&["./examples/rlversion"]),
+            ])
+            .stderr(Arg::lit("/dev/null")),
+        ),
+    ]
+}

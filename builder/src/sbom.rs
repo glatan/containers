@@ -184,8 +184,11 @@ mod tests {
         ) -> Vec<crate::package::Dependency> {
             vec![]
         }
-        fn build_script(&self) -> &'static str {
-            ""
+        fn recipe(
+            &self,
+            _ctx: &crate::package::recipe::BuildContext,
+        ) -> crate::package::recipe::Recipe {
+            crate::package::recipe::Recipe::Noop
         }
         fn flags(&self, _target: crate::target::Target) -> crate::flags::Flag {
             crate::flags::Flag::new(vec![], vec![])

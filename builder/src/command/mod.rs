@@ -117,6 +117,15 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+    /// コンテナ内で BuildPlan を直接実行する（podman のエントリポイント）
+    #[command(hide = true)]
+    RunRecipe {
+        /// plan JSON のパス
+        plan: std::path::PathBuf,
+        /// ターゲット <arch>/<variant>
+        #[arg(short = 't', long, value_name = "ARCH/VARIANT")]
+        target: String,
+    },
     /// ビルド環境の管理
     #[command(subcommand)]
     Env(env::EnvCommand),
@@ -210,8 +219,39 @@ pub fn run() -> Result<()> {
             images,
             dry_run,
         } => work::clean(&selection, &targets, images, dry_run),
+        Command::RunRecipe { plan, target } => run_recipe(&plan, parse_target(&target)?),
         Command::Env(command) => env::run(command),
     }
+}
+
+/// コンテナ内エントリ: plan JSON を `ContainerSandbox` で直接実行する。
+/// `BuildContext` は podman `-e` で注入済みの env から再構成する
+/// （`TRIPLE`/`HOST_TRIPLE`/`PACKAGE_HOST`/`CROSS` は build_target が
+/// 常に渡している）。`&'static str` フィールドを復元するため
+/// plan ファイルは `Box::leak` で 'static 化する。
+fn run_recipe(plan: &std::path::Path, target: Target) -> Result<()> {
+    use crate::package::recipe::{BuildContext, BuildPlan};
+    use crate::package::runner;
+    use crate::package::sandbox::ContainerSandbox;
+
+    let json = std::fs::read_to_string(plan)
+        .map_err(|e| Error::message(format!("plan が読めません {}: {e}", plan.display())))?;
+    let leaked: &'static str = Box::leak(json.into_boxed_str());
+    let plan: BuildPlan = serde_json::from_str(leaked)
+        .map_err(|e| Error::message(format!("plan のパースに失敗: {e}")))?;
+    let getenv = |name: &str| {
+        std::env::var(name).map_err(|_| Error::message(format!("環境変数 {name} がありません")))
+    };
+    let ctx = BuildContext {
+        target,
+        triple: getenv("TRIPLE")?,
+        host_triple: getenv("HOST_TRIPLE")?,
+        package_host: getenv("PACKAGE_HOST")?,
+        cross_prefix: std::env::var("CROSS").unwrap_or_default(),
+    };
+    let mut sandbox = ContainerSandbox::new();
+    runner::run_plan(&plan, &ctx, &mut sandbox)
+        .map_err(|e| Error::message(format!("recipe の実行に失敗: {e}")))
 }
 
 /// `-t` の値を Target に解決する。失敗時は `targets` コマンドへの誘導を添える。

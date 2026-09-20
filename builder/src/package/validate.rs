@@ -83,13 +83,7 @@ pub(crate) fn check_needed(
 }
 
 fn provides_glibc(package: &dyn Package) -> bool {
-    matches!(
-        package.role(),
-        crate::package::Role::Toolchain {
-            stage: crate::package::Stage::Glibc,
-            ..
-        }
-    )
+    package.gnu_triple().is_some() && package.target_artifact() && !package.build_only()
 }
 
 fn declares_glibc(package: &dyn Package, target: Target) -> bool {
@@ -282,6 +276,9 @@ mod tests {
         dependencies: &'static [Dependency],
         build_dependencies: &'static [Dependency],
         role: crate::package::Role,
+        gnu_triple: Option<&'static str>,
+        target_artifact: bool,
+        build_only: bool,
     }
 
     impl Package for Fake {
@@ -308,14 +305,26 @@ mod tests {
         fn build_dependencies(&self, _target: crate::target::Target) -> Vec<Dependency> {
             self.build_dependencies.to_vec()
         }
-        fn build_script(&self) -> &'static str {
-            ""
+        fn recipe(
+            &self,
+            _ctx: &crate::package::recipe::BuildContext,
+        ) -> crate::package::recipe::Recipe {
+            crate::package::recipe::Recipe::Noop
         }
         fn flags(&self, _target: crate::target::Target) -> crate::flags::Flag {
             crate::flags::Flag::new(vec![], vec![])
         }
         fn role(&self) -> crate::package::Role {
             self.role
+        }
+        fn gnu_triple(&self) -> Option<&'static str> {
+            self.gnu_triple
+        }
+        fn target_artifact(&self) -> bool {
+            self.target_artifact
+        }
+        fn build_only(&self) -> bool {
+            self.build_only
         }
     }
 
@@ -344,10 +353,10 @@ mod tests {
                 name: "linux-headers",
                 version: "1.0",
             }],
-            role: crate::package::Role::Toolchain {
-                triple: "x86_64-linux-gnu",
-                stage: crate::package::Stage::Glibc,
-            },
+            role: crate::package::Role::Package,
+            gnu_triple: Some("x86_64-linux-gnu"),
+            target_artifact: true,
+            build_only: false,
         };
         check_needed(
             &glibc,
@@ -368,10 +377,10 @@ mod tests {
             name: "x86_64-linux-gnu-glibc",
             dependencies: &[],
             build_dependencies: &[],
-            role: crate::package::Role::Toolchain {
-                triple: "x86_64-linux-gnu",
-                stage: crate::package::Stage::Glibc,
-            },
+            role: crate::package::Role::Package,
+            gnu_triple: Some("x86_64-linux-gnu"),
+            target_artifact: true,
+            build_only: false,
         };
         let error = check_needed(
             &glibc,
@@ -393,6 +402,9 @@ mod tests {
                 version: "1.0",
             }],
             role: crate::package::Role::Package,
+            gnu_triple: None,
+            target_artifact: false,
+            build_only: false,
         };
         let error = check_needed(
             &openssl,
@@ -414,6 +426,9 @@ mod tests {
                 version: "1.0",
             }],
             role: crate::package::Role::Package,
+            gnu_triple: None,
+            target_artifact: false,
+            build_only: false,
         };
         check_needed(
             &openssl,
@@ -431,6 +446,9 @@ mod tests {
             }],
             build_dependencies: &[],
             role: crate::package::Role::Package,
+            gnu_triple: None,
+            target_artifact: false,
+            build_only: false,
         };
         check_needed(
             &bash,
@@ -451,6 +469,9 @@ mod tests {
             }],
             build_dependencies: &[],
             role: crate::package::Role::Package,
+            gnu_triple: None,
+            target_artifact: false,
+            build_only: false,
         };
         let error = check_needed(
             &openssl,

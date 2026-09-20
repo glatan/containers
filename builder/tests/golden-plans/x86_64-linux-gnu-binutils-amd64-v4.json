@@ -1,0 +1,775 @@
+{
+  "Steps": {
+    "env": "None",
+    "pgo": null,
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Export": {
+          "name": "CC_FOR_BUILD",
+          "value": {
+            "Concat": [
+              {
+                "Var": "HOST_TRIPLE"
+              },
+              {
+                "Lit": "-gcc"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "Export": {
+          "name": "CXX_FOR_BUILD",
+          "value": {
+            "Concat": [
+              {
+                "Var": "HOST_TRIPLE"
+              },
+              {
+                "Lit": "-g++"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "Export": {
+          "name": "PGODIR",
+          "value": {
+            "Lit": "/tmp/pgo"
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "rm"
+                },
+                {
+                  "Lit": "-rf"
+                },
+                {
+                  "Var": "PGODIR"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "mkdir"
+                },
+                {
+                  "Lit": "-p"
+                },
+                {
+                  "Var": "PGODIR"
+                },
+                {
+                  "Concat": [
+                    {
+                      "Var": "BUILD"
+                    },
+                    {
+                      "Lit": "/gen"
+                    }
+                  ]
+                },
+                {
+                  "Concat": [
+                    {
+                      "Var": "BUILD"
+                    },
+                    {
+                      "Lit": "/final"
+                    }
+                  ]
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Cd": {
+          "Concat": [
+            {
+              "Var": "BUILD"
+            },
+            {
+              "Lit": "/gen"
+            }
+          ]
+        }
+      },
+      {
+        "Exec": {
+          "env": [
+            [
+              "CFLAGS",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Lit": "${CFLAGS:-} "
+                    },
+                    {
+                      "Lit": "-fprofile-generate=${PGODIR} -fprofile-update=atomic"
+                    }
+                  ]
+                }
+              }
+            ],
+            [
+              "CXXFLAGS",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Lit": "${CXXFLAGS:-} "
+                    },
+                    {
+                      "Lit": "-fprofile-generate=${PGODIR} -fprofile-update=atomic"
+                    }
+                  ]
+                }
+              }
+            ],
+            [
+              "LDFLAGS",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Lit": "${LDFLAGS:-} "
+                    },
+                    {
+                      "Lit": "-fprofile-generate"
+                    }
+                  ]
+                }
+              }
+            ]
+          ],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Concat": [
+                    {
+                      "Var": "SOURCE"
+                    },
+                    {
+                      "Lit": "/configure"
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "build",
+                    {
+                      "Var": "HOST_TRIPLE"
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "host",
+                    {
+                      "Var": "HOST_TRIPLE"
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "target",
+                    {
+                      "Var": "TRIPLE"
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "program-prefix",
+                    {
+                      "Concat": [
+                        {
+                          "Var": "TRIPLE"
+                        },
+                        {
+                          "Lit": "-"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Lit": "--prefix=/usr"
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "--infodir=/usr/share/info/"
+                    },
+                    {
+                      "Var": "TRIPLE"
+                    }
+                  ]
+                },
+                {
+                  "Lit": "--disable-nls"
+                },
+                {
+                  "Lit": "--disable-werror"
+                },
+                {
+                  "Lit": "--enable-plugins"
+                },
+                {
+                  "Lit": "--with-system-zlib"
+                },
+                {
+                  "Lit": "--without-debuginfod"
+                },
+                {
+                  "Lit": "--disable-gprofng"
+                },
+                {
+                  "Lit": "--enable-new-dtags"
+                },
+                {
+                  "Lit": "--enable-relro"
+                },
+                {
+                  "Lit": "--enable-default-execstack=no"
+                },
+                {
+                  "Lit": "--enable-default-hash-style=gnu"
+                },
+                {
+                  "Lit": "--enable-cet"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "Or": {
+          "lhs": [
+            {
+              "Set": {
+                "name": "_as",
+                "value": {
+                  "Concat": [
+                    {
+                      "Var": "BUILD"
+                    },
+                    {
+                      "Lit": "/gen/gas/as-new"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "Set": {
+                "name": "_ld",
+                "value": {
+                  "Concat": [
+                    {
+                      "Var": "BUILD"
+                    },
+                    {
+                      "Lit": "/gen/ld/ld-new"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "Set": {
+                "name": "_objdump",
+                "value": {
+                  "Concat": [
+                    {
+                      "Var": "BUILD"
+                    },
+                    {
+                      "Lit": "/gen/binutils/objdump"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "Exec": {
+                "env": [],
+                "pipe": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "mkdir"
+                      },
+                      {
+                        "Lit": "-p"
+                      },
+                      {
+                        "Lit": "/tmp/bu-work"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            },
+            {
+              "ForEach": {
+                "body": [
+                  {
+                    "Exec": {
+                      "env": [],
+                      "pipe": {
+                        "stages": [
+                          [
+                            {
+                              "Lit": "printf"
+                            },
+                            {
+                              "Quoted": {
+                                "Lit": ".text\\n.globl f%s\\nf%s:\\n  mov $%s, %%eax\\n  ret\\n"
+                              }
+                            },
+                            {
+                              "Var": "_i"
+                            },
+                            {
+                              "Var": "_i"
+                            },
+                            {
+                              "Var": "_i"
+                            }
+                          ]
+                        ],
+                        "stderr": null,
+                        "stdin": null,
+                        "stdout": {
+                          "append": false,
+                          "target": {
+                            "Lit": "/tmp/bu-work/t.s"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "Exec": {
+                      "env": [],
+                      "pipe": {
+                        "stages": [
+                          [
+                            {
+                              "Var": "_as"
+                            },
+                            {
+                              "Lit": "-o"
+                            },
+                            {
+                              "Lit": "/tmp/bu-work/t.o"
+                            },
+                            {
+                              "Lit": "/tmp/bu-work/t.s"
+                            }
+                          ]
+                        ],
+                        "stderr": null,
+                        "stdin": null,
+                        "stdout": null
+                      }
+                    }
+                  },
+                  {
+                    "Exec": {
+                      "env": [],
+                      "pipe": {
+                        "stages": [
+                          [
+                            {
+                              "Var": "_ld"
+                            },
+                            {
+                              "Lit": "-r"
+                            },
+                            {
+                              "Lit": "-o"
+                            },
+                            {
+                              "Concat": [
+                                {
+                                  "Lit": "/tmp/bu-work/t"
+                                },
+                                {
+                                  "Var": "_i"
+                                },
+                                {
+                                  "Lit": ".o"
+                                }
+                              ]
+                            },
+                            {
+                              "Lit": "/tmp/bu-work/t.o"
+                            }
+                          ]
+                        ],
+                        "stderr": null,
+                        "stdin": null,
+                        "stdout": null
+                      }
+                    }
+                  }
+                ],
+                "items": [
+                  {
+                    "Subst": {
+                      "stages": [
+                        [
+                          {
+                            "Lit": "seq"
+                          },
+                          {
+                            "Lit": "1"
+                          },
+                          {
+                            "Lit": "64"
+                          }
+                        ]
+                      ],
+                      "stderr": null,
+                      "stdin": null,
+                      "stdout": null
+                    }
+                  }
+                ],
+                "stdout": null,
+                "var": "_i"
+              }
+            },
+            {
+              "Exec": {
+                "env": [],
+                "pipe": {
+                  "stages": [
+                    [
+                      {
+                        "Var": "_ld"
+                      },
+                      {
+                        "Lit": "-r"
+                      },
+                      {
+                        "Lit": "-o"
+                      },
+                      {
+                        "Lit": "/tmp/bu-work/all.o"
+                      },
+                      {
+                        "Lit": "/tmp/bu-work/t*.o"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            },
+            {
+              "Exec": {
+                "env": [],
+                "pipe": {
+                  "stages": [
+                    [
+                      {
+                        "Var": "_objdump"
+                      },
+                      {
+                        "Lit": "-d"
+                      },
+                      {
+                        "Lit": "/tmp/bu-work/all.o"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": {
+                    "append": false,
+                    "target": {
+                      "Lit": "/dev/null"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "Exec": {
+                "env": [],
+                "pipe": {
+                  "stages": [
+                    [
+                      {
+                        "Var": "_objdump"
+                      },
+                      {
+                        "Lit": "-h"
+                      },
+                      {
+                        "Lit": "/tmp/bu-work/all.o"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": {
+                    "append": false,
+                    "target": {
+                      "Lit": "/dev/null"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "rhs": [
+            {
+              "Exec": {
+                "env": [],
+                "pipe": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "true"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "Cd": {
+          "Concat": [
+            {
+              "Var": "BUILD"
+            },
+            {
+              "Lit": "/final"
+            }
+          ]
+        }
+      },
+      {
+        "Exec": {
+          "env": [
+            [
+              "CFLAGS",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Lit": "${CFLAGS:-} "
+                    },
+                    {
+                      "Lit": "-fprofile-use=${PGODIR} -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"
+                    }
+                  ]
+                }
+              }
+            ],
+            [
+              "CXXFLAGS",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Lit": "${CXXFLAGS:-} "
+                    },
+                    {
+                      "Lit": "-fprofile-use=${PGODIR} -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"
+                    }
+                  ]
+                }
+              }
+            ],
+            [
+              "LDFLAGS",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Lit": "${LDFLAGS:-} "
+                    },
+                    {
+                      "Lit": "-fprofile-use"
+                    }
+                  ]
+                }
+              }
+            ]
+          ],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Concat": [
+                    {
+                      "Var": "SOURCE"
+                    },
+                    {
+                      "Lit": "/configure"
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "build",
+                    {
+                      "Var": "HOST_TRIPLE"
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "host",
+                    {
+                      "Var": "HOST_TRIPLE"
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "target",
+                    {
+                      "Var": "TRIPLE"
+                    }
+                  ]
+                },
+                {
+                  "Opt": [
+                    "program-prefix",
+                    {
+                      "Concat": [
+                        {
+                          "Var": "TRIPLE"
+                        },
+                        {
+                          "Lit": "-"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Lit": "--prefix=/usr"
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "--infodir=/usr/share/info/"
+                    },
+                    {
+                      "Var": "TRIPLE"
+                    }
+                  ]
+                },
+                {
+                  "Lit": "--disable-nls"
+                },
+                {
+                  "Lit": "--disable-werror"
+                },
+                {
+                  "Lit": "--enable-plugins"
+                },
+                {
+                  "Lit": "--with-system-zlib"
+                },
+                {
+                  "Lit": "--without-debuginfod"
+                },
+                {
+                  "Lit": "--disable-gprofng"
+                },
+                {
+                  "Lit": "--enable-new-dtags"
+                },
+                {
+                  "Lit": "--enable-relro"
+                },
+                {
+                  "Lit": "--enable-default-execstack=no"
+                },
+                {
+                  "Lit": "--enable-default-hash-style=gnu"
+                },
+                {
+                  "Lit": "--enable-cet"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "None"
+  }
+}

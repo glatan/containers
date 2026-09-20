@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Recipe};
+use crate::package::recipe::{BuildContext, Recipe, Step};
 use crate::package::{Package, Source};
 
 pub struct Sqlite;
@@ -34,16 +34,38 @@ impl Package for Sqlite {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
+        Recipe::autotools_pgo(&["--prefix=/usr"], pgo_workload())
     }
 }
 
-const PGO_WORKLOAD: &str = r#"./sqlite3 /tmp/pgo.db "CREATE TABLE t(a INTEGER, b TEXT); CREATE INDEX ti ON t(a);"
-for _i in $(seq 1 200); do
-  ./sqlite3 /tmp/pgo.db "INSERT INTO t VALUES($((RANDOM)), 'val'); SELECT count(*), sum(a) FROM t; SELECT a FROM t t1 JOIN t t2 ON t1.a = t2.a LIMIT 100; BEGIN; UPDATE t SET b='x' WHERE a=1; COMMIT;"
-done
-./sqlite3 /tmp/pgo.db "EXPLAIN QUERY PLAN SELECT * FROM t WHERE a > 10 ORDER BY b; VACUUM;""#;
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::{Arg, Pipe, argv};
+
+    let exec = |pipe: Pipe| Step::Exec { env: vec![], pipe };
+    vec![
+        exec(Pipe::cmd(argv(&[
+            "./sqlite3",
+            "/tmp/pgo.db",
+            "\"CREATE TABLE t(a INTEGER, b TEXT); CREATE INDEX ti ON t(a);\"",
+        ]))),
+        Step::ForEach {
+            var: "_i",
+            items: vec![Arg::Subst(Box::new(Pipe::cmd(argv(&["seq", "1", "200"]))))],
+            body: vec![exec(Pipe::cmd(argv(&[
+                "./sqlite3",
+                "/tmp/pgo.db",
+                "\"INSERT INTO t VALUES(${_i}, 'val'); SELECT count(*), sum(a) FROM t; SELECT a FROM t t1 JOIN t t2 ON t1.a = t2.a LIMIT 100; BEGIN; UPDATE t SET b='x' WHERE a=1; COMMIT;\"",
+            ])))],
+            stdout: None,
+        },
+        exec(Pipe::cmd(argv(&[
+            "./sqlite3",
+            "/tmp/pgo.db",
+            "\"EXPLAIN QUERY PLAN SELECT * FROM t WHERE a > 10 ORDER BY b; VACUUM;\"",
+        ]))),
+    ]
+}

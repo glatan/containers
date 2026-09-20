@@ -1,5 +1,5 @@
 use crate::flags::Flag;
-use crate::package::recipe::{BuildContext, Env, Recipe, Step, Steps};
+use crate::package::recipe::{Arg, BuildContext, Cond, Env, Recipe, Step, Steps};
 use crate::package::{Dependency, Package, Source};
 use crate::target::Target;
 
@@ -103,27 +103,95 @@ impl Package for Python {
         configure_args.push("--without-ensurepip");
         Recipe::Steps(
             Steps::new(Env::Autotools)
-                .step(Step::Shell(
-                    r#"for _dep in libffi zlib openssl expat sqlite ncurses readline xz bzip2 zstd; do
-  if [ -d /dep/$_dep/usr/include ]; then
-    export CPPFLAGS="${CPPFLAGS:-} -I/dep/$_dep/usr/include"
-    export CFLAGS="$CFLAGS -I/dep/$_dep/usr/include"
-  fi
-  if [ -d /dep/$_dep/usr/lib64 ]; then
-    export LDFLAGS="$LDFLAGS -L/dep/$_dep/usr/lib64"
-    export PKG_CONFIG_PATH="/dep/$_dep/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
-  elif [ -d /dep/$_dep/usr/lib ]; then
-    export LDFLAGS="$LDFLAGS -L/dep/$_dep/usr/lib"
-    export PKG_CONFIG_PATH="/dep/$_dep/usr/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
-  fi
-done"#,
-                ))
+                .step(Step::ForEach {
+                    var: "_dep",
+                    items: [
+                        "libffi", "zlib", "openssl", "expat", "sqlite", "ncurses", "readline",
+                        "xz", "bzip2", "zstd",
+                    ]
+                    .iter()
+                    .map(|name| Arg::lit(name))
+                    .collect(),
+                    body: {
+                        let dep_dir = |sub: &'static str| {
+                            Arg::Concat(vec![Arg::lit("/dep/"), Arg::Var("_dep"), Arg::lit(sub)])
+                        };
+                        let export = |name: &'static str, parts: Vec<Arg>| Step::Export {
+                            name,
+                            value: Arg::quoted(Arg::Concat(parts)),
+                        };
+                        let lib_flags = |libdir: &'static str| {
+                            vec![
+                                export(
+                                    "LDFLAGS",
+                                    vec![
+                                        Arg::Var("LDFLAGS"),
+                                        Arg::lit(" -L/dep/"),
+                                        Arg::Var("_dep"),
+                                        Arg::lit(match libdir {
+                                            "lib64" => "/usr/lib64",
+                                            _ => "/usr/lib",
+                                        }),
+                                    ],
+                                ),
+                                export(
+                                    "PKG_CONFIG_PATH",
+                                    vec![
+                                        Arg::lit("/dep/"),
+                                        Arg::Var("_dep"),
+                                        Arg::lit(match libdir {
+                                            "lib64" => "/usr/lib64/pkgconfig",
+                                            _ => "/usr/lib/pkgconfig",
+                                        }),
+                                        Arg::lit("${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"),
+                                    ],
+                                ),
+                            ]
+                        };
+                        vec![
+                            Step::If {
+                                cond: Cond::DirExists(dep_dir("/usr/include")),
+                                then: vec![
+                                    export(
+                                        "CPPFLAGS",
+                                        vec![
+                                            Arg::lit("${CPPFLAGS:-}"),
+                                            Arg::lit(" -I/dep/"),
+                                            Arg::Var("_dep"),
+                                            Arg::lit("/usr/include"),
+                                        ],
+                                    ),
+                                    export(
+                                        "CFLAGS",
+                                        vec![
+                                            Arg::Var("CFLAGS"),
+                                            Arg::lit(" -I/dep/"),
+                                            Arg::Var("_dep"),
+                                            Arg::lit("/usr/include"),
+                                        ],
+                                    ),
+                                ],
+                                else_: vec![],
+                            },
+                            Step::If {
+                                cond: Cond::DirExists(dep_dir("/usr/lib64")),
+                                then: lib_flags("lib64"),
+                                else_: vec![Step::If {
+                                    cond: Cond::DirExists(dep_dir("/usr/lib")),
+                                    then: lib_flags("lib"),
+                                    else_: vec![],
+                                }],
+                            },
+                        ]
+                    },
+                    stdout: None,
+                })
                 .step(Step::configure(&configure_args))
                 .step(Step::make(&[]))
                 .step(Step::make_install(&[]))
                 .step(Step::Symlink {
-                    target: "python3",
-                    link: "\"$OUT\"/usr/bin/python",
+                    target: "python3".into(),
+                    link: "\"$OUT\"/usr/bin/python".into(),
                     force: true,
                 }),
         )

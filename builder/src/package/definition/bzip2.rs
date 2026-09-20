@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Env, Recipe, Step, Steps, Workdir};
+use crate::package::recipe::{Arg, BuildContext, Env, Pipe, Recipe, Step, Steps, Workdir};
 use crate::package::{Package, Source};
 
 pub struct Bzip2;
@@ -34,17 +34,23 @@ impl Package for Bzip2 {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
         Recipe::Steps(
             Steps::new(Env::Autotools)
                 .workdir(Workdir::InSource)
-                .pgo(crate::package::recipe::PgoTemplate::Make(PGO_WORKLOAD))
-                .step(Step::Shell(
-                    "sed -i 's/$(CC) -shared/$(CC) $(LDFLAGS) -shared/' Makefile-libbz2_so",
-                ))
+                .pgo(crate::package::recipe::PgoTemplate::Make(pgo_workload()))
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("sed"),
+                        Arg::lit("-i"),
+                        Arg::lit("'s/$(CC) -shared/$(CC) $(LDFLAGS) -shared/'"),
+                        Arg::lit("Makefile-libbz2_so"),
+                    ]),
+                })
                 .step(Step::Make {
                     jobs: false,
                     args: crate::package::recipe::args(&[
@@ -71,16 +77,66 @@ impl Package for Bzip2 {
                 .step(Step::MakeInstall {
                     vars: crate::package::recipe::args(&["PREFIX=\"$OUT/usr\""]),
                 })
-                .step(Step::Shell(
-                    "mkdir -p \"$OUT/usr/lib\"
-cp -a libbz2.so* \"$OUT/usr/lib/\"",
-                )),
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("mkdir"),
+                        Arg::lit("-p"),
+                        Arg::quoted(Arg::Concat(vec![Arg::Var("OUT"), Arg::lit("/usr/lib")])),
+                    ]),
+                })
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("cp"),
+                        Arg::lit("-a"),
+                        Arg::lit("libbz2.so*"),
+                        Arg::quoted(Arg::Concat(vec![Arg::Var("OUT"), Arg::lit("/usr/lib/")])),
+                    ]),
+                }),
         )
     }
 }
 
-const PGO_WORKLOAD: &str = r#"for _i in 1 2 3 4 5 6 7 8; do cat ./*.c ./*.h 2>/dev/null; done > /tmp/pgo-input
-for _opt in -1 -6 -9; do
-  ./bzip2 -c "$_opt" /tmp/pgo-input | ./bzip2 -d -c > /dev/null
-done
-./bzip2 -c -9 /tmp/pgo-input > /tmp/pgo.bz2 && ./bzip2recover /tmp/pgo.bz2 > /dev/null 2>&1"#;
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::{Arg, Cond, Pipe, Redirect, argv};
+
+    let exec = |pipe: Pipe| Step::Exec { env: vec![], pipe };
+    vec![
+        Step::ForEach {
+            var: "_i",
+            items: argv(&["1", "2", "3", "4", "5", "6", "7", "8"]),
+            body: vec![exec(
+                Pipe::cmd(argv(&["cat", "./*.c", "./*.h"])).stderr(Arg::lit("/dev/null")),
+            )],
+            stdout: Some(Redirect {
+                target: Arg::lit("/tmp/pgo-input"),
+                append: false,
+            }),
+        },
+        Step::ForEach {
+            var: "_opt",
+            items: argv(&["-1", "-6", "-9"]),
+            body: vec![exec(
+                Pipe::new(vec![
+                    argv(&["./bzip2", "-c", "\"$_opt\"", "/tmp/pgo-input"]),
+                    argv(&["./bzip2", "-d", "-c"]),
+                ])
+                .stdout(Arg::lit("/dev/null")),
+            )],
+            stdout: None,
+        },
+        Step::If {
+            cond: Cond::Cmd(
+                Pipe::cmd(argv(&["./bzip2", "-c", "-9", "/tmp/pgo-input"]))
+                    .stdout(Arg::lit("/tmp/pgo.bz2")),
+            ),
+            then: vec![exec(
+                Pipe::cmd(argv(&["./bzip2recover", "/tmp/pgo.bz2"]))
+                    .stdout(Arg::lit("/dev/null"))
+                    .stderr(Arg::lit("/dev/null")),
+            )],
+            else_: vec![],
+        },
+    ]
+}

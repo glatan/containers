@@ -1,0 +1,192 @@
+{
+  "Steps": {
+    "env": "Autotools",
+    "pgo": {
+      "Autotools": [
+        {
+          "ForEach": {
+            "body": [
+              {
+                "Set": {
+                  "name": "_dir",
+                  "value": {
+                    "Subst": {
+                      "stages": [
+                        [
+                          {
+                            "Lit": "dirname"
+                          },
+                          {
+                            "Lit": "\"$_pc\""
+                          }
+                        ]
+                      ],
+                      "stderr": null,
+                      "stdin": null,
+                      "stdout": null
+                    }
+                  }
+                }
+              },
+              {
+                "Set": {
+                  "name": "_name",
+                  "value": {
+                    "Subst": {
+                      "stages": [
+                        [
+                          {
+                            "Lit": "basename"
+                          },
+                          {
+                            "Lit": "\"$_pc\""
+                          },
+                          {
+                            "Lit": ".pc"
+                          }
+                        ]
+                      ],
+                      "stderr": null,
+                      "stdin": null,
+                      "stdout": null
+                    }
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [
+                    [
+                      "PKG_CONFIG_PATH",
+                      {
+                        "Var": "_dir"
+                      }
+                    ]
+                  ],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "./pkgconf"
+                        },
+                        {
+                          "Lit": "--cflags"
+                        },
+                        {
+                          "Lit": "--libs"
+                        },
+                        {
+                          "Lit": "\"$_name\""
+                        }
+                      ]
+                    ],
+                    "stderr": {
+                      "Lit": "/dev/null"
+                    },
+                    "stdin": null,
+                    "stdout": {
+                      "append": false,
+                      "target": {
+                        "Lit": "/dev/null"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [
+                    [
+                      "PKG_CONFIG_PATH",
+                      {
+                        "Var": "_dir"
+                      }
+                    ]
+                  ],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "./pkgconf"
+                        },
+                        {
+                          "Lit": "--modversion"
+                        },
+                        {
+                          "Lit": "\"$_name\""
+                        }
+                      ]
+                    ],
+                    "stderr": {
+                      "Lit": "/dev/null"
+                    },
+                    "stdin": null,
+                    "stdout": {
+                      "append": false,
+                      "target": {
+                        "Lit": "/dev/null"
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "items": [
+              {
+                "Subst": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "find"
+                      },
+                      {
+                        "Lit": "/dep"
+                      },
+                      {
+                        "Lit": "/usr"
+                      },
+                      {
+                        "Lit": "-name"
+                      },
+                      {
+                        "Lit": "'*.pc'"
+                      }
+                    ]
+                  ],
+                  "stderr": {
+                    "Lit": "/dev/null"
+                  },
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            ],
+            "stdout": null,
+            "var": "_pc"
+          }
+        }
+      ]
+    },
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Configure": [
+          "--prefix=/usr"
+        ]
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

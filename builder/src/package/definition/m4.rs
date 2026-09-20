@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Recipe};
+use crate::package::recipe::{BuildContext, Recipe, Step};
 use crate::package::{Bootstrap, Package, Source};
 
 pub struct M4;
@@ -39,18 +39,47 @@ impl Package for M4 {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
+        Recipe::autotools_pgo(&["--prefix=/usr"], pgo_workload())
     }
 }
 
 impl Bootstrap for M4 {}
 
-const PGO_WORKLOAD: &str = r#"find "$SOURCE" -name '*.m4' | while read -r _m; do
-  ./src/m4 "$_m" > /dev/null 2>&1
-done
-echo 'define(`x', `1')dnl x' | ./src/m4 > /dev/null
-./src/m4 -P "$SOURCE"/m4/*.m4 > /dev/null 2>&1"#;
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::{Arg, Pipe, argv};
+
+    let exec = |pipe: Pipe| Step::Exec { env: vec![], pipe };
+    vec![
+        Step::ForEach {
+            var: "_m",
+            items: vec![Arg::Subst(Box::new(Pipe::cmd(argv(&[
+                "find",
+                "\"$SOURCE\"",
+                "-name",
+                "'*.m4'",
+            ]))))],
+            body: vec![exec(
+                Pipe::cmd(argv(&["./src/m4", "\"$_m\""]))
+                    .stdout(Arg::lit("/dev/null"))
+                    .stderr(Arg::lit("/dev/null")),
+            )],
+            stdout: None,
+        },
+        exec(
+            Pipe::new(vec![
+                argv(&["echo", "\"define(\\`x', \\`1')dnl x\""]),
+                argv(&["./src/m4"]),
+            ])
+            .stdout(Arg::lit("/dev/null")),
+        ),
+        exec(
+            Pipe::cmd(argv(&["./src/m4", "-P", "\"$SOURCE\"/m4/*.m4"]))
+                .stdout(Arg::lit("/dev/null"))
+                .stderr(Arg::lit("/dev/null")),
+        ),
+    ]
+}

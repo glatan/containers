@@ -1,0 +1,328 @@
+{
+  "Steps": {
+    "env": "Autotools",
+    "pgo": {
+      "Make": [
+        {
+          "ForEach": {
+            "body": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "cat"
+                        },
+                        {
+                          "Lit": "./*.c"
+                        },
+                        {
+                          "Lit": "./*.h"
+                        }
+                      ]
+                    ],
+                    "stderr": {
+                      "Lit": "/dev/null"
+                    },
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              }
+            ],
+            "items": [
+              {
+                "Lit": "1"
+              },
+              {
+                "Lit": "2"
+              },
+              {
+                "Lit": "3"
+              },
+              {
+                "Lit": "4"
+              },
+              {
+                "Lit": "5"
+              },
+              {
+                "Lit": "6"
+              },
+              {
+                "Lit": "7"
+              },
+              {
+                "Lit": "8"
+              }
+            ],
+            "stdout": {
+              "append": false,
+              "target": {
+                "Lit": "/tmp/pgo-input"
+              }
+            },
+            "var": "_i"
+          }
+        },
+        {
+          "ForEach": {
+            "body": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "./bzip2"
+                        },
+                        {
+                          "Lit": "-c"
+                        },
+                        {
+                          "Lit": "\"$_opt\""
+                        },
+                        {
+                          "Lit": "/tmp/pgo-input"
+                        }
+                      ],
+                      [
+                        {
+                          "Lit": "./bzip2"
+                        },
+                        {
+                          "Lit": "-d"
+                        },
+                        {
+                          "Lit": "-c"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": {
+                      "append": false,
+                      "target": {
+                        "Lit": "/dev/null"
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "items": [
+              {
+                "Lit": "-1"
+              },
+              {
+                "Lit": "-6"
+              },
+              {
+                "Lit": "-9"
+              }
+            ],
+            "stdout": null,
+            "var": "_opt"
+          }
+        },
+        {
+          "If": {
+            "cond": {
+              "Cmd": {
+                "stages": [
+                  [
+                    {
+                      "Lit": "./bzip2"
+                    },
+                    {
+                      "Lit": "-c"
+                    },
+                    {
+                      "Lit": "-9"
+                    },
+                    {
+                      "Lit": "/tmp/pgo-input"
+                    }
+                  ]
+                ],
+                "stderr": null,
+                "stdin": null,
+                "stdout": {
+                  "append": false,
+                  "target": {
+                    "Lit": "/tmp/pgo.bz2"
+                  }
+                }
+              }
+            },
+            "else_": [],
+            "then": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "./bzip2recover"
+                        },
+                        {
+                          "Lit": "/tmp/pgo.bz2"
+                        }
+                      ]
+                    ],
+                    "stderr": {
+                      "Lit": "/dev/null"
+                    },
+                    "stdin": null,
+                    "stdout": {
+                      "append": false,
+                      "target": {
+                        "Lit": "/dev/null"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "std": "Gnu17",
+    "steps": [
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "sed"
+                },
+                {
+                  "Lit": "-i"
+                },
+                {
+                  "Lit": "'s/$(CC) -shared/$(CC) $(LDFLAGS) -shared/'"
+                },
+                {
+                  "Lit": "Makefile-libbz2_so"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Make": {
+          "args": [
+            "-f",
+            "Makefile-libbz2_so",
+            "CC=\"$CC\"",
+            "CFLAGS=\"$CFLAGS -fpic -fPIC -Wall -Winline -D_FILE_OFFSET_BITS=64\"",
+            "LDFLAGS=\"$LDFLAGS\""
+          ],
+          "jobs": false
+        }
+      },
+      {
+        "Make": {
+          "args": [
+            "CC=\"$CC\"",
+            "AR=\"${AR:-${TRIPLE}-ar}\"",
+            "RANLIB=\"${RANLIB:-${TRIPLE}-ranlib}\"",
+            "CFLAGS=\"$CFLAGS -Wall -Winline -D_FILE_OFFSET_BITS=64\"",
+            "LDFLAGS=\"$LDFLAGS\"",
+            "libbz2.a",
+            "bzip2",
+            "bzip2recover"
+          ],
+          "jobs": false
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": [
+            "PREFIX=\"$OUT/usr\""
+          ]
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "mkdir"
+                },
+                {
+                  "Lit": "-p"
+                },
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Var": "OUT"
+                      },
+                      {
+                        "Lit": "/usr/lib"
+                      }
+                    ]
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "cp"
+                },
+                {
+                  "Lit": "-a"
+                },
+                {
+                  "Lit": "libbz2.so*"
+                },
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Var": "OUT"
+                      },
+                      {
+                        "Lit": "/usr/lib/"
+                      }
+                    ]
+                  }
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "InSource"
+  }
+}

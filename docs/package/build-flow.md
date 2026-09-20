@@ -47,7 +47,7 @@ Phase 4 は、Phase 3 までに揃えた HOST クロスコンパイラで、カ�
 
 ## シードグラフと Package グラフ
 
-プレフィックス付き `binutils` の `Package::dependencies(target)` は、その Platform の `{triple}-glibc` を引く。seed の binutils はその glibc より先に組む。`Role::Toolchain` のパッケージは `Bootstrap::seed_dependencies(target)` でシード相のグラフを上書きする。binutils のシード実行時依存は空なので、glibc との循環が起きない。
+プレフィックス付き `binutils` の `Package::dependencies(target)` は、その Platform の `{triple}-glibc` を引く。seed の binutils はその glibc より先に組む。`{triple}-binutils` は `Bootstrap::seed_dependencies(target)` でシード相のグラフを上書きする。binutils のシード実行時依存は空なので、glibc との循環が起きない。
 
 ```mermaid
 flowchart LR

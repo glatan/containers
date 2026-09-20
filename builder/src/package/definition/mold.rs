@@ -1,5 +1,7 @@
 use crate::flags::{Flag, Ldflag};
-use crate::package::recipe::{BuildContext, Recipe, SYSROOT_ENV};
+use crate::package::recipe::{
+    Arg, BuildContext, Cond, Env, Pipe, Recipe, Step, Steps, Workdir, argv,
+};
 use crate::package::{Bootstrap, Dependency, Package, Source};
 use crate::target::Target;
 
@@ -55,12 +57,34 @@ impl Package for Mold {
     }
 
     fn flags(&self, target: Target) -> Flag {
-        // mold 自身は -fuse-ld=mold でリンクできないため除外する
+        // mold 自身は -fuse-ld=mold でリンクできないため除外する。
+        // また bundled TBB が enum の値数違い等の実際の ODR 違反を持ち、
+        // さらに LTO オブジェクトのリンクではドライバ内部で `-r` が
+        // 使われ spec 由来の `-fhardened` が抑止不可の警告を出す
+        // （cmake の cm_cxx_features.cmake が "warning" を機能なしと
+        // 誤判定する）。mold は cmake ビルドなので LTO を外す。
+        use crate::flags::Cflag;
         Flag::new(
-            crate::flags::tool_cflags(target),
+            crate::flags::tool_cflags(target)
+                .into_iter()
+                .filter(|flag| {
+                    !matches!(
+                        *flag,
+                        Cflag::Lto | Cflag::WerrorOdr | Cflag::WerrorLtoTypeMismatch
+                    )
+                })
+                .collect(),
             crate::flags::tool_ldflags(target)
                 .into_iter()
-                .filter(|flag| *flag != Ldflag::FuseLdMold)
+                .filter(|flag| {
+                    !matches!(
+                        *flag,
+                        Ldflag::Lto
+                            | Ldflag::WerrorOdr
+                            | Ldflag::WerrorLtoTypeMismatch
+                            | Ldflag::FuseLdMold
+                    )
+                })
                 .collect(),
         )
     }
@@ -69,83 +93,322 @@ impl Package for Mold {
         crate::flags::Pgo::Custom
     }
 
-    fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        let mut script = String::from("set -euxo pipefail\n");
-        script.push_str(SYSROOT_ENV);
-        script.push_str(
-            r#"
-CMAKE_PREFIX=
-for _dep in zlib zstd; do
-  if [ -d /dep/$_dep/usr ]; then
-    CMAKE_PREFIX="${CMAKE_PREFIX:+$CMAKE_PREFIX:}/dep/$_dep/usr"
-  fi
-done
-if [ -n "$CMAKE_PREFIX" ]; then
-  export CMAKE_PREFIX_PATH="$CMAKE_PREFIX${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
-fi
-if [ -d /dep/cmake/usr/bin ]; then
-  export PATH="/dep/cmake/usr/bin:$PATH"
-fi
-CMAKE_CROSS=()
-if [ "$TRIPLE" != "$HOST_TRIPLE" ]; then
-  CMAKE_CROSS=(
-    -DCMAKE_SYSTEM_NAME=Linux
-    -DCMAKE_SYSTEM_PROCESSOR="${TRIPLE%%-*}"
-    -DCMAKE_C_COMPILER_TARGET="$TRIPLE"
-    -DCMAKE_CXX_COMPILER_TARGET="$TRIPLE"
-  )
-fi
-configure_mold() {
-  cmake -S "$SOURCE" -B "$1" \
-    "${CMAKE_CROSS[@]}" \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX=/usr \
-    -DCMAKE_C_COMPILER="$CC" \
-    -DCMAKE_CXX_COMPILER="$CXX" \
-    -DCMAKE_C_FLAGS="$2" \
-    -DCMAKE_CXX_FLAGS="$3" \
-    -DCMAKE_EXE_LINKER_FLAGS="$4" \
-    -DCMAKE_SHARED_LINKER_FLAGS="$4" \
-    -DMOLD_USE_MIMALLOC=ON \
-    -DMOLD_USE_SYSTEM_MIMALLOC=OFF \
-    -DMOLD_USE_SYSTEM_TBB=OFF
-}
-if [ "$TRIPLE" = "$HOST_TRIPLE" ]; then
-  # ネイティブのみ PGO。instrumented mold でリンクを実行してプロファイルを集め、
-  # 別ツリーで -fprofile-use の成果物を作る。
-  export PGODIR=/tmp/pgo
-  rm -rf "$PGODIR"
-  mkdir -p "$PGODIR"
-  configure_mold "$BUILD/gen" \
-    "${CFLAGS:-} -fprofile-generate=$PGODIR -fprofile-update=atomic" \
-    "${CXXFLAGS:-} -fprofile-generate=$PGODIR -fprofile-update=atomic" \
-    "${LDFLAGS:-} -fprofile-generate"
-  cmake --build "$BUILD/gen" -j"$(nproc)"
-  (
-    mkdir -p /tmp/moldbin /tmp/moldwork
-    ln -sf "$BUILD/gen/mold" /tmp/moldbin/ld.mold
-    for _i in 1 2 3 4 5; do
-      printf 'int fn%s(void){return %s;}\n' "$_i" "$_i" | "$CC" -x c - -c -o "/tmp/moldwork/t$_i.o"
-      "$CC" -B/tmp/moldbin -fuse-ld=mold -shared -o "/tmp/moldwork/t$_i.so" "/tmp/moldwork/t$_i.o"
-    done
-    printf 'int main(void){return fn1();}\nextern int fn1(void);\n' | "$CC" -x c - -c -o /tmp/moldwork/main.o
-    "$CC" -B/tmp/moldbin -fuse-ld=mold -o /tmp/moldwork/prog /tmp/moldwork/main.o /tmp/moldwork/t1.o
-    "$CC" -B/tmp/moldbin -fuse-ld=mold -pie -o /tmp/moldwork/prog-pie /tmp/moldwork/main.o /tmp/moldwork/t1.o
-  ) || true
-  configure_mold "$BUILD/use" \
-    "${CFLAGS:-} -fprofile-use=$PGODIR -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch" \
-    "${CXXFLAGS:-} -fprofile-use=$PGODIR -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch" \
-    "${LDFLAGS:-} -fprofile-use"
-  cmake --build "$BUILD/use" -j"$(nproc)"
-  cmake --install "$BUILD/use" --prefix "$OUT/usr"
-else
-  configure_mold "$BUILD" "${CFLAGS:-}" "${CXXFLAGS:-}" "${LDFLAGS:-}"
-  cmake --build "$BUILD" -j"$(nproc)"
-  cmake --install "$BUILD" --prefix "$OUT/usr"
-fi
-"#,
-        );
-        Recipe::Shell(script.into())
+    fn recipe(&self, ctx: &BuildContext) -> Recipe {
+        // CMAKE_CROSS の実行時判定は ctx.cross() で静的に解決する。
+        let mut cross_args: Vec<Arg> = Vec::new();
+        if ctx.cross() {
+            let arch = ctx.triple.split('-').next().unwrap_or(&ctx.triple);
+            cross_args = vec![
+                Arg::lit("-DCMAKE_SYSTEM_NAME=Linux"),
+                Arg::owned(format!("-DCMAKE_SYSTEM_PROCESSOR={arch}")),
+                Arg::owned(format!("-DCMAKE_C_COMPILER_TARGET={}", ctx.triple)),
+                Arg::owned(format!("-DCMAKE_CXX_COMPILER_TARGET={}", ctx.triple)),
+            ];
+        }
+        // configure_mold() シェル関数を Rust 側の呼び出しへ展開。
+        let configure_mold =
+            |dir: Arg, cflags: Vec<Arg>, cxxflags: Vec<Arg>, ldflags: Vec<Arg>| -> Step {
+                let mut cmd = argv(&["cmake", "-S"]);
+                cmd.push(Arg::quoted(Arg::Var("SOURCE")));
+                cmd.push(Arg::lit("-B"));
+                cmd.push(dir);
+                cmd.extend(cross_args.iter().cloned());
+                cmd.extend(argv(&[
+                    "-DCMAKE_BUILD_TYPE=Release",
+                    "-DCMAKE_INSTALL_PREFIX=/usr",
+                ]));
+                for (flag, var) in [
+                    ("-DCMAKE_C_COMPILER=", "CC"),
+                    ("-DCMAKE_CXX_COMPILER=", "CXX"),
+                ] {
+                    cmd.push(Arg::Concat(vec![
+                        Arg::lit(flag),
+                        Arg::quoted(Arg::Var(var)),
+                    ]));
+                }
+                cmd.push(Arg::Concat(vec![
+                    Arg::lit("-DCMAKE_C_FLAGS="),
+                    Arg::quoted(Arg::Concat(cflags)),
+                ]));
+                cmd.push(Arg::Concat(vec![
+                    Arg::lit("-DCMAKE_CXX_FLAGS="),
+                    Arg::quoted(Arg::Concat(cxxflags)),
+                ]));
+                for flag in ["-DCMAKE_EXE_LINKER_FLAGS=", "-DCMAKE_SHARED_LINKER_FLAGS="] {
+                    cmd.push(Arg::Concat(vec![
+                        Arg::lit(flag),
+                        Arg::quoted(Arg::Concat(ldflags.clone())),
+                    ]));
+                }
+                cmd.extend(argv(&[
+                    "-DMOLD_USE_MIMALLOC=ON",
+                    "-DMOLD_USE_SYSTEM_MIMALLOC=OFF",
+                    "-DMOLD_USE_SYSTEM_TBB=OFF",
+                ]));
+                Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(cmd),
+                }
+            };
+        let gen_dir = || Arg::quoted(Arg::Concat(vec![Arg::Var("BUILD"), Arg::lit("/gen")]));
+        let use_dir = || Arg::quoted(Arg::Concat(vec![Arg::Var("BUILD"), Arg::lit("/use")]));
+        let build_dir = || Arg::quoted(Arg::Var("BUILD"));
+        let cmake_build = |dir: Arg| Step::Exec {
+            env: vec![],
+            pipe: Pipe::cmd(vec![
+                Arg::lit("cmake"),
+                Arg::lit("--build"),
+                dir,
+                Arg::nproc_jobs("-j"),
+            ]),
+        };
+        let cmake_install = |dir: Arg| Step::Exec {
+            env: vec![],
+            pipe: Pipe::cmd(vec![
+                Arg::lit("cmake"),
+                Arg::lit("--install"),
+                dir,
+                Arg::lit("--prefix"),
+                Arg::quoted(Arg::Concat(vec![Arg::Var("OUT"), Arg::lit("/usr")])),
+            ]),
+        };
+        // 依存の /dep/{zlib,zstd}/usr を CMAKE_PREFIX_PATH へ連結する。
+        let mut steps = Steps::new(Env::None)
+            .workdir(Workdir::None)
+            .step(Step::Set {
+                name: "CMAKE_PREFIX",
+                value: Arg::lit(""),
+            })
+            .step(Step::ForEach {
+                var: "_dep",
+                items: argv(&["zlib", "zstd"]),
+                body: vec![Step::If {
+                    cond: Cond::DirExists(Arg::Concat(vec![
+                        Arg::lit("/dep/"),
+                        Arg::Var("_dep"),
+                        Arg::lit("/usr"),
+                    ])),
+                    then: vec![Step::Set {
+                        name: "CMAKE_PREFIX",
+                        value: Arg::quoted(Arg::Concat(vec![
+                            Arg::lit("${CMAKE_PREFIX:+$CMAKE_PREFIX:}/dep/"),
+                            Arg::Var("_dep"),
+                            Arg::lit("/usr"),
+                        ])),
+                    }],
+                    else_: vec![],
+                }],
+                stdout: None,
+            })
+            .step(Step::If {
+                cond: Cond::EnvSet("CMAKE_PREFIX"),
+                then: vec![Step::Export {
+                    name: "CMAKE_PREFIX_PATH",
+                    value: Arg::quoted(Arg::Concat(vec![
+                        Arg::Var("CMAKE_PREFIX"),
+                        Arg::lit("${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"),
+                    ])),
+                }],
+                else_: vec![],
+            })
+            .step(Step::If {
+                cond: Cond::DirExists(Arg::lit("/dep/cmake/usr/bin")),
+                then: vec![Step::Export {
+                    name: "PATH",
+                    value: Arg::quoted(Arg::Concat(vec![
+                        Arg::lit("/dep/cmake/usr/bin:"),
+                        Arg::Var("PATH"),
+                    ])),
+                }],
+                else_: vec![],
+            });
+        if !ctx.cross() {
+            // ネイティブのみ PGO。instrumented mold でリンクを実行して
+            // プロファイルを集め、別ツリーで -fprofile-use の成果物を作る。
+            let cc = || Arg::quoted(Arg::Var("CC"));
+            let moldwork = |suffix: &'static str| {
+                Arg::quoted(Arg::Concat(vec![
+                    Arg::lit("/tmp/moldwork/"),
+                    Arg::lit(suffix),
+                ]))
+            };
+            let moldwork_i = |suffix: &'static str| {
+                Arg::quoted(Arg::Concat(vec![
+                    Arg::lit("/tmp/moldwork/t"),
+                    Arg::Var("_i"),
+                    Arg::lit(suffix),
+                ]))
+            };
+            let mold_link = |output: Arg, inputs: Vec<Arg>, extra: Vec<Arg>| {
+                let mut a = vec![cc(), Arg::lit("-B/tmp/moldbin"), Arg::lit("-fuse-ld=mold")];
+                a.extend(extra);
+                a.push(Arg::lit("-o"));
+                a.push(output);
+                a.extend(inputs);
+                Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(a),
+                }
+            };
+            steps = steps
+                .step(Step::Export {
+                    name: "PGODIR",
+                    value: Arg::lit("/tmp/pgo"),
+                })
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("rm"),
+                        Arg::lit("-rf"),
+                        Arg::quoted(Arg::Var("PGODIR")),
+                    ]),
+                })
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("mkdir"),
+                        Arg::lit("-p"),
+                        Arg::quoted(Arg::Var("PGODIR")),
+                    ]),
+                })
+                .step(configure_mold(
+                    gen_dir(),
+                    vec![
+                        Arg::lit("${CFLAGS:-} -fprofile-generate="),
+                        Arg::Var("PGODIR"),
+                        Arg::lit(" -fprofile-update=atomic"),
+                    ],
+                    vec![
+                        Arg::lit("${CXXFLAGS:-} -fprofile-generate="),
+                        Arg::Var("PGODIR"),
+                        Arg::lit(" -fprofile-update=atomic"),
+                    ],
+                    vec![Arg::lit("${LDFLAGS:-} -fprofile-generate")],
+                ))
+                .step(cmake_build(gen_dir()))
+                .step(Step::Or {
+                    lhs: vec![
+                        Step::Exec {
+                            env: vec![],
+                            pipe: Pipe::cmd(argv(&[
+                                "mkdir",
+                                "-p",
+                                "/tmp/moldbin",
+                                "/tmp/moldwork",
+                            ])),
+                        },
+                        Step::Exec {
+                            env: vec![],
+                            pipe: Pipe::cmd(vec![
+                                Arg::lit("ln"),
+                                Arg::lit("-sf"),
+                                Arg::quoted(Arg::Concat(vec![
+                                    Arg::Var("BUILD"),
+                                    Arg::lit("/gen/mold"),
+                                ])),
+                                Arg::lit("/tmp/moldbin/ld.mold"),
+                            ]),
+                        },
+                        Step::ForEach {
+                            var: "_i",
+                            items: argv(&["1", "2", "3", "4", "5"]),
+                            body: vec![
+                                Step::Exec {
+                                    env: vec![],
+                                    pipe: Pipe::new(vec![
+                                        vec![
+                                            Arg::lit("printf"),
+                                            Arg::lit("'int fn%s(void){return %s;}\\n'"),
+                                            Arg::quoted(Arg::Var("_i")),
+                                            Arg::quoted(Arg::Var("_i")),
+                                        ],
+                                        vec![
+                                            cc(),
+                                            Arg::lit("-x"),
+                                            Arg::lit("c"),
+                                            Arg::lit("-"),
+                                            Arg::lit("-c"),
+                                            Arg::lit("-o"),
+                                            moldwork_i(".o"),
+                                        ],
+                                    ]),
+                                },
+                                mold_link(
+                                    moldwork_i(".so"),
+                                    vec![moldwork_i(".o")],
+                                    vec![Arg::lit("-shared")],
+                                ),
+                            ],
+                            stdout: None,
+                        },
+                        Step::Exec {
+                            env: vec![],
+                            pipe: Pipe::new(vec![
+                                vec![
+                                    Arg::lit("printf"),
+                                    Arg::lit(
+                                        "'int main(void){return fn1();}\\nextern int fn1(void);\\n'",
+                                    ),
+                                ],
+                                vec![
+                                    cc(),
+                                    Arg::lit("-x"),
+                                    Arg::lit("c"),
+                                    Arg::lit("-"),
+                                    Arg::lit("-c"),
+                                    Arg::lit("-o"),
+                                    moldwork("main.o"),
+                                ],
+                            ]),
+                        },
+                        mold_link(
+                            moldwork("prog"),
+                            vec![moldwork("main.o"), moldwork("t1.o")],
+                            vec![],
+                        ),
+                        mold_link(
+                            moldwork("prog-pie"),
+                            vec![moldwork("main.o"), moldwork("t1.o")],
+                            vec![Arg::lit("-pie")],
+                        ),
+                    ],
+                    rhs: vec![Step::Exec {
+                        env: vec![],
+                        pipe: Pipe::cmd(argv(&["true"])),
+                    }],
+                })
+                .step(configure_mold(
+                    use_dir(),
+                    vec![
+                        Arg::lit("${CFLAGS:-} -fprofile-use="),
+                        Arg::Var("PGODIR"),
+                        Arg::lit(
+                            " -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch",
+                        ),
+                    ],
+                    vec![
+                        Arg::lit("${CXXFLAGS:-} -fprofile-use="),
+                        Arg::Var("PGODIR"),
+                        Arg::lit(
+                            " -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch",
+                        ),
+                    ],
+                    vec![Arg::lit("${LDFLAGS:-} -fprofile-use")],
+                ))
+                .step(cmake_build(use_dir()))
+                .step(cmake_install(use_dir()));
+        } else {
+            steps = steps
+                .step(configure_mold(
+                    build_dir(),
+                    vec![Arg::lit("${CFLAGS:-}")],
+                    vec![Arg::lit("${CXXFLAGS:-}")],
+                    vec![Arg::lit("${LDFLAGS:-}")],
+                ))
+                .step(cmake_build(build_dir()))
+                .step(cmake_install(build_dir()));
+        }
+        Recipe::Steps(steps)
     }
 }
 

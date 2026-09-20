@@ -118,12 +118,9 @@ fn final_gcc_passes_hardened_specs_and_per_variant_arch() {
         s.contains("--with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'"),
         "{s}"
     );
-    // 最終 gcc のみ per-variant。$MARCH（= PACKAGE_HOST の ISA）は
-    // host arch = codegen arch のときだけ使われ、異種クロスでは
-    // triple ベースラインへフォールバックする。
-    assert!(s.contains(r#"[ "$_host_arch" = "$_target_arch" ]"#), "{s}");
-    assert!(s.contains("_baseline=\"$MARCH\""), "{s}");
-    assert!(s.contains("--with-arch=$_baseline --enable-cet"), "{s}");
+    // 最終 gcc のみ per-variant。host arch = codegen arch では $MARCH、
+    // 異種では triple ベースラインが静的に選択される。
+    assert!(s.contains("--with-arch=${MARCH} --enable-cet"), "{s}");
     assert!(s.contains("--enable-cet"), "{s}");
     assert!(s.contains("--enable-default-pie"), "{s}");
     assert!(s.contains("--enable-default-ssp"), "{s}");
@@ -155,26 +152,27 @@ fn glibc_enables_stack_protector_bind_now_fortify_and_cet() {
     assert!(s.contains("--enable-stack-protector=strong"), "{s}");
     assert!(s.contains("--enable-bind-now"), "{s}");
     assert!(s.contains("--enable-fortify-source"), "{s}");
-    // CET はスクリプト内の triple ランタイム分岐で x86_64 のみ有効
-    assert!(s.contains("CET_FLAGS=--enable-cet"), "{s}");
-    assert!(s.contains(r#"[ "$TRIPLE" = x86_64-linux-gnu ]"#), "{s}");
-    // 同一スクリプトが全 triple で共有される
-    assert_eq!(s, script("aarch64-linux-gnu-glibc", NATIVE));
+    // CET はレンダ時に静的解決され x86_64 のみ有効
+    assert!(s.contains("--enable-cet"), "{s}");
+    assert!(!s.contains("CET_FLAGS"), "{s}");
+    assert!(!script("aarch64-linux-gnu-glibc", NATIVE).contains("--enable-cet"));
 }
 
 #[test]
 fn native_binutils_runs_pgo_cross_does_not() {
-    // PGO ブロックはスクリプト内で
-    // `$TRIPLE = x86_64-linux-gnu && $PACKAGE_HOST = $HOST_TRIPLE` に
-    // ゲートされている（クロスでは実行されない）
-    for name in ["x86_64-linux-gnu-binutils", "aarch64-linux-gnu-binutils"] {
-        let s = script(name, NATIVE);
-        assert!(s.contains("-fprofile-generate"), "{name}: {s}");
-        assert!(s.contains("x86_64-linux-gnu"), "{name}: {s}");
-        assert!(s.contains("--enable-relro"), "{name}: {s}");
-        assert!(s.contains("--enable-new-dtags"), "{name}: {s}");
-        assert!(s.contains("--enable-default-execstack=no"), "{name}: {s}");
-        assert!(s.contains("--enable-default-hash-style=gnu"), "{name}: {s}");
+    // PGO と --enable-cet はレンダ時に静的解決される:
+    // x86_64 ネイティブのみ PGO あり、非 x86_64/クロスは素の configure+make。
+    let native = script("x86_64-linux-gnu-binutils", NATIVE);
+    assert!(native.contains("-fprofile-generate"), "{native}");
+    assert!(native.contains("--enable-cet"), "{native}");
+    let cross = script("aarch64-linux-gnu-binutils", NATIVE);
+    assert!(!cross.contains("-fprofile-generate"), "{cross}");
+    assert!(!cross.contains("--enable-cet"), "{cross}");
+    for s in [&native, &cross] {
+        assert!(s.contains("--enable-relro"), "{s}");
+        assert!(s.contains("--enable-new-dtags"), "{s}");
+        assert!(s.contains("--enable-default-execstack=no"), "{s}");
+        assert!(s.contains("--enable-default-hash-style=gnu"), "{s}");
     }
 }
 
@@ -193,7 +191,7 @@ fn pgo_declaration_matches_rendered_script() {
             // Profiled はテンプレート経由なので -fprofile-generate が必須。
             // Custom はパッケージ固有実装（python の --enable-optimizations 等
             // -fprofile-* を出さないものもある）なので検査しない。
-            Pgo::Profiled(_) => assert!(
+            Pgo::Profiled => assert!(
                 s.contains("-fprofile-generate"),
                 "{name}: Pgo::Profiled 宣言があるのにネイティブ script が -fprofile-generate を含まない"
             ),

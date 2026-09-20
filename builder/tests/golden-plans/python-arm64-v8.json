@@ -1,0 +1,281 @@
+{
+  "Steps": {
+    "env": "Autotools",
+    "pgo": null,
+    "std": "Gnu17",
+    "steps": [
+      {
+        "ForEach": {
+          "body": [
+            {
+              "If": {
+                "cond": {
+                  "DirExists": {
+                    "Concat": [
+                      {
+                        "Lit": "/dep/"
+                      },
+                      {
+                        "Var": "_dep"
+                      },
+                      {
+                        "Lit": "/usr/include"
+                      }
+                    ]
+                  }
+                },
+                "else_": [],
+                "then": [
+                  {
+                    "Export": {
+                      "name": "CPPFLAGS",
+                      "value": {
+                        "Quoted": {
+                          "Concat": [
+                            {
+                              "Lit": "${CPPFLAGS:-}"
+                            },
+                            {
+                              "Lit": " -I/dep/"
+                            },
+                            {
+                              "Var": "_dep"
+                            },
+                            {
+                              "Lit": "/usr/include"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "Export": {
+                      "name": "CFLAGS",
+                      "value": {
+                        "Quoted": {
+                          "Concat": [
+                            {
+                              "Var": "CFLAGS"
+                            },
+                            {
+                              "Lit": " -I/dep/"
+                            },
+                            {
+                              "Var": "_dep"
+                            },
+                            {
+                              "Lit": "/usr/include"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "If": {
+                "cond": {
+                  "DirExists": {
+                    "Concat": [
+                      {
+                        "Lit": "/dep/"
+                      },
+                      {
+                        "Var": "_dep"
+                      },
+                      {
+                        "Lit": "/usr/lib64"
+                      }
+                    ]
+                  }
+                },
+                "else_": [
+                  {
+                    "If": {
+                      "cond": {
+                        "DirExists": {
+                          "Concat": [
+                            {
+                              "Lit": "/dep/"
+                            },
+                            {
+                              "Var": "_dep"
+                            },
+                            {
+                              "Lit": "/usr/lib"
+                            }
+                          ]
+                        }
+                      },
+                      "else_": [],
+                      "then": [
+                        {
+                          "Export": {
+                            "name": "LDFLAGS",
+                            "value": {
+                              "Quoted": {
+                                "Concat": [
+                                  {
+                                    "Var": "LDFLAGS"
+                                  },
+                                  {
+                                    "Lit": " -L/dep/"
+                                  },
+                                  {
+                                    "Var": "_dep"
+                                  },
+                                  {
+                                    "Lit": "/usr/lib"
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "Export": {
+                            "name": "PKG_CONFIG_PATH",
+                            "value": {
+                              "Quoted": {
+                                "Concat": [
+                                  {
+                                    "Lit": "/dep/"
+                                  },
+                                  {
+                                    "Var": "_dep"
+                                  },
+                                  {
+                                    "Lit": "/usr/lib/pkgconfig"
+                                  },
+                                  {
+                                    "Lit": "${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "then": [
+                  {
+                    "Export": {
+                      "name": "LDFLAGS",
+                      "value": {
+                        "Quoted": {
+                          "Concat": [
+                            {
+                              "Var": "LDFLAGS"
+                            },
+                            {
+                              "Lit": " -L/dep/"
+                            },
+                            {
+                              "Var": "_dep"
+                            },
+                            {
+                              "Lit": "/usr/lib64"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "Export": {
+                      "name": "PKG_CONFIG_PATH",
+                      "value": {
+                        "Quoted": {
+                          "Concat": [
+                            {
+                              "Lit": "/dep/"
+                            },
+                            {
+                              "Var": "_dep"
+                            },
+                            {
+                              "Lit": "/usr/lib64/pkgconfig"
+                            },
+                            {
+                              "Lit": "${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "items": [
+            {
+              "Lit": "libffi"
+            },
+            {
+              "Lit": "zlib"
+            },
+            {
+              "Lit": "openssl"
+            },
+            {
+              "Lit": "expat"
+            },
+            {
+              "Lit": "sqlite"
+            },
+            {
+              "Lit": "ncurses"
+            },
+            {
+              "Lit": "readline"
+            },
+            {
+              "Lit": "xz"
+            },
+            {
+              "Lit": "bzip2"
+            },
+            {
+              "Lit": "zstd"
+            }
+          ],
+          "stdout": null,
+          "var": "_dep"
+        }
+      },
+      {
+        "Configure": [
+          "--prefix=/usr",
+          "--enable-shared",
+          "--without-ensurepip"
+        ]
+      },
+      {
+        "Make": {
+          "args": [],
+          "jobs": true
+        }
+      },
+      {
+        "MakeInstall": {
+          "vars": []
+        }
+      },
+      {
+        "Symlink": {
+          "force": true,
+          "link": "\"$OUT\"/usr/bin/python",
+          "target": "python3"
+        }
+      }
+    ],
+    "sysroot": true,
+    "workdir": "Build"
+  }
+}

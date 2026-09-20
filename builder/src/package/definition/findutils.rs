@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Recipe};
+use crate::package::recipe::{BuildContext, Recipe, Step};
 use crate::package::{Bootstrap, Package, Source};
 
 pub struct Findutils;
@@ -34,17 +34,70 @@ impl Package for Findutils {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
+        Recipe::autotools_pgo(&["--prefix=/usr"], pgo_workload())
     }
 }
 
-const PGO_WORKLOAD: &str = r#"./find/find "$SOURCE" -name '*.c' -type f > /dev/null
-./find/find "$SOURCE" -type f -size +10k -readable > /dev/null
-./find/find "$SOURCE" -name 'Make*' -o -name '*.am' > /dev/null
-./find/find "$SOURCE" -type f -newer "$SOURCE"/configure -print0 | ./xargs/xargs -0 echo > /dev/null"#;
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::{Arg, Pipe, argv};
+
+    let exec = |pipe: Pipe| Step::Exec { env: vec![], pipe };
+    vec![
+        exec(
+            Pipe::cmd(argv(&[
+                "./find/find",
+                "\"$SOURCE\"",
+                "-name",
+                "'*.c'",
+                "-type",
+                "f",
+            ]))
+            .stdout(Arg::lit("/dev/null")),
+        ),
+        exec(
+            Pipe::cmd(argv(&[
+                "./find/find",
+                "\"$SOURCE\"",
+                "-type",
+                "f",
+                "-size",
+                "+10k",
+                "-readable",
+            ]))
+            .stdout(Arg::lit("/dev/null")),
+        ),
+        exec(
+            Pipe::cmd(argv(&[
+                "./find/find",
+                "\"$SOURCE\"",
+                "-name",
+                "'Make*'",
+                "-o",
+                "-name",
+                "'*.am'",
+            ]))
+            .stdout(Arg::lit("/dev/null")),
+        ),
+        exec(
+            Pipe::new(vec![
+                argv(&[
+                    "./find/find",
+                    "\"$SOURCE\"",
+                    "-type",
+                    "f",
+                    "-newer",
+                    "\"$SOURCE\"/configure",
+                    "-print0",
+                ]),
+                argv(&["./xargs/xargs", "-0", "echo"]),
+            ])
+            .stdout(Arg::lit("/dev/null")),
+        ),
+    ]
+}
 
 impl Bootstrap for Findutils {}

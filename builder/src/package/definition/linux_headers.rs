@@ -1,4 +1,5 @@
 use crate::flags::Flag;
+use crate::package::recipe::{Arg, BuildContext, Env, Pipe, Recipe, Step, Steps, Workdir};
 use crate::package::{Dependency, Package, Role, Source};
 use crate::target::Target;
 
@@ -46,22 +47,72 @@ impl Package for LinuxHeaders {
         Flag::new(vec![], vec![])
     }
 
-    fn build_script(&self) -> &'static str {
-        r#"set -euxo pipefail
-install_uapi() {
-  local karch="$1" dest="$2"
-  local o="$BUILD/$karch"
-  mkdir -p "$o" "$dest"
-  make -C "$SOURCE" O="$o" ARCH="$karch" headers
-  cp -a "$o/usr/include/." "$dest/"
-}
-install_uapi x86_64 "$OUT/usr/x86_64-linux-gnu/include"
-install_uapi arm64 "$OUT/usr/aarch64-linux-gnu/include"
-install_uapi riscv "$OUT/usr/riscv64-linux-gnu/include"
-install_uapi powerpc "$OUT/usr/powerpc64le-linux-gnu/include"
-install_uapi s390 "$OUT/usr/s390x-linux-gnu/include"
-mkdir -p "$OUT/usr/include"
-cp -a "$OUT/usr/${HOST_TRIPLE}/include/." "$OUT/usr/include/"
-"#
+    fn recipe(&self, _ctx: &BuildContext) -> Recipe {
+        // install_uapi karch "$OUT/usr/{triple}/include" の Rust 側展開。
+        const UAPI: &[(&str, &str)] = &[
+            ("x86_64", "x86_64-linux-gnu"),
+            ("arm64", "aarch64-linux-gnu"),
+            ("riscv", "riscv64-linux-gnu"),
+            ("powerpc", "powerpc64le-linux-gnu"),
+            ("s390", "s390x-linux-gnu"),
+        ];
+        let mut steps = Steps::new(Env::None).sysroot(false).workdir(Workdir::None);
+        for (karch, triple) in UAPI {
+            let out_dir = format!("$BUILD/{karch}");
+            let dest = format!("$OUT/usr/{triple}/include");
+            steps = steps
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("mkdir"),
+                        Arg::lit("-p"),
+                        Arg::quoted(Arg::owned(out_dir.clone())),
+                        Arg::quoted(Arg::owned(dest.clone())),
+                    ]),
+                })
+                .step(Step::Make {
+                    jobs: false,
+                    args: vec![
+                        "-C".to_owned(),
+                        "\"$SOURCE\"".to_owned(),
+                        format!("O=\"{out_dir}\""),
+                        format!("ARCH=\"{karch}\""),
+                        "headers".to_owned(),
+                    ],
+                })
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("cp"),
+                        Arg::lit("-a"),
+                        Arg::quoted(Arg::owned(format!("{out_dir}/usr/include/."))),
+                        Arg::quoted(Arg::owned(format!("{dest}/"))),
+                    ]),
+                });
+        }
+        Recipe::Steps(
+            steps
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("mkdir"),
+                        Arg::lit("-p"),
+                        Arg::quoted(Arg::lit("$OUT/usr/include")),
+                    ]),
+                })
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("cp"),
+                        Arg::lit("-a"),
+                        Arg::quoted(Arg::Concat(vec![
+                            Arg::lit("$OUT/usr/"),
+                            Arg::Var("HOST_TRIPLE"),
+                            Arg::lit("/include/."),
+                        ])),
+                        Arg::quoted(Arg::lit("$OUT/usr/include/")),
+                    ]),
+                }),
+        )
     }
 }

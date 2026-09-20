@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, LTO_ENV, Recipe, SYSROOT_ENV};
+use crate::package::recipe::{Arg, BuildContext, Env, Pipe, Recipe, Step, Steps, Workdir, argv};
 use crate::package::{Package, Source};
 
 pub struct Glib;
@@ -68,42 +68,81 @@ impl Package for Glib {
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::tool_flags(target)
     }
-    fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        let mut script = String::from(LTO_ENV);
-        script.push_str(SYSROOT_ENV);
-        script.push_str(
-            r#"mkdir -p "$BUILD"
-cd "$BUILD"
-meson_args=(--prefix=/usr --wrap-mode=nofallback -Dlibmount=disabled -Dnls=disabled -Dtests=false -Dsysprof=disabled -Dintrospection=disabled)
-if [ "$TRIPLE" != "$HOST_TRIPLE" ]; then
-  case "$TRIPLE" in
-    aarch64-*) cpu_family=aarch64; cpu=aarch64 ;;
-    riscv64-*) cpu_family=riscv64; cpu=riscv64 ;;
-    x86_64-*) cpu_family=x86_64; cpu=x86_64 ;;
-    powerpc64le-*) cpu_family=ppc64; cpu=ppc64le ;;
-    s390x-*) cpu_family=s390x; cpu=s390x ;;
-    *) echo "未対応の meson cpu: $TRIPLE"; exit 1 ;;
-  esac
-  cat > meson-cross.ini <<EOF
-[binaries]
-c = '$CC'
-cpp = '${CXX:-$CC}'
-ar = '${AR:-${TRIPLE}-ar}'
-strip = '${TRIPLE}-strip'
-pkg-config = 'pkg-config'
-[host_machine]
-system = 'linux'
-cpu_family = '$cpu_family'
-cpu = '$cpu'
-endian = 'little'
-EOF
-  meson_args+=(--cross-file "$BUILD/meson-cross.ini")
-fi
-meson setup "$SOURCE" "${meson_args[@]}"
-meson compile -C . -j "$(nproc)"
-meson install -C . --destdir "$OUT"
-"#,
-        );
-        Recipe::Shell(script.into())
+    fn recipe(&self, ctx: &BuildContext) -> Recipe {
+        let mut steps = Steps::new(Env::Lto).workdir(Workdir::Build);
+        let mut meson_args = argv(&[
+            "--prefix=/usr",
+            "--wrap-mode=nofallback",
+            "-Dlibmount=disabled",
+            "-Dnls=disabled",
+            "-Dtests=false",
+            "-Dsysprof=disabled",
+            "-Dintrospection=disabled",
+        ]);
+        if ctx.cross() {
+            // case "$TRIPLE" の cpu 名解決を Rust 側へ移す。
+            let (cpu_family, cpu) = match ctx.triple.split('-').next() {
+                Some("aarch64") => ("aarch64", "aarch64"),
+                Some("riscv64") => ("riscv64", "riscv64"),
+                Some("x86_64") => ("x86_64", "x86_64"),
+                Some("powerpc64le") => ("ppc64", "ppc64le"),
+                Some("s390x") => ("s390x", "s390x"),
+                other => panic!("未対応の meson cpu: {}", other.unwrap_or("")),
+            };
+            steps = steps.step(Step::WriteFile {
+                path: Arg::lit("meson-cross.ini"),
+                lines: vec![
+                    Arg::lit("[binaries]"),
+                    Arg::lit("c = '$CC'"),
+                    Arg::lit("cpp = '${CXX:-$CC}'"),
+                    Arg::lit("ar = '${AR:-${TRIPLE}-ar}'"),
+                    Arg::owned(format!("strip = '{}-strip'", ctx.triple)),
+                    Arg::lit("pkg-config = 'pkg-config'"),
+                    Arg::lit("[host_machine]"),
+                    Arg::lit("system = 'linux'"),
+                    Arg::owned(format!("cpu_family = '{cpu_family}'")),
+                    Arg::owned(format!("cpu = '{cpu}'")),
+                    Arg::lit("endian = 'little'"),
+                ],
+                append: false,
+                expand: true,
+            });
+            meson_args.push(Arg::lit("--cross-file"));
+            meson_args.push(Arg::quoted(Arg::Concat(vec![
+                Arg::Var("BUILD"),
+                Arg::lit("/meson-cross.ini"),
+            ])));
+        }
+        let mut setup = argv(&["meson", "setup"]);
+        setup.push(Arg::quoted(Arg::Var("SOURCE")));
+        setup.extend(meson_args);
+        Recipe::Steps(
+            steps
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(setup),
+                })
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(
+                        [
+                            argv(&["meson", "compile", "-C", ".", "-j"]),
+                            vec![Arg::nproc()],
+                        ]
+                        .concat(),
+                    ),
+                })
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("meson"),
+                        Arg::lit("install"),
+                        Arg::lit("-C"),
+                        Arg::lit("."),
+                        Arg::lit("--destdir"),
+                        Arg::quoted(Arg::Var("OUT")),
+                    ]),
+                }),
+        )
     }
 }

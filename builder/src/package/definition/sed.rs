@@ -1,4 +1,4 @@
-use crate::package::recipe::{BuildContext, Recipe};
+use crate::package::recipe::{BuildContext, Recipe, Step};
 use crate::package::{Bootstrap, Package, Source};
 
 pub struct Sed;
@@ -34,18 +34,65 @@ impl Package for Sed {
         crate::flags::tool_flags(target)
     }
     fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Profiled(PGO_WORKLOAD)
+        crate::flags::Pgo::Profiled
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::autotools_pgo(&["--prefix=/usr"], PGO_WORKLOAD)
+        Recipe::autotools_pgo(&["--prefix=/usr"], pgo_workload())
     }
 }
 
-const PGO_WORKLOAD: &str = r#"find "$SOURCE" -name '*.c' -o -name '*.h' | while read -r _f; do
-  ./sed/sed -e 's/int/INT/g' -e 's/return/RET/g' "$_f" > /dev/null
-done
-./sed/sed -n '1,50p' "$SOURCE"/configure > /dev/null
-./sed/sed -e 'y/abc/ABC/' -e '/^#/d' "$SOURCE"/config.h.in > /dev/null 2>&1"#;
+fn pgo_workload() -> Vec<Step> {
+    use crate::package::recipe::{Arg, Pipe, argv};
+
+    let exec = |pipe: Pipe| Step::Exec { env: vec![], pipe };
+    vec![
+        Step::ForEach {
+            var: "_f",
+            items: vec![Arg::Subst(Box::new(Pipe::cmd(argv(&[
+                "find",
+                "\"$SOURCE\"",
+                "-name",
+                "'*.c'",
+                "-o",
+                "-name",
+                "'*.h'",
+            ]))))],
+            body: vec![exec(
+                Pipe::cmd(argv(&[
+                    "./sed/sed",
+                    "-e",
+                    "'s/int/INT/g'",
+                    "-e",
+                    "'s/return/RET/g'",
+                    "\"$_f\"",
+                ]))
+                .stdout(Arg::lit("/dev/null")),
+            )],
+            stdout: None,
+        },
+        exec(
+            Pipe::cmd(argv(&[
+                "./sed/sed",
+                "-n",
+                "'1,50p'",
+                "\"$SOURCE\"/configure",
+            ]))
+            .stdout(Arg::lit("/dev/null")),
+        ),
+        exec(
+            Pipe::cmd(argv(&[
+                "./sed/sed",
+                "-e",
+                "'y/abc/ABC/'",
+                "-e",
+                "'/^#/d'",
+                "\"$SOURCE\"/config.h.in",
+            ]))
+            .stdout(Arg::lit("/dev/null"))
+            .stderr(Arg::lit("/dev/null")),
+        ),
+    ]
+}
 
 impl Bootstrap for Sed {}

@@ -1,5 +1,5 @@
 use crate::flags::Flag;
-use crate::package::recipe::{BuildContext, Env, Recipe, Step, Steps};
+use crate::package::recipe::{Arg, BuildContext, Env, Pipe, Recipe, Step, Steps};
 use crate::package::{Bootstrap, Dependency, Package, Source};
 use crate::target::Target;
 
@@ -41,15 +41,59 @@ impl Package for Cmake {
     }
 
     fn flags(&self, target: Target) -> Flag {
-        crate::flags::tool_flags(target)
+        // 2 つの理由で LTO を外す:
+        // 1. bootstrap の flex 生成 lexer（cmExprLexer/cmGccDepfileLexer）が
+        //    `YY_EXTRA_TYPE` の型名だけ異なる実際の ODR 違反を持ち、
+        //    LTO では正しい動作が保証できない。
+        // 2. LTO オブジェクトのリンクではドライバ内部で `-r` が使われ、
+        //    spec 由来の `-fhardened` が "linker hardening options not
+        //    enabled" を警告（`-Wno-hardened` では抑止不可）する。
+        //    cmake の cm_cxx_features.cmake は try_compile 出力の
+        //    "warning" を機能なしと誤判定するため bootstrap が死ぬ。
+        use crate::flags::{Cflag, Ldflag};
+        let drop_c = |f: &&Cflag| {
+            !matches!(
+                **f,
+                Cflag::Lto | Cflag::WerrorOdr | Cflag::WerrorLtoTypeMismatch
+            )
+        };
+        let drop_l = |f: &&Ldflag| {
+            !matches!(
+                **f,
+                Ldflag::Lto | Ldflag::WerrorOdr | Ldflag::WerrorLtoTypeMismatch
+            )
+        };
+        Flag::new(
+            crate::flags::tool_cflags(target)
+                .iter()
+                .filter(drop_c)
+                .copied()
+                .collect(),
+            crate::flags::tool_ldflags(target)
+                .iter()
+                .filter(drop_l)
+                .copied()
+                .collect(),
+        )
     }
 
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
         Recipe::Steps(
             Steps::new(Env::Autotools)
-                .step(Step::Shell(
-                    r#""$SOURCE"/bootstrap --prefix=/usr --parallel="$(nproc)" --   -DCMAKE_USE_OPENSSL=OFF   -DCMAKE_DISABLE_FIND_PACKAGE_Libidn2=ON"#,
-                ))
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::Concat(vec![
+                            Arg::quoted(Arg::Var("SOURCE")),
+                            Arg::lit("/bootstrap"),
+                        ]),
+                        Arg::lit("--prefix=/usr"),
+                        Arg::nproc_jobs("--parallel="),
+                        Arg::lit("--"),
+                        Arg::lit("-DCMAKE_USE_OPENSSL=OFF"),
+                        Arg::lit("-DCMAKE_DISABLE_FIND_PACKAGE_Libidn2=ON"),
+                    ]),
+                })
                 .step(Step::make(&[]))
                 .step(Step::make_install(&[])),
         )
