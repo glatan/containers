@@ -5,7 +5,9 @@ use std::sync::{Arc, Mutex};
 
 use crate::error::{Error, Result};
 use crate::flags::Ldflag;
-use crate::package::recipe::{Arg, BuildContext, BuildPlan, Cond, Env, Pipe, Recipe, Step, argv};
+#[cfg(test)]
+use crate::package::recipe::Env;
+use crate::package::recipe::{Arg, BuildContext, BuildPlan, Cond, Pipe, Recipe, Step, argv};
 use crate::package::{self, Bootstrap, Package, Role};
 use crate::process;
 use crate::target::Target;
@@ -233,40 +235,31 @@ pub(super) fn build_target(
     } else {
         crate::package::env::BUILD_IMAGE.reference()
     };
-    // 実行経路: 既定はコンテナ内 runner（`run-recipe` が plan を直接解釈）。
-    // `CONTAINERS_BUILDER_EXEC=bash` で生成スクリプト経路へフォールバック。
-    let entrypoint: Vec<String> = match std::env::var("CONTAINERS_BUILDER_EXEC").as_deref() {
-        Ok("bash") => vec![
-            "/usr/bin/bash".to_string(),
-            "-c".to_string(),
-            wrap_script(package, !own, target, &mounts, &prep),
-        ],
-        _ => {
-            let plan = build_plan(package, !own, target, &mounts, &prep);
-            let plan_path = gen_dir.join("plan.json");
-            fs::create_dir_all(&gen_dir).map_err(|source| Error::io(&gen_dir, source))?;
-            fs::write(&plan_path, serde_json::to_string(&plan)?)
-                .map_err(|source| Error::io(&plan_path, source))?;
-            command
-                .args(["-v"])
-                .arg(format!("{}:/tmp/plan.json:ro", plan_path.display()));
-            // runner 自身をコンテナへマウント（バイナリ互換は
-            // イメージ側 glibc に依存する。不整合なら bash 経路へ）
-            let exe = std::env::current_exe()
-                .and_then(fs::canonicalize)
-                .map_err(|source| Error::message(format!("current_exe: {source}")))?;
-            command
-                .args(["-v"])
-                .arg(format!("{}:/tmp/runner:ro", exe.display()));
-            vec![
-                "/tmp/runner".to_string(),
-                "run-recipe".to_string(),
-                "/tmp/plan.json".to_string(),
-                "-t".to_string(),
-                format!("{architecture}/{variant}"),
-            ]
-        }
-    };
+    // 実行経路: コンテナ内 runner（`run-recipe` が plan を直接解釈）。
+    // bash 生成は golden・query・デバッグ用途のみ（`wrap_script`）。
+    let plan = build_plan(package, !own, target, &mounts, &prep);
+    let plan_path = gen_dir.join("plan.json");
+    fs::create_dir_all(&gen_dir).map_err(|source| Error::io(&gen_dir, source))?;
+    fs::write(&plan_path, serde_json::to_string(&plan)?)
+        .map_err(|source| Error::io(&plan_path, source))?;
+    command
+        .args(["-v"])
+        .arg(format!("{}:/tmp/plan.json:ro", plan_path.display()));
+    // runner 自身をコンテナへマウント（バイナリ互換はイメージ側 glibc
+    // に依存する）
+    let exe = std::env::current_exe()
+        .and_then(fs::canonicalize)
+        .map_err(|source| Error::message(format!("current_exe: {source}")))?;
+    command
+        .args(["-v"])
+        .arg(format!("{}:/tmp/runner:ro", exe.display()));
+    let entrypoint: Vec<String> = vec![
+        "/tmp/runner".to_string(),
+        "run-recipe".to_string(),
+        "/tmp/plan.json".to_string(),
+        "-t".to_string(),
+        format!("{architecture}/{variant}"),
+    ];
     let log_path = workspace::log_path(package.name(), package.version(), target);
     if let Some(parent) = log_path.parent() {
         fs::create_dir_all(parent).map_err(|source| Error::io(parent, source))?;
@@ -1570,7 +1563,8 @@ pub(crate) fn build_plan(
 }
 
 /// 計画を bash スクリプトへ render する互換バックエンド。
-/// golden・デバッグ・`CONTAINERS_BUILDER_EXEC=bash` フォールバック用。
+/// golden テスト・デバッグ表示用。実実行は runner のみ。
+#[cfg(test)]
 pub(super) fn wrap_script(
     package: &dyn Package,
     seed: bool,
