@@ -14,9 +14,10 @@
           "--with-pkg-config-libdir=/usr/lib/pkgconfig",
           "--without-ada",
           "--without-debug",
+          "--with-versioned-syms",
           "--with-build-cc=x86_64-linux-gnu-gcc",
           "--with-build-cpp=x86_64-linux-gnu-gcc",
-          "--with-build-cflags=-O2 -std=gnu17",
+          "--with-build-cflags='-O2 -std=gnu17'",
           "--with-build-cppflags=",
           "--with-build-ldflags="
         ]

@@ -8,7 +8,7 @@ autotools_configure() {
   if ! CFLAGS="$(sanitize_flags "${CFLAGS:-}")" \
        CXXFLAGS="$(sanitize_flags "${CXXFLAGS:-}")" \
        LDFLAGS="$(sanitize_flags "${LDFLAGS:-}")" \
-       "$SOURCE"/configure --build="$HOST_TRIPLE" --host="${PACKAGE_HOST:-$TRIPLE}" "$@"; then
+       ./configure --build="$HOST_TRIPLE" --host="${PACKAGE_HOST:-$TRIPLE}" "$@"; then
     if [ -f config.log ]; then
       echo "===== config.log (last 80 lines) ====="
       tail -n 80 config.log
@@ -17,6 +17,7 @@ autotools_configure() {
   fi
 }
 mkdir -p "$BUILD"
+cp -a "$SOURCE"/. "$BUILD"/
 cd "$BUILD"
 for _dep in libffi zlib openssl expat sqlite ncurses readline xz bzip2 zstd; do
   if [ -d /dep/${_dep}/usr/include ]; then
@@ -26,13 +27,16 @@ for _dep in libffi zlib openssl expat sqlite ncurses readline xz bzip2 zstd; do
   if [ -d /dep/${_dep}/usr/lib64 ]; then
     export LDFLAGS="${LDFLAGS} -L/dep/${_dep}/usr/lib64"
     export PKG_CONFIG_PATH="/dep/${_dep}/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+    export LD_LIBRARY_PATH="/dep/${_dep}/usr/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
   else
     if [ -d /dep/${_dep}/usr/lib ]; then
       export LDFLAGS="${LDFLAGS} -L/dep/${_dep}/usr/lib"
       export PKG_CONFIG_PATH="/dep/${_dep}/usr/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+      export LD_LIBRARY_PATH="/dep/${_dep}/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
     fi
   fi
 done
+export CFLAGS="${CFLAGS} -DOPENSSL_NO_SSL3 -DOPENSSL_NO_SSL3_METHOD -DOPENSSL_NO_TLS1_METHOD -DOPENSSL_NO_TLS1_1_METHOD -DOPENSSL_NO_TLS1_2_METHOD"
 autotools_configure --prefix=/usr --enable-shared --enable-optimizations --without-ensurepip
 make -j"$(nproc)" CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}"
 make install CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}" DESTDIR="$OUT"

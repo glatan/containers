@@ -6,6 +6,6 @@ autotools_configure() {
 }
 mkdir -p "$BUILD"
 cd "$BUILD"
-autotools_configure --prefix=/usr --with-shared --without-cxx --enable-widec --enable-pc-files --with-pkg-config-libdir=/usr/lib/pkgconfig --without-ada --without-debug
+autotools_configure --prefix=/usr --with-shared --without-cxx --enable-widec --enable-pc-files --with-pkg-config-libdir=/usr/lib/pkgconfig --without-ada --without-debug --with-versioned-syms
 make -j"$(nproc)"
 make install DESTDIR="$OUT"

@@ -44,9 +44,8 @@ impl Package for Flex {
         crate::flags::Pgo::Profiled
     }
 
-    fn recipe(&self, _ctx: &BuildContext) -> Recipe {
-        Recipe::Steps(
-            Steps::new(Env::Autotools)
+    fn recipe(&self, ctx: &BuildContext) -> Recipe {
+        let mut steps = Steps::new(Env::Autotools)
                 // gnulib の lib/malloc.c は K&R 宣言のため gnu17 で壊れる
                 .std(Std::Gnu11)
                 .workdir(Workdir::InSource)
@@ -93,10 +92,29 @@ impl Package for Flex {
                         Arg::lit("{}"),
                         Arg::lit("+"),
                     ]),
+                });
+        if ctx.cross() {
+            // make コマンドラインの `CFLAGS=…` は Makefile の
+            // target-specific `CFLAGS=$(CFLAGS_FOR_BUILD)` も上書きするため
+            // stage1flex（BUILD 側ツール）がターゲットフラグで壊れる。
+            // configure が焼いた Makefile 側の値を使うプレーンな make にする。
+            steps = steps
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![Arg::lit("make"), Arg::nproc_jobs("-j")]),
                 })
-                .step(Step::make(&[]))
-                .step(Step::make_install(&[])),
-        )
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("make"),
+                        Arg::lit("install"),
+                        Arg::Concat(vec![Arg::lit("DESTDIR="), Arg::quoted(Arg::Var("OUT"))]),
+                    ]),
+                });
+        } else {
+            steps = steps.step(Step::make(&[])).step(Step::make_install(&[]));
+        }
+        Recipe::Steps(steps)
     }
 }
 

@@ -18,6 +18,6 @@ autotools_configure() {
 }
 mkdir -p "$BUILD"
 cd "$BUILD"
-"${SOURCE}"/bootstrap --prefix=/usr --parallel=$(nproc) -- -DCMAKE_USE_OPENSSL=OFF -DCMAKE_DISABLE_FIND_PACKAGE_Libidn2=ON
+"${SOURCE}"/bootstrap --prefix=/usr --parallel=$(nproc) -- -DCMAKE_SYSROOT=/tmp/sysroot -DCMAKE_USE_OPENSSL=OFF -DCMAKE_DISABLE_FIND_PACKAGE_Libidn2=ON
 make -j"$(nproc)" CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}"
 make install CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}" DESTDIR="$OUT"

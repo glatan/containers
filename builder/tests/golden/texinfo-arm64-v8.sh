@@ -35,7 +35,7 @@ autotools_configure() {
   if ! CFLAGS="$(sanitize_flags "${CFLAGS:-}")" \
        CXXFLAGS="$(sanitize_flags "${CXXFLAGS:-}")" \
        LDFLAGS="$(sanitize_flags "${LDFLAGS:-}")" \
-       "$SOURCE"/configure --build="$HOST_TRIPLE" --host="${PACKAGE_HOST:-$TRIPLE}" "$@"; then
+       ./configure --build="$HOST_TRIPLE" --host="${PACKAGE_HOST:-$TRIPLE}" "$@"; then
     if [ -f config.log ]; then
       echo "===== config.log (last 80 lines) ====="
       tail -n 80 config.log
@@ -44,7 +44,12 @@ autotools_configure() {
   fi
 }
 mkdir -p "$BUILD"
+cp -a "$SOURCE"/. "$BUILD"/
 cd "$BUILD"
+sed -i 's/env -i /env -i LD_LIBRARY_PATH="$LD_LIBRARY_PATH" PERL5LIB="$PERL5LIB" /' configure
+export BUILD_CC=x86_64-linux-gnu-gcc
+export BUILD_AR=x86_64-linux-gnu-ar
+export BUILD_RANLIB=x86_64-linux-gnu-ranlib
 autotools_configure --prefix=/usr --disable-perl-xs
 if ! [ -f tools/Makefile ]; then
   mkdir -p tools
@@ -55,5 +60,5 @@ check:
 .PHONY: all install check
 EOF
 fi
-make -j"$(nproc)" CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}"
+make -j$(nproc)
 make install CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}" DESTDIR="$OUT"

@@ -96,7 +96,7 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
             Arg::Var("TRIPLE"),
         ]),
         Arg::lit("--with-system-zlib"),
-        Arg::lit("--with-isl"),
+        Arg::Var("GCC_LIB_FLAGS"),
     ];
     argv.extend(arch_flags.iter().map(|f| Arg::lit(f)));
     argv.extend(
@@ -126,7 +126,7 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
         .map(|f| Arg::lit(f)),
     );
 
-    Steps::new(Env::None)
+    let mut steps = Steps::new(Env::None)
         .sysroot(false)
         .workdir(Workdir::None)
         // GCC の TARGET_EXPORTS は CC/CXX/AR 等を target 向けに上書きするが
@@ -198,7 +198,12 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
             Arg::lit("-sfn"),
             dep_binutils("-ld"),
             usr_bin("-ld"),
-        ]))
+        ]));
+    // gmp/mpfr/mpc/isl は cc1 がリンクするビルド機側ライブラリ、
+    // zlib/zstd は --with-system-zlib/lto が要求する。合成 env の
+    // gcc は /usr/include を検索しないため dep マウント経由で供給する。
+    steps.steps.extend(super::gcc::lib_flag_steps());
+    steps
         .step(Step::Cd(Arg::Var("BUILD")))
         .step(Step::Exec {
             env: vec![],

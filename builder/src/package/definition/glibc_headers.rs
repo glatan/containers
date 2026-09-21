@@ -126,6 +126,8 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
             Arg::Concat(vec![Arg::Var("HDR"), Arg::lit("/.")]),
             sysroot_dir("/include/"),
         ]))
+        // stage1/stage2 gcc は /usr/bin/{triple}-{as,ld} を内蔵パスで呼ぶ
+        .steps(super::stages::toolchain_links())
         .step(Step::Cd(Arg::Var("BUILD")))
         .step(Step::Unset("CFLAGS"))
         .step(Step::Unset("CXXFLAGS"))

@@ -7,10 +7,10 @@ if [ -d /dep/${HOST_TRIPLE}-glibc/usr/${HOST_TRIPLE} ]; then
   mkdir -p /tmp/build-sysroot/usr
   ln -sfn "/dep/${HOST_TRIPLE}-glibc/usr/${HOST_TRIPLE}/include" /tmp/build-sysroot/include
   ln -sfn "/dep/${HOST_TRIPLE}-glibc/usr/${HOST_TRIPLE}/include" /tmp/build-sysroot/usr/include
-  ln -sfn "/dep/${HOST_TRIPLE}-glibc/usr/${HOST_TRIPLE}/lib" /tmp/build-sysroot/lib
-  ln -sfn "/dep/${HOST_TRIPLE}-glibc/usr/${HOST_TRIPLE}/lib" /tmp/build-sysroot/usr/lib
-  ln -sfn "/dep/${HOST_TRIPLE}-glibc/usr/${HOST_TRIPLE}/lib64" /tmp/build-sysroot/lib64
-  ln -sfn "/dep/${HOST_TRIPLE}-glibc/usr/${HOST_TRIPLE}/lib64" /tmp/build-sysroot/usr/lib64
+  cp -a "/dep/${HOST_TRIPLE}-glibc/usr/${HOST_TRIPLE}/lib" /tmp/build-sysroot/lib
+  cp -a "/dep/${HOST_TRIPLE}-glibc/usr/${HOST_TRIPLE}/lib64" /tmp/build-sysroot/lib64
+  ln -sfn ../lib /tmp/build-sysroot/usr/lib
+  ln -sfn ../lib64 /tmp/build-sysroot/usr/lib64
   _build_root=/tmp/build-sysroot
 fi
 _bf="-O2 -pipe"
@@ -55,14 +55,14 @@ else
   GCC_LIB_FLAGS=--with-isl
 fi
 if [ -d /dep/zlib/usr/include ]; then
-  export CFLAGS="${CFLAGS:-} -I/dep/zlib/usr/include"
-  export CXXFLAGS="${CXXFLAGS:-} -I/dep/zlib/usr/include"
-  export LDFLAGS="${LDFLAGS:-} -L/dep/zlib/usr/lib64 -L/dep/zlib/usr/lib"
+  export CFLAGS=" -I/dep/zlib/usr/include"
+  export CXXFLAGS=" -I/dep/zlib/usr/include"
+  export LDFLAGS=" -L/dep/zlib/usr/lib64 -L/dep/zlib/usr/lib"
 fi
 if [ -d /dep/zstd/usr/include ]; then
-  export CFLAGS="${CFLAGS:-} -I/dep/zstd/usr/include"
-  export CXXFLAGS="${CXXFLAGS:-} -I/dep/zstd/usr/include"
-  export LDFLAGS="${LDFLAGS:-} -L/dep/zstd/usr/lib64 -L/dep/zstd/usr/lib"
+  export CFLAGS=" -I/dep/zstd/usr/include"
+  export CXXFLAGS=" -I/dep/zstd/usr/include"
+  export LDFLAGS=" -L/dep/zstd/usr/lib64 -L/dep/zstd/usr/lib"
 fi
 cd ${BUILD}/instrumented
 CFLAGS="${CFLAGS:-} -fprofile-generate=${_profiledir} -fprofile-update=atomic" CXXFLAGS="${CXXFLAGS:-} -fprofile-generate=${_profiledir} -fprofile-update=atomic" LDFLAGS="${LDFLAGS:-} -fprofile-generate=${_profiledir}" ${SOURCE}/configure --build=${HOST_TRIPLE} --host=${HOST_TRIPLE} --target=${TRIPLE} --program-prefix=${TRIPLE}- --prefix=/usr --with-sysroot=${SYSROOT} --with-build-sysroot=${BUILD_SYSROOT} --with-native-system-header-dir=/include --with-as=/usr/bin/${TRIPLE}-as --with-ld=/usr/bin/${TRIPLE}-ld --infodir=/usr/share/info/${TRIPLE} --with-system-zlib ${GCC_LIB_FLAGS} --with-arch=z900 --enable-decimal-float --disable-nls --disable-werror --disable-libssp --disable-libstdcxx-pch --disable-bootstrap --disable-multilib --disable-libsanitizer --enable-plugin --enable-languages=c,c++ --enable-lto --enable-checking=release --enable-__cxa_atexit --enable-threads=posix --enable-shared --enable-default-pie --enable-default-ssp --with-linker-hash-style=gnu --enable-linker-build-id --enable-gnu-indirect-function --enable-gnu-unique-object --enable-initfini-array --enable-libstdcxx-backtrace --enable-host-pie --enable-host-bind-now --with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'

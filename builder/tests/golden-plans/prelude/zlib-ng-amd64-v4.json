@@ -722,6 +722,14 @@
           }
         },
         {
+          "Set": {
+            "name": "PGO_LLP_SAVE",
+            "value": {
+              "Var": "LD_LIBRARY_PATH"
+            }
+          }
+        },
+        {
           "Export": {
             "name": "LD_LIBRARY_PATH",
             "value": {
@@ -958,7 +966,12 @@
           }
         },
         {
-          "Unset": "LD_LIBRARY_PATH"
+          "Export": {
+            "name": "LD_LIBRARY_PATH",
+            "value": {
+              "Var": "PGO_LLP_SAVE"
+            }
+          }
         },
         {
           "Exec": {

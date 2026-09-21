@@ -1033,6 +1033,51 @@
                   "Lit": "-DnvGUformat='\"G\"'"
                 },
                 {
+                  "Lit": "-Dd_PRIfldbl=define"
+                },
+                {
+                  "Lit": "-Dd_PRIgldbl=define"
+                },
+                {
+                  "Lit": "-Dd_PRIeldbl=define"
+                },
+                {
+                  "Lit": "-Dd_PRIFUldbl=define"
+                },
+                {
+                  "Lit": "-Dd_PRIGUldbl=define"
+                },
+                {
+                  "Lit": "-Dd_PRIEUldbl=define"
+                },
+                {
+                  "Lit": "-Dd_SCNfldbl=define"
+                },
+                {
+                  "Lit": "-Dd_ldbl_dig=define"
+                },
+                {
+                  "Lit": "-DsPRIfldbl='\"Lf\"'"
+                },
+                {
+                  "Lit": "-DsPRIgldbl='\"Lg\"'"
+                },
+                {
+                  "Lit": "-DsPRIeldbl='\"Le\"'"
+                },
+                {
+                  "Lit": "-DsPRIFUldbl='\"LF\"'"
+                },
+                {
+                  "Lit": "-DsPRIGUldbl='\"LG\"'"
+                },
+                {
+                  "Lit": "-DsPRIEUldbl='\"LE\"'"
+                },
+                {
+                  "Lit": "-DsSCNfldbl='\"Lf\"'"
+                },
+                {
                   "Concat": [
                     {
                       "Lit": "-Dtargetarch="
@@ -1106,7 +1151,7 @@
                             "Var": "_sysroot"
                           },
                           {
-                            "Lit": "/lib "
+                            "Lit": "/lib /dep/libxcrypt/usr/lib /dep/libxcrypt/usr/lib64 "
                           },
                           {
                             "Var": "_sysroot"
@@ -6802,6 +6847,9 @@
                       }
                     }
                   ]
+                },
+                {
+                  "Lit": "PERL=/tmp/perl-host/miniperl"
                 }
               ]
             ],

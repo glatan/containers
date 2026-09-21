@@ -212,6 +212,56 @@
     "std": "Gnu17",
     "steps": [
       {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "sed"
+                },
+                {
+                  "Lit": "-i"
+                },
+                {
+                  "Lit": "'s/env -i /env -i LD_LIBRARY_PATH=\"$LD_LIBRARY_PATH\" PERL5LIB=\"$PERL5LIB\" /'"
+                },
+                {
+                  "Lit": "configure"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Export": {
+          "name": "BUILD_CC",
+          "value": {
+            "Lit": "x86_64-linux-gnu-gcc"
+          }
+        }
+      },
+      {
+        "Export": {
+          "name": "BUILD_AR",
+          "value": {
+            "Lit": "x86_64-linux-gnu-ar"
+          }
+        }
+      },
+      {
+        "Export": {
+          "name": "BUILD_RANLIB",
+          "value": {
+            "Lit": "x86_64-linux-gnu-ranlib"
+          }
+        }
+      },
+      {
         "Configure": [
           "--prefix=/usr",
           "--disable-perl-xs"
@@ -278,9 +328,41 @@
         }
       },
       {
-        "Make": {
-          "args": [],
-          "jobs": true
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "make"
+                },
+                {
+                  "Concat": [
+                    {
+                      "Lit": "-j"
+                    },
+                    {
+                      "Subst": {
+                        "stages": [
+                          [
+                            {
+                              "Lit": "nproc"
+                            }
+                          ]
+                        ],
+                        "stderr": null,
+                        "stdin": null,
+                        "stdout": null
+                      }
+                    }
+                  ]
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
         }
       },
       {
@@ -290,6 +372,6 @@
       }
     ],
     "sysroot": true,
-    "workdir": "Build"
+    "workdir": "InSource"
   }
 }

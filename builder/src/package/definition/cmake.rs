@@ -77,7 +77,68 @@ impl Package for Cmake {
         )
     }
 
-    fn recipe(&self, _ctx: &BuildContext) -> Recipe {
+    fn host_tools(&self, target: Target) -> Vec<&'static str> {
+        // クロスビルドでは bootstrap の実行テストがホストで動かないため
+        // BUILD_ENV 側の cmake で configure する（artifact があれば
+        // /dep/cmake へマウントされ PATH に入る）。
+        if target.gnu_triple() != Target::HOST_GNU_TRIPLE {
+            vec!["cmake"]
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn recipe(&self, ctx: &BuildContext) -> Recipe {
+        if ctx.cross() {
+            let arch = ctx.triple.split('-').next().unwrap_or(&ctx.triple);
+            return Recipe::Steps(
+                Steps::new(Env::None)
+                    .step(Step::Exec {
+                        env: vec![],
+                        pipe: Pipe::cmd(vec![
+                            Arg::lit("cmake"),
+                            Arg::lit("-S"),
+                            Arg::quoted(Arg::Var("SOURCE")),
+                            Arg::lit("-B"),
+                            Arg::quoted(Arg::Var("BUILD")),
+                            Arg::lit("-DCMAKE_SYSTEM_NAME=Linux"),
+                            Arg::owned(format!("-DCMAKE_SYSTEM_PROCESSOR={arch}")),
+                            // find_* は sysroot 配下を検索させる
+                            Arg::lit("-DCMAKE_SYSROOT=/tmp/sysroot"),
+                            Arg::lit("-DCMAKE_BUILD_TYPE=Release"),
+                            Arg::lit("-DCMAKE_INSTALL_PREFIX=/usr"),
+                            Arg::lit("-DCMAKE_USE_OPENSSL=OFF"),
+                            Arg::lit("-DCMAKE_DISABLE_FIND_PACKAGE_Libidn2=ON"),
+                            Arg::lit("-DBUILD_TESTING=OFF"),
+                            Arg::Concat(vec![
+                                Arg::lit("-DCMAKE_C_COMPILER="),
+                                Arg::quoted(Arg::Var("CC")),
+                            ]),
+                            Arg::Concat(vec![
+                                Arg::lit("-DCMAKE_CXX_COMPILER="),
+                                Arg::quoted(Arg::Var("CXX")),
+                            ]),
+                        ]),
+                    })
+                    .step(Step::Exec {
+                        env: vec![],
+                        pipe: Pipe::cmd(vec![
+                            Arg::lit("cmake"),
+                            Arg::lit("--build"),
+                            Arg::quoted(Arg::Var("BUILD")),
+                            Arg::nproc_jobs("-j"),
+                        ]),
+                    })
+                    .step(Step::Exec {
+                        env: vec![("DESTDIR", Arg::quoted(Arg::Var("OUT")))],
+                        pipe: Pipe::cmd(vec![
+                            Arg::lit("cmake"),
+                            Arg::lit("--install"),
+                            Arg::quoted(Arg::Var("BUILD")),
+                        ]),
+                    }),
+            );
+        }
         Recipe::Steps(
             Steps::new(Env::Autotools)
                 .step(Step::Exec {
@@ -90,6 +151,10 @@ impl Package for Cmake {
                         Arg::lit("--prefix=/usr"),
                         Arg::nproc_jobs("--parallel="),
                         Arg::lit("--"),
+                        // イメージの /usr/include は空で、glibc ヘッダは
+                        // sysroot 側にある（cmlibarchive の FIND_PATH
+                        // iconv.h 等が見えるようにする）
+                        Arg::lit("-DCMAKE_SYSROOT=/tmp/sysroot"),
                         Arg::lit("-DCMAKE_USE_OPENSSL=OFF"),
                         Arg::lit("-DCMAKE_DISABLE_FIND_PACKAGE_Libidn2=ON"),
                     ]),

@@ -440,7 +440,8 @@
             "--enable-pc-files",
             "--with-pkg-config-libdir=/usr/lib/pkgconfig",
             "--without-ada",
-            "--without-debug"
+            "--without-debug",
+            "--with-versioned-syms"
           ]
         },
         {

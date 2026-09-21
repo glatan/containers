@@ -1,4 +1,4 @@
-use crate::package::recipe::{Arg, BuildContext, Cond, Env, Pipe, Recipe, Step, Steps};
+use crate::package::recipe::{Arg, BuildContext, Cond, Env, Pipe, Recipe, Step, Steps, Workdir};
 use crate::package::{Package, Source};
 use crate::target::Target;
 
@@ -27,7 +27,13 @@ impl Package for Texinfo {
         }
     }
     fn dependencies(&self, target: crate::target::Target) -> Vec<crate::package::Dependency> {
-        crate::package::with_libc(target, &[])
+        crate::package::with_libc(
+            target,
+            &[crate::package::Dependency {
+                name: "ncurses",
+                version: "6.6",
+            }],
+        )
     }
     fn build_dependencies(
         &self,
@@ -40,14 +46,45 @@ impl Package for Texinfo {
     }
     fn recipe(&self, ctx: &BuildContext) -> Recipe {
         let mut args = vec!["--prefix=/usr".to_owned()];
+        let mut pre = Vec::new();
         if ctx.cross() {
             args.push("--disable-perl-xs".into());
+            // クロス時に configure は native tools の二次 configure を
+            // `env -i` で実行する。LD_LIBRARY_PATH が消えるため /bin/sh が
+            // libncursesw.so.6（ld.so の既定パスは無く、イメージは
+            // LD_LIBRARY_PATH 前提）を解決できず tools/Makefile が生成
+            // されない。configure の `env -i` 行に LD_LIBRARY_PATH の
+            // 引き継ぎを挿入し、BUILD_* をネイティブ toolchain に向けて
+            // tools/info/makedoc がネイティブビルドされるようにする。
+            pre.push(Step::Exec {
+                env: vec![],
+                pipe: Pipe::cmd(vec![
+                    Arg::lit("sed"),
+                    Arg::lit("-i"),
+                    Arg::lit("'s/env -i /env -i LD_LIBRARY_PATH=\"$LD_LIBRARY_PATH\" PERL5LIB=\"$PERL5LIB\" /'"),
+                    Arg::lit("configure"),
+                ]),
+            });
+            for (name, tool) in [
+                ("BUILD_CC", "gcc"),
+                ("BUILD_AR", "ar"),
+                ("BUILD_RANLIB", "ranlib"),
+            ] {
+                pre.push(Step::Export {
+                    name,
+                    value: Arg::owned(format!("{}-{tool}", ctx.host_triple)),
+                });
+            }
         }
         Recipe::Steps(
             Steps::new(Env::Autotools)
+                // /src は read-only マウントのため、configure への sed を
+                // 可能にするようソースを $BUILD へコピーしてビルドする。
+                .workdir(Workdir::InSource)
                 .pgo(crate::package::recipe::PgoTemplate::Autotools(
                     pgo_workload(),
                 ))
+                .steps(pre)
                 .step(Step::Configure(args))
                 .step(Step::If {
                     cond: Cond::Not(Box::new(Cond::FileExists(Arg::lit("tools/Makefile")))),
@@ -74,8 +111,21 @@ impl Package for Texinfo {
                     ],
                     else_: vec![],
                 })
-                .step(Step::make(&[]))
-                .step(Step::make_install(&[])),
+                .steps(if ctx.cross() {
+                    // Step::make の CFLAGS= コマンドライン変数は tools/
+                    // のネイティブビルドにも伝播して -march=<target> で
+                    // 壊れるため、configure 時に焼いたフラグを使う
+                    // プレーン make にする。
+                    vec![
+                        Step::Exec {
+                            env: vec![],
+                            pipe: Pipe::cmd(vec![Arg::lit("make"), Arg::nproc_jobs("-j")]),
+                        },
+                        Step::make_install(&[]),
+                    ]
+                } else {
+                    vec![Step::make(&[]), Step::make_install(&[])]
+                }),
         )
     }
 

@@ -43,12 +43,17 @@ impl Package for Ncurses {
             "--with-pkg-config-libdir=/usr/lib/pkgconfig".into(),
             "--without-ada".into(),
             "--without-debug".into(),
+            // シードの Arch ncurses は versioned symbols。bash 等をシードで
+            // リンクすると NCURSES6_TINFO_* の VERNEED が記録され、
+            // 無バージョンの本成果物では起動毎に ld.so が警告を出す
+            //（configure の `cmd 2>&1` 取り込み経路で LD が汚染される）。
+            "--with-versioned-syms".into(),
         ];
         if ctx.cross() {
             args.extend([
                 format!("--with-build-cc={}-gcc", ctx.host_triple),
                 format!("--with-build-cpp={}-gcc", ctx.host_triple),
-                "--with-build-cflags=-O2 -std=gnu17".into(),
+                "--with-build-cflags='-O2 -std=gnu17'".into(),
                 "--with-build-cppflags=".into(),
                 "--with-build-ldflags=".into(),
             ]);

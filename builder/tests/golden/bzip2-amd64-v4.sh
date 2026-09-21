@@ -26,7 +26,7 @@ export _PGO_CFLAGS="${CFLAGS:-}" _PGO_CXXFLAGS="${CXXFLAGS:-}" _PGO_LDFLAGS="${L
 export CFLAGS="$_PGO_CFLAGS -fprofile-generate=$PGODIR -fprofile-update=atomic"
 export CXXFLAGS="$_PGO_CXXFLAGS -fprofile-generate=$PGODIR -fprofile-update=atomic"
 export LDFLAGS="$_PGO_LDFLAGS -fprofile-generate"
-sed -i 's/$(CC) -shared/$(CC) $(LDFLAGS) -shared/' Makefile-libbz2_so
+sed -i -e 's/$(CC) -shared/$(CC) $(LDFLAGS) -shared/' -e 's/$(CFLAGS) -o bzip2-shared/$(CFLAGS) $(LDFLAGS) -o bzip2-shared/' Makefile-libbz2_so
 make -f Makefile-libbz2_so CC="$CC" CFLAGS="$CFLAGS -fpic -fPIC -Wall -Winline -D_FILE_OFFSET_BITS=64" LDFLAGS="$LDFLAGS" CXXFLAGS="${CXXFLAGS:-}"
 make CC="$CC" AR="${AR:-${TRIPLE}-ar}" RANLIB="${RANLIB:-${TRIPLE}-ranlib}" CFLAGS="$CFLAGS -Wall -Winline -D_FILE_OFFSET_BITS=64" LDFLAGS="$LDFLAGS" libbz2.a bzip2 bzip2recover CXXFLAGS="${CXXFLAGS:-}"
 export LD_LIBRARY_PATH="$PWD${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
@@ -48,7 +48,7 @@ make clean || make distclean
 export CFLAGS="$_PGO_CFLAGS -fprofile-use=$PGODIR -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"
 export CXXFLAGS="$_PGO_CXXFLAGS -fprofile-use=$PGODIR -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"
 export LDFLAGS="$_PGO_LDFLAGS -fprofile-use"
-sed -i 's/$(CC) -shared/$(CC) $(LDFLAGS) -shared/' Makefile-libbz2_so
+sed -i -e 's/$(CC) -shared/$(CC) $(LDFLAGS) -shared/' -e 's/$(CFLAGS) -o bzip2-shared/$(CFLAGS) $(LDFLAGS) -o bzip2-shared/' Makefile-libbz2_so
 make -f Makefile-libbz2_so CC="$CC" CFLAGS="$CFLAGS -fpic -fPIC -Wall -Winline -D_FILE_OFFSET_BITS=64" LDFLAGS="$LDFLAGS" CXXFLAGS="${CXXFLAGS:-}"
 make CC="$CC" AR="${AR:-${TRIPLE}-ar}" RANLIB="${RANLIB:-${TRIPLE}-ranlib}" CFLAGS="$CFLAGS -Wall -Winline -D_FILE_OFFSET_BITS=64" LDFLAGS="$LDFLAGS" libbz2.a bzip2 bzip2recover CXXFLAGS="${CXXFLAGS:-}"
 make install PREFIX="$OUT/usr" CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}" DESTDIR="$OUT"

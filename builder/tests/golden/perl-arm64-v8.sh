@@ -114,7 +114,7 @@ if [ -d "${_sysroot}/lib" ]; then
   export LIBRARY_PATH="${_sysroot}/lib:${_sysroot}/lib64${LIBRARY_PATH:+:$LIBRARY_PATH}"
 fi
 export LD_LIBRARY_PATH="/dep/libxcrypt/usr/lib:/dep/libxcrypt/usr/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-./Configure -des -Dprefix=/usr -Dvendorprefix=/usr -Duse64bitall -Dusethreads -Duseshrplib -Dcc="${CC}" -Dld="${CC}" -Accflags="${CFLAGS}" -Aldflags="${LDFLAGS}" -Dusecrosscompile -Dhostperl=/tmp/perl-host/miniperl -Dhostgenerate=/tmp/generate_uudmap -Dcharsize=1 -Dshortsize=2 -Dintsize=4 -Dlongsize=8 -Dlonglongsize=8 -Dptrsize=8 -Ddoublesize=8 -Dnvsize=8 -Duvsize=8 -Divsize=8 -Dcharbits=8 -Dalignbytes=8 -Dssizetype=ssize_t -Dsizetype=size_t -Dlseektype=off_t -Dlseeksize=8 -Dtimetype=time_t -Dfpostype=fpos_t -Dfpossize=16 -Dlongdblsize=16 -Ddoublekind=3 -Duseithreads -Dusemultiplicity -Duseperlio -Uebcdic -Dd_PRId64=define -Dd_PRIi64=define -Divdformat='"ld"' -Duvuformat='"lu"' -Duvxformat='"lx"' -DsPRId64='"ld"' -DsPRIi64='"li"' -DsPRIo64='"lo"' -DsPRIu64='"lu"' -DsPRIx64='"lx"' -DsPRIXU64='"lX"' -Dnveformat='"e"' -Dnvgformat='"g"' -DnvEUformat='"E"' -DnvGUformat='"G"' -Dtargetarch="${TRIPLE}" -Dsysroot="${_sysroot}" -Dusrinc="${_sysroot}/include" -Dincpth="${_sysroot}/include" -Dlibpth="${_sysroot}/lib ${_sysroot}/lib64" -Darchname="${TRIPLE}" -Dbyteorder="12345678"
+./Configure -des -Dprefix=/usr -Dvendorprefix=/usr -Duse64bitall -Dusethreads -Duseshrplib -Dcc="${CC}" -Dld="${CC}" -Accflags="${CFLAGS}" -Aldflags="${LDFLAGS}" -Dusecrosscompile -Dhostperl=/tmp/perl-host/miniperl -Dhostgenerate=/tmp/generate_uudmap -Dcharsize=1 -Dshortsize=2 -Dintsize=4 -Dlongsize=8 -Dlonglongsize=8 -Dptrsize=8 -Ddoublesize=8 -Dnvsize=8 -Duvsize=8 -Divsize=8 -Dcharbits=8 -Dalignbytes=8 -Dssizetype=ssize_t -Dsizetype=size_t -Dlseektype=off_t -Dlseeksize=8 -Dtimetype=time_t -Dfpostype=fpos_t -Dfpossize=16 -Dlongdblsize=16 -Ddoublekind=3 -Duseithreads -Dusemultiplicity -Duseperlio -Uebcdic -Dd_PRId64=define -Dd_PRIi64=define -Divdformat='"ld"' -Duvuformat='"lu"' -Duvxformat='"lx"' -DsPRId64='"ld"' -DsPRIi64='"li"' -DsPRIo64='"lo"' -DsPRIu64='"lu"' -DsPRIx64='"lx"' -DsPRIXU64='"lX"' -Dnveformat='"e"' -Dnvgformat='"g"' -DnvEUformat='"E"' -DnvGUformat='"G"' -Dd_PRIfldbl=define -Dd_PRIgldbl=define -Dd_PRIeldbl=define -Dd_PRIFUldbl=define -Dd_PRIGUldbl=define -Dd_PRIEUldbl=define -Dd_SCNfldbl=define -Dd_ldbl_dig=define -DsPRIfldbl='"Lf"' -DsPRIgldbl='"Lg"' -DsPRIeldbl='"Le"' -DsPRIFUldbl='"LF"' -DsPRIGUldbl='"LG"' -DsPRIEUldbl='"LE"' -DsSCNfldbl='"Lf"' -Dtargetarch="${TRIPLE}" -Dsysroot="${_sysroot}" -Dusrinc="${_sysroot}/include" -Dincpth="${_sysroot}/include" -Dlibpth="${_sysroot}/lib /dep/libxcrypt/usr/lib /dep/libxcrypt/usr/lib64 ${_sysroot}/lib64" -Darchname="${TRIPLE}" -Dbyteorder="12345678"
 if [ -f config.sh ]; then
   if grep -q ^lseeksize= config.sh >/dev/null; then
     sed -i "s|^lseeksize=.*|lseeksize='8'|" config.sh
@@ -441,7 +441,7 @@ if [ -x /tmp/perl-host/miniperl ] >/dev/null; then
   ln -sfn /tmp/perl-host/miniperl /tmp/perl-host/perl
   export PATH="/tmp/perl-host:${PATH}"
 fi
-make -j$(nproc)
+make -j$(nproc) PERL=/tmp/perl-host/miniperl
 make install DESTDIR="${OUT}"
 _perl_so=$(find "${OUT}/usr/lib" -name libperl.so | head -n1)
 if [ -n "${_perl_so:-}" ]; then

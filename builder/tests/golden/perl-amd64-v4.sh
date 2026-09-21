@@ -38,7 +38,7 @@ if [ -d "${_sysroot}/lib" ]; then
 fi
 export LD_LIBRARY_PATH="/dep/libxcrypt/usr/lib:/dep/libxcrypt/usr/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 if [ -d "${_sysroot}/include" ]; then
-  ./Configure -des -Dprefix=/usr -Dvendorprefix=/usr -Duse64bitall -Dusethreads -Duseshrplib -Dcc="${CC}" -Dld="${CC}" -Accflags="${CFLAGS}" -Aldflags="${LDFLAGS}" -Dsysroot="${SYSROOT}" -Dusrinc="${_sysroot}/include" -Dincpth="${_sysroot}/include" -Dlibpth="${_sysroot}/lib ${_sysroot}/lib64"
+  ./Configure -des -Dprefix=/usr -Dvendorprefix=/usr -Duse64bitall -Dusethreads -Duseshrplib -Dcc="${CC}" -Dld="${CC}" -Accflags="${CFLAGS}" -Aldflags="${LDFLAGS}" -Dsysroot="${SYSROOT}" -Dusrinc="${_sysroot}/include" -Dincpth="${_sysroot}/include" -Dlibpth="${_sysroot}/lib /dep/libxcrypt/usr/lib /dep/libxcrypt/usr/lib64 ${_sysroot}/lib64"
 else
   ./Configure -des -Dprefix=/usr -Dvendorprefix=/usr -Duse64bitall -Dusethreads -Duseshrplib -Dcc="${CC}" -Dld="${CC}" -Accflags="${CFLAGS}" -Aldflags="${LDFLAGS}"
 fi

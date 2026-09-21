@@ -47,7 +47,12 @@ impl Package for Bzip2 {
                     pipe: Pipe::cmd(vec![
                         Arg::lit("sed"),
                         Arg::lit("-i"),
+                        Arg::lit("-e"),
                         Arg::lit("'s/$(CC) -shared/$(CC) $(LDFLAGS) -shared/'"),
+                        Arg::lit("-e"),
+                        Arg::lit(
+                            "'s/$(CFLAGS) -o bzip2-shared/$(CFLAGS) $(LDFLAGS) -o bzip2-shared/'",
+                        ),
                         Arg::lit("Makefile-libbz2_so"),
                     ]),
                 })

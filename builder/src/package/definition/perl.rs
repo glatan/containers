@@ -478,6 +478,25 @@ impl Package for Perl {
                 "-Dnvgformat='\"g\"'",
                 "-DnvEUformat='\"E\"'",
                 "-DnvGUformat='\"G\"'",
+                // long double の printf/scanf 書式（LP64 glibc では
+                // binary128/extended いずれも Lf 系）。try-run 不能な
+                // クロスでは未定義のまま PERL_PRIfldbl が空展開され
+                // sv.c が構文エラーになる。
+                "-Dd_PRIfldbl=define",
+                "-Dd_PRIgldbl=define",
+                "-Dd_PRIeldbl=define",
+                "-Dd_PRIFUldbl=define",
+                "-Dd_PRIGUldbl=define",
+                "-Dd_PRIEUldbl=define",
+                "-Dd_SCNfldbl=define",
+                "-Dd_ldbl_dig=define",
+                "-DsPRIfldbl='\"Lf\"'",
+                "-DsPRIgldbl='\"Lg\"'",
+                "-DsPRIeldbl='\"Le\"'",
+                "-DsPRIFUldbl='\"LF\"'",
+                "-DsPRIGUldbl='\"LG\"'",
+                "-DsPRIEUldbl='\"LE\"'",
+                "-DsSCNfldbl='\"Lf\"'",
             ] {
                 configure.push(Arg::lit(arg));
             }
@@ -508,7 +527,10 @@ impl Package for Perl {
                     Arg::lit("-Dlibpth="),
                     Arg::quoted(Arg::Concat(vec![
                         Arg::Var("_sysroot"),
-                        Arg::lit("/lib "),
+                        // dep ライブラリも Configure の lib 検索パスへ
+                        // （libcrypt の -lcrypt 等が見つからないと
+                        // ext.libs/最終リンクで undefined reference になる）
+                        Arg::lit("/lib /dep/libxcrypt/usr/lib /dep/libxcrypt/usr/lib64 "),
                         Arg::Var("_sysroot"),
                         Arg::lit("/lib64"),
                     ])),
@@ -564,7 +586,10 @@ impl Package for Perl {
                     Arg::lit("-Dlibpth="),
                     Arg::quoted(Arg::Concat(vec![
                         Arg::Var("_sysroot"),
-                        Arg::lit("/lib "),
+                        // dep ライブラリも Configure の lib 検索パスへ
+                        // （libcrypt の -lcrypt 等が見つからないと
+                        // ext.libs/最終リンクで undefined reference になる）
+                        Arg::lit("/lib /dep/libxcrypt/usr/lib /dep/libxcrypt/usr/lib64 "),
                         Arg::Var("_sysroot"),
                         Arg::lit("/lib64"),
                     ])),
@@ -812,9 +837,14 @@ impl Package for Perl {
         });
         // Step::Make の CFLAGS 系変数上書きは perl の Makefile が焼いた
         // フラグを潰すため、素の make を Exec で呼ぶ。
-        steps
-            .steps
-            .push(cmd(vec![Arg::lit("make"), Arg::nproc_jobs("-j")]));
+        let mut make_args = vec![Arg::lit("make"), Arg::nproc_jobs("-j")];
+        if cross {
+            // utils/*.PL 等の生成ルールは `../perl`（target バイナリ）を
+            // 実行するため、host miniperl に差し替える。コマンドライン変数は
+            // サブ make にも伝播し install の HOST_PERL も既に miniperl を指す。
+            make_args.push(Arg::lit("PERL=/tmp/perl-host/miniperl"));
+        }
+        steps.steps.push(cmd(make_args));
         steps.steps.push(cmd(vec![
             Arg::lit("make"),
             Arg::lit("install"),
