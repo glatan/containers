@@ -1,6 +1,6 @@
 use crate::flags::Flag;
 use crate::package::recipe::{BuildContext, Env, Recipe, Step, Steps, Workdir};
-use crate::package::{Dependency, Package, Role, Source};
+use crate::package::{Dependency, Package, Source};
 use crate::target::Target;
 
 pub struct CaCertificates;
@@ -18,8 +18,8 @@ impl Package for CaCertificates {
         "MPL-2.0"
     }
 
-    fn role(&self) -> Role {
-        Role::Catalog
+    fn catalog(&self) -> bool {
+        true
     }
 
     fn source(&self) -> Source {

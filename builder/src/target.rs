@@ -121,6 +121,16 @@ impl Target {
         }
     }
 
+    pub const fn binutils_package(self) -> &'static str {
+        match self {
+            Self::Amd64(_) => "x86_64-linux-gnu-binutils",
+            Self::Arm64(_) => "aarch64-linux-gnu-binutils",
+            Self::Riscv64(_) => "riscv64-linux-gnu-binutils",
+            Self::Ppc64le(_) => "powerpc64le-linux-gnu-binutils",
+            Self::S390x(_) => "s390x-linux-gnu-binutils",
+        }
+    }
+
     pub const fn baseline(self) -> Self {
         match self {
             Self::Amd64(_) => Self::Amd64(Amd64Variant::V1),

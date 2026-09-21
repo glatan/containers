@@ -43,9 +43,10 @@ impl Package for X8664LinuxGnuBinutils {
     fn gnu_triple(&self) -> Option<&'static str> {
         Some(TRIPLE)
     }
-}
-
-impl Bootstrap for X8664LinuxGnuBinutils {
+    /// `Bootstrap` を実装（bootstrap パッケージ）。
+    fn as_bootstrap(&self) -> Option<&dyn Bootstrap> {
+        Some(self)
+    }
     fn pacman(&self) -> &'static [&'static str] {
         if self.seed() {
             binutils::PACMAN_SEED
@@ -53,6 +54,9 @@ impl Bootstrap for X8664LinuxGnuBinutils {
             binutils::PACMAN
         }
     }
+}
+
+impl Bootstrap for X8664LinuxGnuBinutils {
     /// シード（Arch base-devel）相の中間ステージ。
     fn seed(&self) -> bool {
         true

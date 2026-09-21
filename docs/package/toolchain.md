@@ -49,7 +49,7 @@ glibc blake3: `6d07bc16d8d066b1c0ae713d762175f261e27df9cab8015ec11e1c980c05e79b0
   → *-gcc            (C/C++、PGO 適用、`--disable-bootstrap`)
 ```
 
-対象とする `{triple}` は、`x86_64-linux-gnu`、`aarch64-linux-gnu`、`riscv64-linux-gnu`、`powerpc64le-linux-gnu`、および `s390x-linux-gnu` の 5 種類です。段階ごとのコマンドは [build-flow.md](./build-flow.md) です。プレフィックス付きパッケージは `BOOTSTRAP` 配列の外でも Bootstrap グラフを使います。
+対象とする `{triple}` は、`x86_64-linux-gnu`、`aarch64-linux-gnu`、`riscv64-linux-gnu`、`powerpc64le-linux-gnu`、および `s390x-linux-gnu` の 5 種類です。段階ごとのコマンドは [build-flow.md](./build-flow.md) です。プレフィックス付きパッケージは `Bootstrap` グラフを使います。
 
 | パッケージ | バージョン | パッケージイメージ化 |
 |-|-|-|

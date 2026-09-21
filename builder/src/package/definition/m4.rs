@@ -45,6 +45,10 @@ impl Package for M4 {
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
         Recipe::autotools_pgo(&["--prefix=/usr"], pgo_workload())
     }
+    /// `Bootstrap` を実装（bootstrap パッケージ）。
+    fn as_bootstrap(&self) -> Option<&dyn Bootstrap> {
+        Some(self)
+    }
 }
 
 impl Bootstrap for M4 {}

@@ -2,7 +2,7 @@ use crate::flags::Flag;
 use crate::package::recipe::{
     Arg, BuildContext, Cond, Env, Pipe, Recipe, Step, Steps, Workdir, args, argv,
 };
-use crate::package::{Dependency, Package, Role, Source};
+use crate::package::{Dependency, Package, Source};
 use crate::target::Target;
 
 pub struct Openssl;
@@ -20,8 +20,8 @@ impl Package for Openssl {
         "Apache-2.0"
     }
 
-    fn role(&self) -> Role {
-        Role::Catalog
+    fn catalog(&self) -> bool {
+        true
     }
 
     fn source(&self) -> Source {

@@ -55,6 +55,10 @@ impl Package for Gawk {
     fn recipe(&self, _ctx: &BuildContext) -> Recipe {
         Recipe::autotools_pgo(&["--prefix=/usr"], pgo_workload())
     }
+    /// `Bootstrap` を実装（bootstrap パッケージ）。
+    fn as_bootstrap(&self) -> Option<&dyn Bootstrap> {
+        Some(self)
+    }
 }
 
 fn pgo_workload() -> Vec<Step> {

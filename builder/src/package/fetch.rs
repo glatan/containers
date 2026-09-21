@@ -2,13 +2,13 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use super::{Package, Role, Source};
+use super::{Package, Source};
 use crate::error::{Error, Result};
 use crate::process;
 use crate::util::source_checksums;
 
 pub fn fetch_package(package: &dyn Package) -> Result<Vec<String>> {
-    if matches!(package.role(), Role::BuildEnv) {
+    if package.compose_root() {
         return Ok(vec![format!(
             "{} はソースを持たないためスキップします",
             package.name()

@@ -48,6 +48,10 @@ impl Package for Coreutils {
             pgo_workload(),
         )
     }
+    /// `Bootstrap` を実装（bootstrap パッケージ）。
+    fn as_bootstrap(&self) -> Option<&dyn Bootstrap> {
+        Some(self)
+    }
 }
 
 impl Bootstrap for Coreutils {}

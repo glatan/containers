@@ -51,12 +51,16 @@ impl Package for X8664LinuxGnuGlibcHeaders {
     fn gnu_triple(&self) -> Option<&'static str> {
         Some(TRIPLE)
     }
-}
-
-impl Bootstrap for X8664LinuxGnuGlibcHeaders {
+    /// `Bootstrap` を実装（bootstrap パッケージ）。
+    fn as_bootstrap(&self) -> Option<&dyn Bootstrap> {
+        Some(self)
+    }
     fn pacman(&self) -> &'static [&'static str] {
         glibc::PACMAN
     }
+}
+
+impl Bootstrap for X8664LinuxGnuGlibcHeaders {
     /// シード（Arch base-devel）相の中間ステージ。
     fn seed(&self) -> bool {
         true

@@ -410,6 +410,10 @@ impl Package for Mold {
         }
         Recipe::Steps(steps)
     }
+    /// `Bootstrap` を実装（bootstrap パッケージ）。
+    fn as_bootstrap(&self) -> Option<&dyn Bootstrap> {
+        Some(self)
+    }
 }
 
 impl Bootstrap for Mold {}

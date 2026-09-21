@@ -2,7 +2,7 @@ use crate::flags::Flag;
 use crate::package::recipe::{
     Arg, BuildContext, Env, Pipe, Recipe, Redirect, Step, Steps, Workdir, argv,
 };
-use crate::package::{Dependency, Package, Role, Source};
+use crate::package::{Dependency, Package, Source};
 use crate::target::Target;
 
 pub struct ZlibNg;
@@ -20,8 +20,13 @@ impl Package for ZlibNg {
         "Zlib"
     }
 
-    fn role(&self) -> Role {
-        Role::Catalog
+    fn catalog(&self) -> bool {
+        true
+    }
+
+    /// シード（Arch base-devel）上のビルドには cmake が必要。
+    fn pacman(&self) -> &'static [&'static str] {
+        &["cmake"]
     }
 
     fn source(&self) -> Source {

@@ -51,10 +51,13 @@ impl Package for Riscv64LinuxGnuGlibcHeaders {
     fn gnu_triple(&self) -> Option<&'static str> {
         Some(TRIPLE)
     }
-}
-
-impl Bootstrap for Riscv64LinuxGnuGlibcHeaders {
+    /// `Bootstrap` を実装（bootstrap パッケージ）。
+    fn as_bootstrap(&self) -> Option<&dyn Bootstrap> {
+        Some(self)
+    }
     fn pacman(&self) -> &'static [&'static str] {
         glibc::PACMAN
     }
 }
+
+impl Bootstrap for Riscv64LinuxGnuGlibcHeaders {}

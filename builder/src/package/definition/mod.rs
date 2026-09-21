@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use crate::package::{Bootstrap, Package};
+use crate::package::Package;
 
 mod aarch64_linux_gnu_binutils;
 mod aarch64_linux_gnu_gcc;
@@ -160,78 +160,6 @@ pub static PACKAGES: &[&dyn Package] = &[
     &build_env::BuildEnv,
 ];
 
-pub static BOOTSTRAP: &[&dyn Bootstrap] = &[
-    &x86_64_linux_gnu_binutils::X8664LinuxGnuBinutils,
-    &x86_64_linux_gnu_gcc_stage1::X8664LinuxGnuGccStage1,
-    &x86_64_linux_gnu_glibc_headers::X8664LinuxGnuGlibcHeaders,
-    &x86_64_linux_gnu_gcc_stage2::X8664LinuxGnuGccStage2,
-    &x86_64_linux_gnu_glibc::X8664LinuxGnuGlibc,
-    &x86_64_linux_gnu_gcc::X8664LinuxGnuGcc,
-    &make::Make,
-    &bash::Bash,
-    &coreutils::Coreutils,
-    &sed::Sed,
-    &grep::Grep,
-    &gawk::Gawk,
-    &findutils::Findutils,
-    &tar::Tar,
-    &gzip::Gzip,
-    &xz::Xz,
-    &diffutils::Diffutils,
-    &patch::Patch,
-    &m4::M4,
-    &cmake::Cmake,
-    &mold::Mold,
-];
-
-/// `Bootstrap` を実装するプレフィックス付きツールチェーン全件。
-/// `BOOTSTRAP`（シード経路）とは別に、Bootstrap 依存グラフの対象を列挙する。
-static TOOLCHAIN: &[&dyn Bootstrap] = &[
-    &x86_64_linux_gnu_binutils::X8664LinuxGnuBinutils,
-    &x86_64_linux_gnu_gcc_stage1::X8664LinuxGnuGccStage1,
-    &x86_64_linux_gnu_glibc_headers::X8664LinuxGnuGlibcHeaders,
-    &x86_64_linux_gnu_gcc_stage2::X8664LinuxGnuGccStage2,
-    &x86_64_linux_gnu_glibc::X8664LinuxGnuGlibc,
-    &x86_64_linux_gnu_gcc::X8664LinuxGnuGcc,
-    &aarch64_linux_gnu_binutils::Aarch64LinuxGnuBinutils,
-    &aarch64_linux_gnu_gcc_stage1::Aarch64LinuxGnuGccStage1,
-    &aarch64_linux_gnu_glibc_headers::Aarch64LinuxGnuGlibcHeaders,
-    &aarch64_linux_gnu_gcc_stage2::Aarch64LinuxGnuGccStage2,
-    &aarch64_linux_gnu_glibc::Aarch64LinuxGnuGlibc,
-    &aarch64_linux_gnu_gcc::Aarch64LinuxGnuGcc,
-    &riscv64_linux_gnu_binutils::Riscv64LinuxGnuBinutils,
-    &riscv64_linux_gnu_gcc_stage1::Riscv64LinuxGnuGccStage1,
-    &riscv64_linux_gnu_glibc_headers::Riscv64LinuxGnuGlibcHeaders,
-    &riscv64_linux_gnu_gcc_stage2::Riscv64LinuxGnuGccStage2,
-    &riscv64_linux_gnu_glibc::Riscv64LinuxGnuGlibc,
-    &riscv64_linux_gnu_gcc::Riscv64LinuxGnuGcc,
-    &powerpc64le_linux_gnu_binutils::Powerpc64leLinuxGnuBinutils,
-    &powerpc64le_linux_gnu_gcc_stage1::Powerpc64leLinuxGnuGccStage1,
-    &powerpc64le_linux_gnu_glibc_headers::Powerpc64leLinuxGnuGlibcHeaders,
-    &powerpc64le_linux_gnu_gcc_stage2::Powerpc64leLinuxGnuGccStage2,
-    &powerpc64le_linux_gnu_glibc::Powerpc64leLinuxGnuGlibc,
-    &powerpc64le_linux_gnu_gcc::Powerpc64leLinuxGnuGcc,
-    &s390x_linux_gnu_binutils::S390xLinuxGnuBinutils,
-    &s390x_linux_gnu_gcc_stage1::S390xLinuxGnuGccStage1,
-    &s390x_linux_gnu_glibc_headers::S390xLinuxGnuGlibcHeaders,
-    &s390x_linux_gnu_gcc_stage2::S390xLinuxGnuGccStage2,
-    &s390x_linux_gnu_glibc::S390xLinuxGnuGlibc,
-    &s390x_linux_gnu_gcc::S390xLinuxGnuGcc,
-];
-
-pub fn find_bootstrap(name: &str) -> Option<&'static dyn Bootstrap> {
-    TOOLCHAIN
-        .iter()
-        .copied()
-        .find(|package| package.name() == name)
-        .or_else(|| {
-            BOOTSTRAP
-                .iter()
-                .copied()
-                .find(|package| package.name() == name)
-        })
-}
-
 pub fn all() -> &'static [&'static dyn Package] {
     PACKAGES
 }
@@ -367,17 +295,14 @@ mod tests {
             }
             assert!(!package.source().subdir.is_empty());
             assert!(!package.rendered_script(target).is_empty());
-            if matches!(
-                package.name(),
-                "openssl" | "zlib" | "zlib-ng" | "ca-certificates" | "linux-headers" | "build-env"
-            ) {
+            if package.catalog() || package.compose_root() {
                 assert!(
-                    find_bootstrap(package.name()).is_none(),
-                    "カタログ / compose ルートは BOOTSTRAP に載せません: {}",
+                    package.as_bootstrap().is_none(),
+                    "カタログ / compose ルートは bootstrap パッケージではありません: {}",
                     package.name()
                 );
             }
-            if find_bootstrap(package.name()).is_some() {
+            if package.as_bootstrap().is_some() {
                 assert!(
                     !package.rendered_script(target).contains("pacman"),
                     "{} のスクリプトに pacman があります",
@@ -387,10 +312,20 @@ mod tests {
         }
         let target = crate::target::Target::BUILD_ENV;
         assert!(find("mpc").unwrap().depends_on(target, "gmp"));
-        assert!(find_bootstrap("make").is_some());
-        assert!(find_bootstrap("x86_64-linux-gnu-gcc").is_some());
-        assert!(find_bootstrap("aarch64-linux-gnu-gcc").is_some());
-        assert!(find_bootstrap("openssl").is_none());
+        assert!(find("make").unwrap().as_bootstrap().is_some());
+        assert!(
+            find("x86_64-linux-gnu-gcc")
+                .unwrap()
+                .as_bootstrap()
+                .is_some()
+        );
+        assert!(
+            find("aarch64-linux-gnu-gcc")
+                .unwrap()
+                .as_bootstrap()
+                .is_some()
+        );
+        assert!(find("openssl").unwrap().as_bootstrap().is_none());
         assert!(find("linux-headers").unwrap().build_only());
         assert!(!find("x86_64-linux-gnu-glibc").unwrap().build_only());
         assert!(!find("zlib").unwrap().build_only());
@@ -631,17 +566,25 @@ mod tests {
         assert!(find("python").is_ok());
         assert!(find("cmake").is_ok());
         assert!(find("mold").is_ok());
-        assert!(find_bootstrap("python").is_none());
-        assert!(find_bootstrap("cmake").is_some());
-        assert!(find_bootstrap("mold").is_some());
-        assert!(find_bootstrap("qemu").is_none());
-        for package in BOOTSTRAP {
+        assert!(find("python").unwrap().as_bootstrap().is_none());
+        assert!(find("cmake").unwrap().as_bootstrap().is_some());
+        assert!(find("mold").unwrap().as_bootstrap().is_some());
+        assert!(find("qemu").unwrap().as_bootstrap().is_none());
+        // env bootstrap の対象は build-env の依存閉包から導出される。
+        // HOST 以外の toolchain が混ざっていないことを確認する。
+        let bootstrap_order = crate::package::build::packages_in_graph_order(
+            find("build-env").unwrap(),
+            &|name| find(name),
+            host,
+        )
+        .unwrap();
+        for (package, _) in bootstrap_order {
             assert!(
                 !package.name().starts_with("aarch64-")
                     && !package.name().starts_with("riscv64-")
                     && !package.name().starts_with("powerpc64le-")
                     && !package.name().starts_with("s390x-"),
-                "BOOTSTRAP に HOST 以外の toolchain があります: {}",
+                "bootstrap 閉包に HOST 以外の toolchain があります: {}",
                 package.name()
             );
         }
@@ -710,8 +653,10 @@ mod tests {
         assert!(find("aarch64-linux-gnu-glibc").unwrap().supports(arm));
         assert!(find("build-env").unwrap().supports(host));
         assert!(!find("build-env").unwrap().supports(arm));
+        // linux-headers は全 arch のヘッダを内包する単一成果物のため
+        // BUILD_ENV のみでビルドする。
         assert!(find("linux-headers").unwrap().supports(host));
-        assert!(find("linux-headers").unwrap().supports(arm));
+        assert!(!find("linux-headers").unwrap().supports(arm));
         assert!(
             find("x86_64-linux-gnu-gcc")
                 .unwrap()
@@ -731,7 +676,12 @@ mod tests {
             .filter(|package| package.gnu_triple().is_some())
             .count();
         assert_eq!(toolchain, 30);
-        assert_eq!(TOOLCHAIN.len(), 30);
+        // toolchain 30 + ホストツール 15 + linux-headers
+        let bootstrap = PACKAGES
+            .iter()
+            .filter(|package| package.as_bootstrap().is_some())
+            .count();
+        assert_eq!(bootstrap, 46);
     }
 
     #[test]

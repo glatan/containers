@@ -43,9 +43,10 @@ impl Package for S390xLinuxGnuBinutils {
     fn gnu_triple(&self) -> Option<&'static str> {
         Some(TRIPLE)
     }
-}
-
-impl Bootstrap for S390xLinuxGnuBinutils {
+    /// `Bootstrap` を実装（bootstrap パッケージ）。
+    fn as_bootstrap(&self) -> Option<&dyn Bootstrap> {
+        Some(self)
+    }
     fn pacman(&self) -> &'static [&'static str] {
         if self.seed() {
             binutils::PACMAN_SEED
@@ -53,6 +54,9 @@ impl Bootstrap for S390xLinuxGnuBinutils {
             binutils::PACMAN
         }
     }
+}
+
+impl Bootstrap for S390xLinuxGnuBinutils {
     fn seed_dependencies(&self, target: Target) -> Option<(Vec<Dependency>, Vec<Dependency>)> {
         Some((vec![], self.build_dependencies(target)))
     }

@@ -245,7 +245,7 @@ fn tree_prints_dependencies() {
         .success()
         .stdout(contains("zlib 1.3.2 (amd64/v4)"))
         .stdout(contains("x86_64-linux-gnu-glibc 2.44"))
-        .stdout(contains("linux-headers 6.18.33 [build]"));
+        .stdout(contains("linux-headers 6.18.33 [build, bootstrap]"));
 }
 
 #[test]

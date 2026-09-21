@@ -10,7 +10,7 @@ use crate::flags::Ldflag;
 #[cfg(test)]
 use crate::package::recipe::Env;
 use crate::package::recipe::{Arg, BuildContext, BuildPlan, Cond, Pipe, Recipe, Step, argv};
-use crate::package::{self, Bootstrap, Package, Role};
+use crate::package::{self, Package};
 use crate::process;
 use crate::target::Target;
 use crate::util;
@@ -358,7 +358,7 @@ pub(super) fn build_context(package: &dyn Package, target: Target) -> BuildConte
 }
 
 pub(super) fn host_gcc_ready() -> bool {
-    package::find("x86_64-linux-gnu-gcc")
+    package::find(Target::BUILD_ENV.gcc_package())
         .ok()
         .is_some_and(|gcc| workspace::artifact_ready(&gcc.artifact_dir(Target::BUILD_ENV)))
 }
@@ -368,7 +368,9 @@ pub(super) fn compiler_cc(
     target: Target,
     own: bool,
 ) -> Vec<(&'static str, String)> {
-    let prefix = if is_seed(package, target) || matches!(package.role(), Role::LinuxHeaders) {
+    // seed 相のパッケージ（`Bootstrap::seed`）は toolchain 成果物が
+    // まだ存在しないため、シードの無印コンパイラでビルドする。
+    let prefix = if is_seed(package, target) {
         String::new()
     } else if !matches!(target, Target::Amd64(_)) || own || host_gcc_ready() {
         target.cross_prefix()
@@ -405,8 +407,7 @@ pub(super) fn compiler_cc(
 }
 
 pub(super) fn is_seed(package: &dyn Package, target: Target) -> bool {
-    target == Target::BUILD_ENV
-        && package::find_bootstrap(package.name()).is_some_and(Bootstrap::seed)
+    target == Target::BUILD_ENV && package.as_bootstrap().is_some_and(|b| b.seed())
 }
 
 pub(super) fn mold_artifact_dir() -> Option<std::path::PathBuf> {
@@ -461,10 +462,11 @@ pub(super) fn compiler_tool_names(package: &dyn Package, target: Target, own: bo
     let Some(prefix) = cc.strip_suffix("gcc") else {
         return Vec::new();
     };
-    // glibc 自身は full `{triple}-gcc` ではなく stage2 でビルドする。
-    // full gcc は glibc に依存するため、ここで要求すると循環する
+    // その target の libc 提供者（`{triple}-glibc`）は full
+    // `{triple}-gcc` ではなく stage2 でビルドする。full gcc は glibc に
+    // 依存するため、ここで要求すると循環する
     // （stage2 は build_deps で既にマウント済み）。
-    let gcc = if package.name() == target.glibc_package() {
+    let gcc = if provides_target_libc(package, target) {
         format!("{prefix}gcc-stage2")
     } else {
         format!("{prefix}gcc")
@@ -472,35 +474,50 @@ pub(super) fn compiler_tool_names(package: &dyn Package, target: Target, own: bo
     [gcc, format!("{prefix}binutils")].into_iter().collect()
 }
 
+/// `target` 向けの libc を提供するパッケージか（`{triple}-glibc`
+/// 最終成果物）。コード生成 triple 一致・ターゲット成果物・
+/// ビルド専用でない（glibc-headers を除く）で判定する。
+fn provides_target_libc(package: &dyn Package, target: Target) -> bool {
+    package.gnu_triple() == Some(target.gnu_triple())
+        && package.target_artifact()
+        && !package.build_only()
+}
+
 pub(super) fn extra_host_tool_names(package: &dyn Package, target: Target) -> Vec<&'static str> {
     let mut names = package.host_tools(target);
-    let role = package.role();
-    if !matches!(role, Role::LinuxHeaders)
-        && (package.gnu_triple() != Some("x86_64-linux-gnu") || !matches!(target, Target::Amd64(_)))
+    // ホスト triple 以外の toolchain 構成要素や非 amd64 向けビルドには
+    // ホスト toolchain を追加マウントする。seed 相のパッケージ
+    // （linux-headers 等）はシードのコンパイラを使うため除外。
+    if !is_seed(package, target)
+        && (package.gnu_triple() != Some(Target::HOST_GNU_TRIPLE)
+            || !matches!(target, Target::Amd64(_)))
     {
-        names.push("x86_64-linux-gnu-gcc");
-        names.push("x86_64-linux-gnu-binutils");
+        names.push(Target::BUILD_ENV.gcc_package());
+        names.push(Target::BUILD_ENV.binutils_package());
     }
-    if target != Target::BUILD_ENV && package.name() != target.glibc_package() {
+    if target != Target::BUILD_ENV && !provides_target_libc(package, target) {
         names.push(target.glibc_package());
     }
     names
 }
 
+/// シード（Arch base-devel）イメージ上で pacman -Sy するパッケージ。
+/// 各パッケージの `Package::pacman()` 宣言に加えて、非 bootstrap
+/// パッケージの非 amd64 ビルドには distro の cross gcc を入れる
+/// （Bootstrap 実装パッケージは pacman() で環境を完結させる）。
 pub(super) fn seed_pacman(package: &dyn Package, target: Target) -> Vec<String> {
-    let mut pkgs: Vec<String> = Vec::new();
-    if let Some(bootstrap) = package::find_bootstrap(package.name()) {
-        pkgs.extend(bootstrap.pacman().iter().map(|name| (*name).to_string()));
-    } else {
-        if package.name() == "zlib-ng" {
-            pkgs.push("cmake".into());
-        }
-        if !matches!(target, Target::Amd64(_)) {
-            pkgs.push(format!("{}gcc", target.cross_prefix()));
-        }
+    let mut pkgs: Vec<String> = package
+        .pacman()
+        .iter()
+        .map(|name| (*name).to_string())
+        .collect();
+    if package.as_bootstrap().is_none() && !matches!(target, Target::Amd64(_)) {
+        pkgs.push(format!("{}gcc", target.cross_prefix()));
     }
+    // seed 相 toolchain（gnu_triple 持ち）と、mold 未構築で -fuse-ld=mold
+    // を使うパッケージには distro の mold を入れる。
     if pkgs.iter().all(|name| name != "mold")
-        && (is_seed(package, target)
+        && ((is_seed(package, target) && package.gnu_triple().is_some())
             || (uses_mold(package, target) && mold_artifact_dir().is_none()))
     {
         pkgs.push("mold".into());
@@ -832,7 +849,7 @@ pub(super) fn stage_generated(
     let cc = &ctx.package_host;
     let cc_binutils = format!("{cc}-binutils");
     let cc_gcc = format!("{cc}-gcc");
-    let inject = !matches!(package.role(), Role::LinuxHeaders) && package.uses_cc_wrapper();
+    let inject = package.uses_cc_wrapper();
     let mount = |name: &str| mounts.iter().find(|m| m.name == name);
 
     // pkg-config ラッパ。/dep/pkgconf があればホスト側で生成。
@@ -1082,7 +1099,7 @@ pub(crate) fn build_plan(
         package.name()
     );
     let cc = &ctx.package_host;
-    let inject = !matches!(package.role(), Role::LinuxHeaders) && package.uses_cc_wrapper();
+    let inject = package.uses_cc_wrapper();
     let host_gcc = format!("{}-gcc", ctx.host_triple);
     let exec = |args: &[&'static str]| Step::Exec {
         env: vec![],
