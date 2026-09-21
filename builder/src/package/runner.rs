@@ -1245,8 +1245,7 @@ pub(crate) fn glob_match(pattern: &str, path: &str) -> bool {
             Some(b'[') => match parse_class(p) {
                 Some((class, rest)) => match s.first() {
                     Some(&c) => {
-                        class.ranges.iter().any(|&(lo, hi)| lo <= c && c <= hi)
-                            != class.negate
+                        class.ranges.iter().any(|&(lo, hi)| lo <= c && c <= hi) != class.negate
                             && inner(rest, &s[1..])
                     }
                     None => false,
@@ -1283,8 +1282,7 @@ fn parse_class(p: &[u8]) -> Option<(CharClass, &[u8])> {
     }
     while let Some(&c) = p.get(i) {
         if c == b']' {
-            return (!ranges.is_empty())
-                .then_some((CharClass { ranges, negate }, &p[i + 1..]));
+            return (!ranges.is_empty()).then_some((CharClass { ranges, negate }, &p[i + 1..]));
         }
         if p.get(i + 1) == Some(&b'-')
             && let Some(&hi) = p.get(i + 2)
@@ -2043,8 +2041,12 @@ mod tests {
             },
         ]);
         let mut trace = Trace::new();
-        trace.results.push_back(Err((1, "found
-".to_string())));
+        trace.results.push_back(Err((
+            1,
+            "found
+"
+            .to_string(),
+        )));
         run(&recipe, &ctx(), &mut trace).unwrap();
         assert!(trace.ops.contains(&"set SRC=found".to_string()));
         assert!(trace.ops.contains(&"exec  echo found".to_string()));
@@ -2062,8 +2064,12 @@ mod tests {
             ]),
         }]);
         let mut trace = Trace::new();
-        trace.results.push_back(Err((1, "hi
-".to_string())));
+        trace.results.push_back(Err((
+            1,
+            "hi
+"
+            .to_string(),
+        )));
         run(&recipe, &ctx(), &mut trace).unwrap();
         assert!(trace.ops.contains(&"exec  echo hi".to_string()));
     }

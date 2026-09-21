@@ -148,7 +148,6 @@ impl Drop for ContainerSandbox {
     fn drop(&mut self) {
         let _ = env::set_current_dir(&self.initial_cwd);
     }
-
 }
 
 impl Default for ContainerSandbox {

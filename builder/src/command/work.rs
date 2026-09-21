@@ -221,6 +221,7 @@ fn clean_package(
             // 中断したビルドの atomic publish 残骸
             PathBuf::from(format!("{}.tmp", artifact.display())),
             workspace::build_dir(defined.name(), defined.version(), *target),
+            workspace::gen_dir(defined.name(), defined.version(), *target),
             workspace::log_path(defined.name(), defined.version(), *target),
         ] {
             if let Err(error) = clean_path("packages", &path, dry_run) {

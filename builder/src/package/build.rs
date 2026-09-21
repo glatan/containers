@@ -256,6 +256,7 @@ fn run_order(
                 &container::linker_env(defined, target),
                 own,
                 combined.clone(),
+                force_roots.contains(defined.name()),
             )
         },
         &|name| package::find(name),
@@ -1136,6 +1137,7 @@ libdir=/usr/lib
         .map(|(name, dir)| Mount {
             name: name.to_owned(),
             dir: dir.clone(),
+            dep: true,
         })
         .collect()
     }
@@ -1346,8 +1348,7 @@ libdir=/usr/lib
             source,
             artifacts.join("user"),
         );
-        let order: Vec<(&dyn Package, Target)> =
-            vec![(&dep, host), (&dep, arm64), (&user, arm64)];
+        let order: Vec<(&dyn Package, Target)> = vec![(&dep, host), (&dep, arm64), (&user, arm64)];
         let mut compiled = Vec::new();
         let mut log = Vec::new();
         let failed = walk_nodes(
@@ -1474,6 +1475,7 @@ libdir=/usr/lib
         let mounts = [Mount {
             name: "zlib".to_owned(),
             dir,
+            dep: true,
         }];
         // bash の /dep/*/usr/lib/*.la と同じくバイト順・dotfile 除外
         assert_eq!(
@@ -1516,21 +1518,35 @@ includedir=/usr/include
 ",
         )
         .unwrap();
+        // zlib にも .la を用意して rewrite 対象とする（gmp/mpfr/mpc/isl は
+        // lto1 衝突回避のため .la を staging しない仕様のため）
+        fs::write(
+            zlib.join("usr/lib/libz.la"),
+            "libdir='/usr/lib'
+installed=yes
+dependency_libs=' -L/usr/lib /dep/mpfr/usr/lib/libmpfr.la'
+",
+        )
+        .unwrap();
         let mounts = [
             Mount {
                 name: "gmp".to_owned(),
                 dir: gmp,
+                dep: true,
             },
             Mount {
                 name: "zlib".to_owned(),
                 dir: zlib,
+                dep: true,
             },
         ];
         let gen_dir = tmp.path().join("gen");
         let gmp_pkg = crate::package::find("gmp").unwrap();
         let overlays = stage_generated(gmp_pkg, &mounts, &gen_dir, Target::BUILD_ENV).unwrap();
         assert!(overlays.la && overlays.pc);
-        let la = fs::read_to_string(gen_dir.join("la-overlay/libgmp.la")).unwrap();
+        // gmp の .la は staging されない（lto1 relink 衝突回避）
+        assert!(!gen_dir.join("la-overlay/libgmp.la").exists());
+        let la = fs::read_to_string(gen_dir.join("la-overlay/libz.la")).unwrap();
         assert!(la.contains("libdir='/tmp/la-overlay'"), "{la}");
         assert!(la.contains("installed=no"), "{la}");
         assert!(la.contains("-L/tmp/la-overlay"), "{la}");
@@ -1643,8 +1659,6 @@ includedir=/usr/include
             fs::canonicalize(&custom).unwrap()
         );
         // 存在しない明示指定はエラー（タイポを黙ってフォールバックしない）
-        assert!(
-            resolve_runner(Some(tmp.path().join("missing").as_os_str()), &exe).is_err()
-        );
+        assert!(resolve_runner(Some(tmp.path().join("missing").as_os_str()), &exe).is_err());
     }
 }

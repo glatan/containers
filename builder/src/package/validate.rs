@@ -201,7 +201,12 @@ pub(crate) fn soname_to_package(soname: &str, target: Target) -> Option<&'static
     if soname.starts_with("libpcre2-") {
         return Some("pcre2");
     }
-    if soname.starts_with("libncurses") || soname.starts_with("libtinfo") {
+    if soname.starts_with("libncurses")
+        || soname.starts_with("libtinfo")
+        || soname.starts_with("libpanel")
+        || soname.starts_with("libmenu")
+        || soname.starts_with("libform")
+    {
         return Some("ncurses");
     }
     if soname.starts_with("libreadline.so") {

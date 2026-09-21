@@ -47,6 +47,17 @@ pub fn build_dir(name: &str, version: &str, target: Target) -> PathBuf {
         .join(format!("{name}-{version}"))
 }
 
+/// 生成オーバーレイ群のホスト側置き場。`build_dir` 配下には置けない:
+/// `/build` はコンテナへ rw マウントされ、openssl の `make clean` が
+/// `find . -type l -exec rm` で配下の全シンボリックリンク（`.gen/gcc-b`
+/// 等）を掃除してしまうため、マウント外に退避する。
+pub fn gen_dir(name: &str, version: &str, target: Target) -> PathBuf {
+    PathBuf::from("packages/build")
+        .join(format!("{}-{}", target.architecture(), target.variant()))
+        .join(".gen")
+        .join(format!("{name}-{version}"))
+}
+
 pub fn layout_dir(name: &str, version: &str) -> PathBuf {
     PathBuf::from("oci-layouts").join(format!("{name}-{version}"))
 }
@@ -113,6 +124,20 @@ mod tests {
                         );
                     }
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn gen_dir_stays_outside_build_dir() {
+        // .gen は /build マウント配下に置けない（コンテナ内の
+        // `find . -type l -exec rm` 系の clean がシンボリックリンクを
+        // 消すため）。ターゲット dir 直下の .gen/ に退避する。
+        for package in crate::package::PACKAGES {
+            for target in Target::all() {
+                let staged = gen_dir(package.name(), package.version(), target);
+                let build = build_dir(package.name(), package.version(), target);
+                assert!(!staged.starts_with(&build), "{staged:?}");
             }
         }
     }
