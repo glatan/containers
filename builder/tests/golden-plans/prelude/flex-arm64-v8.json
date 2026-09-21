@@ -603,14 +603,73 @@
           }
         },
         {
-          "Make": {
-            "args": [],
-            "jobs": true
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "make"
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "-j"
+                      },
+                      {
+                        "Subst": {
+                          "stages": [
+                            [
+                              {
+                                "Lit": "nproc"
+                              }
+                            ]
+                          ],
+                          "stderr": null,
+                          "stdin": null,
+                          "stdout": null
+                        }
+                      }
+                    ]
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
           }
         },
         {
-          "MakeInstall": {
-            "vars": []
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "make"
+                  },
+                  {
+                    "Lit": "install"
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "DESTDIR="
+                      },
+                      {
+                        "Quoted": {
+                          "Var": "OUT"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
           }
         }
       ],

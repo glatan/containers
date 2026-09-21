@@ -716,7 +716,7 @@
         }
       ],
       "sysroot": true,
-      "workdir": "Build"
+      "workdir": "InSource"
     }
   }
 }

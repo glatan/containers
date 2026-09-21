@@ -46,5 +46,7 @@ autotools_configure() {
 mkdir -p "$BUILD"
 cp -a "$SOURCE"/. "$BUILD"/
 cd "$BUILD"
-python3 configure.py --bootstrap
+cmake -S . -B build-cmake -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64 -DCMAKE_SYSROOT=/tmp/sysroot -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_TESTING=OFF -DCMAKE_C_COMPILER="${CC}" -DCMAKE_CXX_COMPILER="${CXX}"
+cmake --build build-cmake -j$(nproc)
+cp build-cmake/ninja ninja
 install -D -m 755 ninja "$OUT"/usr/bin/ninja

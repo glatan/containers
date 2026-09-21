@@ -427,7 +427,7 @@
   ],
   "recipe": {
     "Steps": {
-      "env": "Autotools",
+      "env": "None",
       "pgo": null,
       "std": "Gnu17",
       "steps": [
@@ -438,24 +438,101 @@
               "stages": [
                 [
                   {
+                    "Lit": "cmake"
+                  },
+                  {
+                    "Lit": "-S"
+                  },
+                  {
+                    "Quoted": {
+                      "Var": "SOURCE"
+                    }
+                  },
+                  {
+                    "Lit": "-B"
+                  },
+                  {
+                    "Quoted": {
+                      "Var": "BUILD"
+                    }
+                  },
+                  {
+                    "Lit": "-DCMAKE_SYSTEM_NAME=Linux"
+                  },
+                  {
+                    "Lit": "-DCMAKE_SYSTEM_PROCESSOR=aarch64"
+                  },
+                  {
+                    "Lit": "-DCMAKE_SYSROOT=/tmp/sysroot"
+                  },
+                  {
+                    "Lit": "-DCMAKE_BUILD_TYPE=Release"
+                  },
+                  {
+                    "Lit": "-DCMAKE_INSTALL_PREFIX=/usr"
+                  },
+                  {
+                    "Lit": "-DCMAKE_USE_OPENSSL=OFF"
+                  },
+                  {
+                    "Lit": "-DCMAKE_DISABLE_FIND_PACKAGE_Libidn2=ON"
+                  },
+                  {
+                    "Lit": "-DBUILD_TESTING=OFF"
+                  },
+                  {
                     "Concat": [
                       {
-                        "Quoted": {
-                          "Var": "SOURCE"
-                        }
+                        "Lit": "-DCMAKE_C_COMPILER="
                       },
                       {
-                        "Lit": "/bootstrap"
+                        "Quoted": {
+                          "Var": "CC"
+                        }
                       }
                     ]
                   },
                   {
-                    "Lit": "--prefix=/usr"
+                    "Concat": [
+                      {
+                        "Lit": "-DCMAKE_CXX_COMPILER="
+                      },
+                      {
+                        "Quoted": {
+                          "Var": "CXX"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "cmake"
+                  },
+                  {
+                    "Lit": "--build"
+                  },
+                  {
+                    "Quoted": {
+                      "Var": "BUILD"
+                    }
                   },
                   {
                     "Concat": [
                       {
-                        "Lit": "--parallel="
+                        "Lit": "-j"
                       },
                       {
                         "Subst": {
@@ -472,15 +549,6 @@
                         }
                       }
                     ]
-                  },
-                  {
-                    "Lit": "--"
-                  },
-                  {
-                    "Lit": "-DCMAKE_USE_OPENSSL=OFF"
-                  },
-                  {
-                    "Lit": "-DCMAKE_DISABLE_FIND_PACKAGE_Libidn2=ON"
                   }
                 ]
               ],
@@ -491,14 +559,37 @@
           }
         },
         {
-          "Make": {
-            "args": [],
-            "jobs": true
-          }
-        },
-        {
-          "MakeInstall": {
-            "vars": []
+          "Exec": {
+            "env": [
+              [
+                "DESTDIR",
+                {
+                  "Quoted": {
+                    "Var": "OUT"
+                  }
+                }
+              ]
+            ],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "cmake"
+                  },
+                  {
+                    "Lit": "--install"
+                  },
+                  {
+                    "Quoted": {
+                      "Var": "BUILD"
+                    }
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
           }
         }
       ],

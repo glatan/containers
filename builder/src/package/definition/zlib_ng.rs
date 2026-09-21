@@ -165,6 +165,10 @@ impl Package for ZlibNg {
                     vec![Arg::Var("LDFLAGS"), Arg::lit(" -fprofile-generate")],
                 ))
                 .step(cmake_build(gen_dir()))
+                .step(Step::Set {
+                    name: "PGO_LLP_SAVE",
+                    value: Arg::Var("LD_LIBRARY_PATH"),
+                })
                 .step(Step::Export {
                     name: "LD_LIBRARY_PATH",
                     value: Arg::quoted(Arg::Concat(vec![
@@ -227,7 +231,10 @@ impl Package for ZlibNg {
                         pipe: Pipe::cmd(argv(&["true"])),
                     }],
                 })
-                .step(Step::Unset("LD_LIBRARY_PATH"))
+                .step(Step::Export {
+                    name: "LD_LIBRARY_PATH",
+                    value: Arg::Var("PGO_LLP_SAVE"),
+                })
                 .step(configure_cmake(
                     build_dir(),
                     "OFF",

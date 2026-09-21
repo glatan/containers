@@ -36,8 +36,14 @@ impl Package for Ninja {
         crate::package::headers_dep()
     }
     /// `configure.py --bootstrap` の実行に必要（成果物にはリンクしない）。
-    fn host_tools(&self, _target: crate::target::Target) -> Vec<&'static str> {
-        vec!["python"]
+    /// クロスでは bootstrap がターゲットバイナリを実行するため使えず、
+    /// BUILD_ENV 側の cmake で configure する。
+    fn host_tools(&self, target: crate::target::Target) -> Vec<&'static str> {
+        if target.gnu_triple() == crate::target::Target::HOST_GNU_TRIPLE {
+            vec!["python"]
+        } else {
+            vec!["cmake"]
+        }
     }
 
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {
@@ -55,11 +61,44 @@ impl Package for Ninja {
         };
         let mut steps = Steps::new(Env::Autotools).workdir(Workdir::InSource);
         if ctx.cross() {
-            steps.steps.push(cmd(vec![
-                Arg::lit("python3"),
-                Arg::lit("configure.py"),
-                Arg::lit("--bootstrap"),
-            ]));
+            // bootstrap は生成した ./ninja を実行するためクロス不可。
+            // BUILD_ENV 側の cmake で configure する。
+            let arch = ctx.triple.split('-').next().unwrap_or(&ctx.triple);
+            steps.steps.extend([
+                cmd(vec![
+                    Arg::lit("cmake"),
+                    Arg::lit("-S"),
+                    Arg::lit("."),
+                    Arg::lit("-B"),
+                    Arg::lit("build-cmake"),
+                    Arg::lit("-DCMAKE_SYSTEM_NAME=Linux"),
+                    Arg::owned(format!("-DCMAKE_SYSTEM_PROCESSOR={arch}")),
+                    Arg::lit("-DCMAKE_SYSROOT=/tmp/sysroot"),
+                    Arg::lit("-DCMAKE_BUILD_TYPE=Release"),
+                    Arg::lit("-DCMAKE_INSTALL_PREFIX=/usr"),
+                    // googletest の FetchContent は --network=none で失敗
+                    Arg::lit("-DBUILD_TESTING=OFF"),
+                    Arg::Concat(vec![
+                        Arg::lit("-DCMAKE_C_COMPILER="),
+                        Arg::quoted(Arg::Var("CC")),
+                    ]),
+                    Arg::Concat(vec![
+                        Arg::lit("-DCMAKE_CXX_COMPILER="),
+                        Arg::quoted(Arg::Var("CXX")),
+                    ]),
+                ]),
+                cmd(vec![
+                    Arg::lit("cmake"),
+                    Arg::lit("--build"),
+                    Arg::lit("build-cmake"),
+                    Arg::nproc_jobs("-j"),
+                ]),
+                cmd(vec![
+                    Arg::lit("cp"),
+                    Arg::lit("build-cmake/ninja"),
+                    Arg::lit("ninja"),
+                ]),
+            ]);
         } else {
             // instrumented bootstrap → ninja で自身を rebuild（workload）→
             // clean → -fprofile-use bootstrap。

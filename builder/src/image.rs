@@ -183,7 +183,10 @@ fn collect_rel_paths(
             collect_rel_paths(root, &child_rel, owner, owners)?;
             continue;
         }
-        if child_rel == Path::new("usr/share/info/dir") {
+        // info の dir ファイルは install-info が生成する索引。
+        // --infodir=/usr/share/info/{triple} を使うパッケージ間で
+        // usr/share/info/{triple}/dir が同名衝突するため配下全体を除外する
+        if name == "dir" && child_rel.starts_with("usr/share/info") {
             continue;
         }
         if let Some(existing) = owners.insert(child_rel.clone(), owner.to_string())
@@ -221,10 +224,12 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let a = tmp.path().join("a");
         let b = tmp.path().join("b");
-        fs::create_dir_all(a.join("usr/share/info")).unwrap();
-        fs::create_dir_all(b.join("usr/share/info")).unwrap();
-        fs::write(a.join("usr/share/info/dir"), "a").unwrap();
-        fs::write(b.join("usr/share/info/dir"), "b").unwrap();
+        for sub in ["usr/share/info", "usr/share/info/x86_64-linux-gnu"] {
+            fs::create_dir_all(a.join(sub)).unwrap();
+            fs::create_dir_all(b.join(sub)).unwrap();
+            fs::write(a.join(sub).join("dir"), "a").unwrap();
+            fs::write(b.join(sub).join("dir"), "b").unwrap();
+        }
         check_path_conflicts(&[("a", a), ("b", b)]).unwrap();
     }
 

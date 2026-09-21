@@ -47,3 +47,44 @@ pub(crate) fn ld_script_fixup(dir: Arg) -> Step {
         stdout: None,
     }
 }
+
+/// /usr/bin/{triple}-as および -ld へのシンボリックリンク。
+/// stage1/stage2 gcc は --with-as/--with-ld=/usr/bin/{triple}-{as,ld}
+/// でビルドされるため、それを呼び出すレシピ（glibc-headers, glibc）は
+/// /dep/{triple}-binutils へのリンクを張る必要がある。
+pub(crate) fn toolchain_links() -> Vec<Step> {
+    let cmd = |argv: Vec<Arg>| Step::Exec {
+        env: vec![],
+        pipe: Pipe::cmd(argv),
+    };
+    let dep_binutils = |sub: &'static str| {
+        Arg::Concat(vec![
+            Arg::lit("/dep/"),
+            Arg::Var("TRIPLE"),
+            Arg::lit("-binutils/usr/bin/"),
+            Arg::Var("TRIPLE"),
+            Arg::lit(sub),
+        ])
+    };
+    let usr_bin = |sub: &'static str| {
+        Arg::Concat(vec![
+            Arg::lit("/usr/bin/"),
+            Arg::Var("TRIPLE"),
+            Arg::lit(sub),
+        ])
+    };
+    vec![
+        cmd(vec![
+            Arg::lit("ln"),
+            Arg::lit("-sfn"),
+            dep_binutils("-as"),
+            usr_bin("-as"),
+        ]),
+        cmd(vec![
+            Arg::lit("ln"),
+            Arg::lit("-sfn"),
+            dep_binutils("-ld"),
+            usr_bin("-ld"),
+        ]),
+    ]
+}

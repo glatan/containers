@@ -50,6 +50,9 @@
                   "Lit": "--"
                 },
                 {
+                  "Lit": "-DCMAKE_SYSROOT=/tmp/sysroot"
+                },
+                {
                   "Lit": "-DCMAKE_USE_OPENSSL=OFF"
                 },
                 {

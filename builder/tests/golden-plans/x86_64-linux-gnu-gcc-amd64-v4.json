@@ -208,10 +208,10 @@
                   "stages": [
                     [
                       {
-                        "Lit": "ln"
+                        "Lit": "cp"
                       },
                       {
-                        "Lit": "-sfn"
+                        "Lit": "-a"
                       },
                       {
                         "Quoted": {
@@ -256,58 +256,10 @@
                   "stages": [
                     [
                       {
-                        "Lit": "ln"
+                        "Lit": "cp"
                       },
                       {
-                        "Lit": "-sfn"
-                      },
-                      {
-                        "Quoted": {
-                          "Concat": [
-                            {
-                              "Concat": [
-                                {
-                                  "Lit": "/dep/"
-                                },
-                                {
-                                  "Var": "HOST_TRIPLE"
-                                },
-                                {
-                                  "Lit": "-glibc/usr/"
-                                },
-                                {
-                                  "Var": "HOST_TRIPLE"
-                                }
-                              ]
-                            },
-                            {
-                              "Lit": "/lib"
-                            }
-                          ]
-                        }
-                      },
-                      {
-                        "Lit": "/tmp/build-sysroot/usr/lib"
-                      }
-                    ]
-                  ],
-                  "stderr": null,
-                  "stdin": null,
-                  "stdout": null
-                }
-              }
-            },
-            {
-              "Exec": {
-                "env": [],
-                "pipe": {
-                  "stages": [
-                    [
-                      {
-                        "Lit": "ln"
-                      },
-                      {
-                        "Lit": "-sfn"
+                        "Lit": "-a"
                       },
                       {
                         "Quoted": {
@@ -358,29 +310,33 @@
                         "Lit": "-sfn"
                       },
                       {
-                        "Quoted": {
-                          "Concat": [
-                            {
-                              "Concat": [
-                                {
-                                  "Lit": "/dep/"
-                                },
-                                {
-                                  "Var": "HOST_TRIPLE"
-                                },
-                                {
-                                  "Lit": "-glibc/usr/"
-                                },
-                                {
-                                  "Var": "HOST_TRIPLE"
-                                }
-                              ]
-                            },
-                            {
-                              "Lit": "/lib64"
-                            }
-                          ]
-                        }
+                        "Lit": "../lib"
+                      },
+                      {
+                        "Lit": "/tmp/build-sysroot/usr/lib"
+                      }
+                    ]
+                  ],
+                  "stderr": null,
+                  "stdin": null,
+                  "stdout": null
+                }
+              }
+            },
+            {
+              "Exec": {
+                "env": [],
+                "pipe": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "ln"
+                      },
+                      {
+                        "Lit": "-sfn"
+                      },
+                      {
+                        "Lit": "../lib64"
                       },
                       {
                         "Lit": "/tmp/build-sysroot/usr/lib64"
@@ -1235,7 +1191,7 @@
                   "Quoted": {
                     "Concat": [
                       {
-                        "Lit": "${CFLAGS:-} -I/dep/"
+                        "Lit": " -I/dep/"
                       },
                       {
                         "Lit": "zlib"
@@ -1255,7 +1211,7 @@
                   "Quoted": {
                     "Concat": [
                       {
-                        "Lit": "${CXXFLAGS:-} -I/dep/"
+                        "Lit": " -I/dep/"
                       },
                       {
                         "Lit": "zlib"
@@ -1275,7 +1231,7 @@
                   "Quoted": {
                     "Concat": [
                       {
-                        "Lit": "${LDFLAGS:-} -L/dep/"
+                        "Lit": " -L/dep/"
                       },
                       {
                         "Lit": "zlib"
@@ -1323,7 +1279,7 @@
                   "Quoted": {
                     "Concat": [
                       {
-                        "Lit": "${CFLAGS:-} -I/dep/"
+                        "Lit": " -I/dep/"
                       },
                       {
                         "Lit": "zstd"
@@ -1343,7 +1299,7 @@
                   "Quoted": {
                     "Concat": [
                       {
-                        "Lit": "${CXXFLAGS:-} -I/dep/"
+                        "Lit": " -I/dep/"
                       },
                       {
                         "Lit": "zstd"
@@ -1363,7 +1319,7 @@
                   "Quoted": {
                     "Concat": [
                       {
-                        "Lit": "${LDFLAGS:-} -L/dep/"
+                        "Lit": " -L/dep/"
                       },
                       {
                         "Lit": "zstd"

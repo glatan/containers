@@ -22,7 +22,22 @@ impl Package for Gawk {
         }
     }
     fn dependencies(&self, target: crate::target::Target) -> Vec<crate::package::Dependency> {
-        crate::package::with_libc(target, &[])
+        // MPFR 必須: MPFR なしでビルドした gawk 5.4.1 は `a > b` 比較で
+        // 文字列値を数値化して破壊するバグがあり、gcc の opt-gather.awk が
+        // "###" レコードを "0" に化けさせて optionlist/options.cc を破損する。
+        crate::package::with_libc(
+            target,
+            &[
+                crate::package::Dependency {
+                    name: "gmp",
+                    version: "6.3.0",
+                },
+                crate::package::Dependency {
+                    name: "mpfr",
+                    version: "4.2.2",
+                },
+            ],
+        )
     }
     fn build_dependencies(
         &self,

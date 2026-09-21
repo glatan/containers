@@ -68,6 +68,67 @@ pub const RUNTIME_LIBS: [Dependency; 6] = [
     },
 ];
 
+/// gmp/mpfr/mpc/isl + zlib/zstd のビルド機側ライブラリ設定。
+/// dep マウントがあれば /dep パスを明示し、無ければイメージ/シードの
+/// システム配置（pacman /usr）を使う。stage1/stage2 と共有する。
+pub fn lib_flag_steps() -> Vec<Step> {
+    let dep_inc = |name: &'static str| {
+        Arg::Concat(vec![
+            Arg::lit("/dep/"),
+            Arg::lit(name),
+            Arg::lit("/usr/include"),
+        ])
+    };
+    let mut steps = vec![Step::If {
+        cond: Cond::DirExists(Arg::lit("/dep/gmp/usr")),
+        then: vec![Step::Set {
+            name: "GCC_LIB_FLAGS",
+            value: Arg::quoted(Arg::lit(
+                "--with-gmp=/dep/gmp/usr --with-mpfr=/dep/mpfr/usr --with-mpc=/dep/mpc/usr --with-isl=/dep/isl/usr",
+            )),
+        }],
+        else_: vec![Step::Set {
+            name: "GCC_LIB_FLAGS",
+            value: Arg::lit("--with-isl"),
+        }],
+    }];
+    for dep in ["zlib", "zstd"] {
+        steps.push(Step::If {
+            cond: Cond::DirExists(dep_inc(dep)),
+            then: vec![
+                Step::Export {
+                    name: "CFLAGS",
+                    value: Arg::quoted(Arg::Concat(vec![
+                        Arg::lit(" -I/dep/"),
+                        Arg::lit(dep),
+                        Arg::lit("/usr/include"),
+                    ])),
+                },
+                Step::Export {
+                    name: "CXXFLAGS",
+                    value: Arg::quoted(Arg::Concat(vec![
+                        Arg::lit(" -I/dep/"),
+                        Arg::lit(dep),
+                        Arg::lit("/usr/include"),
+                    ])),
+                },
+                Step::Export {
+                    name: "LDFLAGS",
+                    value: Arg::quoted(Arg::Concat(vec![
+                        Arg::lit(" -L/dep/"),
+                        Arg::lit(dep),
+                        Arg::lit("/usr/lib64 -L/dep/"),
+                        Arg::lit(dep),
+                        Arg::lit("/usr/lib"),
+                    ])),
+                },
+            ],
+            else_: vec![],
+        });
+    }
+    steps
+}
+
 const HOST_TOOLS: [Dependency; 5] = [
     dep("bison", "3.8.2"),
     dep("flex", "2.6.4"),
@@ -459,14 +520,6 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
         Arg::lit("-glibc/usr/"),
         Arg::Var("TRIPLE"),
     ]);
-    let dep_inc = |name: &'static str| {
-        concat(vec![
-            Arg::lit("/dep/"),
-            Arg::lit(name),
-            Arg::lit("/usr/include"),
-        ])
-    };
-
     let mut steps: Vec<Step> = vec![
         // GCC の TARGET_EXPORTS は CC/CXX/AR 等を target 向けに上書きするが
         // CPP は含まれない。プリリュードの CPP=gcc -E が target libgcc の
@@ -518,28 +571,34 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
                     Arg::quoted(concat(vec![build_root.clone(), Arg::lit("/include")])),
                     Arg::lit("/tmp/build-sysroot/usr/include"),
                 ]),
+                // ld はリンカスクリプトの実パスが sysroot 配下の時だけ
+                // スクリプト内の絶対パスに sysroot を適用する。/dep への
+                // シンボリックリンクでは realpath が sysroot 外に出て
+                // libc.so の GROUP (/lib/libc.so.6 ...) が解決不能になるため、
+                // lib は実ディレクトリへ実コピーする（/tmp/sysroot と同じ手法。
+                // lib64 が相対 symlink の場合も shadow 内で再現される）。
                 cmd(vec![
-                    Arg::lit("ln"),
-                    Arg::lit("-sfn"),
+                    Arg::lit("cp"),
+                    Arg::lit("-a"),
                     Arg::quoted(concat(vec![build_root.clone(), Arg::lit("/lib")])),
                     Arg::lit("/tmp/build-sysroot/lib"),
                 ]),
                 cmd(vec![
-                    Arg::lit("ln"),
-                    Arg::lit("-sfn"),
-                    Arg::quoted(concat(vec![build_root.clone(), Arg::lit("/lib")])),
-                    Arg::lit("/tmp/build-sysroot/usr/lib"),
-                ]),
-                cmd(vec![
-                    Arg::lit("ln"),
-                    Arg::lit("-sfn"),
+                    Arg::lit("cp"),
+                    Arg::lit("-a"),
                     Arg::quoted(concat(vec![build_root.clone(), Arg::lit("/lib64")])),
                     Arg::lit("/tmp/build-sysroot/lib64"),
                 ]),
                 cmd(vec![
                     Arg::lit("ln"),
                     Arg::lit("-sfn"),
-                    Arg::quoted(concat(vec![build_root.clone(), Arg::lit("/lib64")])),
+                    Arg::lit("../lib"),
+                    Arg::lit("/tmp/build-sysroot/usr/lib"),
+                ]),
+                cmd(vec![
+                    Arg::lit("ln"),
+                    Arg::lit("-sfn"),
+                    Arg::lit("../lib64"),
                     Arg::lit("/tmp/build-sysroot/usr/lib64"),
                 ]),
                 Step::Set {
@@ -725,54 +784,8 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
             dep_binutils("-ld"),
             usr_bin("-ld"),
         ]),
-        Step::If {
-            cond: Cond::DirExists(Arg::lit("/dep/gmp/usr")),
-            then: vec![Step::Set {
-                name: "GCC_LIB_FLAGS",
-                value: Arg::quoted(Arg::lit(
-                    "--with-gmp=/dep/gmp/usr --with-mpfr=/dep/mpfr/usr --with-mpc=/dep/mpc/usr --with-isl=/dep/isl/usr",
-                )),
-            }],
-            else_: vec![Step::Set {
-                name: "GCC_LIB_FLAGS",
-                value: Arg::lit("--with-isl"),
-            }],
-        },
     ];
-    for dep in ["zlib", "zstd"] {
-        steps.push(Step::If {
-            cond: Cond::DirExists(dep_inc(dep)),
-            then: vec![
-                Step::Export {
-                    name: "CFLAGS",
-                    value: Arg::quoted(concat(vec![
-                        Arg::lit("${CFLAGS:-} -I/dep/"),
-                        Arg::lit(dep),
-                        Arg::lit("/usr/include"),
-                    ])),
-                },
-                Step::Export {
-                    name: "CXXFLAGS",
-                    value: Arg::quoted(concat(vec![
-                        Arg::lit("${CXXFLAGS:-} -I/dep/"),
-                        Arg::lit(dep),
-                        Arg::lit("/usr/include"),
-                    ])),
-                },
-                Step::Export {
-                    name: "LDFLAGS",
-                    value: Arg::quoted(concat(vec![
-                        Arg::lit("${LDFLAGS:-} -L/dep/"),
-                        Arg::lit(dep),
-                        Arg::lit("/usr/lib64 -L/dep/"),
-                        Arg::lit(dep),
-                        Arg::lit("/usr/lib"),
-                    ])),
-                },
-            ],
-            else_: vec![],
-        });
-    }
+    steps.extend(lib_flag_steps());
     if ctx.canadian() {
         steps.extend(canadian_steps());
     }

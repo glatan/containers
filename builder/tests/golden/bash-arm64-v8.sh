@@ -9,6 +9,7 @@ autotools_configure() {
 }
 mkdir -p "$BUILD"
 cd "$BUILD"
+export CFLAGS_FOR_BUILD="-O2 -std=gnu17"
 autotools_configure --prefix=/usr --without-bash-malloc
 make -j"$(nproc)"
 make install DESTDIR="$OUT"

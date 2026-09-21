@@ -85,6 +85,10 @@ ls / info / tree / targets / env plan  照会系（tree --reverse は逆依存�
 
 ビルドスクリプトへ渡す環境変数と `/dep` へのマウントは [package/README.md](../package/README.md) です。
 `build` は依存パッケージを先にビルドします。ルートが `BOOTSTRAP` に載っている場合、合成済みビルド環境の有無にかかわらずグラフには `Bootstrap` の依存を使います。`own`（合成済みイメージの使用、`pacman` 前置きの有無、ネットワーク遮断）だけを `build_env_ready()` で決めます。成果物ディレクトリが既に存在し空でない場合はそのターゲットのコンパイルをスキップし、ビルド途中で失敗した成果物は不整合を防ぐため自動的に削除します。`podman` の出力は `packages/logs/` の個別ファイルへ tee し、失敗してもログは残します。
+
+コンテナ内で plan を解釈する runner は、ビルドツール自身を `/tmp/runner` にマウントして起動します。マウントするバイナリは `CONTAINERS_BUILDER_RUNNER` 環境変数の明示指定を最優先とし、次に cargo 規約パス `target/x86_64-unknown-linux-musl/<profile>/containers-builder` の musl 静的ビルドを探し、見つからなければ実行中のバイナリを使います。musl 静的ビルドはコンテナ側 libc に依存しないため推奨であり、`rustup target add x86_64-unknown-linux-musl` ののち `cargo build --target x86_64-unknown-linux-musl` で生成します。フォールバック時は、コンテナ側 glibc がホストより古いと runner が起動しない旨の警告を一度だけ出力します。実際にマウントした runner のパスは個別ログの `runner:` 行に記録します。
+
+runner の意味論は bash 描画スクリプトと揃えています。`$(cmd)`・`$(cmd || true)` は失敗時も部分 stdout を保持し（裸の代入 `X=$(f)` のみ errexit で中断）、`ln -sf t dir/` は実在ディレクトリ配下にリンクし、`cp -a` 相当のコピーは symlink・mode・mtime（ディレクトリ含む）を保持し、glob は `*`・`?`・`[...]` クラスと dotfiles 規則、`cd` 後の `PWD` は正規化済みパス、`if cmd` の条件コマンド出力はログへ継承します。`cp -a` の owner 保持だけはコンテナ内で一様に root のため意図的に省略しています。
 LTO や PGO の適用方針はパッケージの種別ごとに異なります。個別の指定内容は [各パッケージのビルド設定](../package/definition/) を参照してください。
 
 ビルド専用のパッケージ定義（`build_only`）は、中間成果物としてのみ扱い、パッケージイメージ化は行いません。これらは他のパッケージの `build-dependencies` にのみ現れます。
@@ -114,6 +118,40 @@ LTO や PGO の適用方針はパッケージの種別ごとに異なります�
 - Layout の生成時は、一時的な staging ディレクトリで構造を構築したのち、不可分（アトミック）に配置を置き換えます。これにより、生成途中で処理が失敗した場合でも既存の `oci-layouts/` が保護されます。
 - レイヤーのハッシュ計算はストリーミング方式で行い、アーカイブ全体をメモリ上に展開しません。
 - SPDX SBOM は Layout ディレクトリ内の `sbom.spdx.json` に配置します。OCI Image Specification ではレイアウト内の未知の追加ファイルを許容しているため、この配置は仕様に適合します。なお、referrers による attestation としての公開は現時点では未実装です。
+
+## コンテナ内ステージングの規約
+
+- 生成オーバーレイ（la-overlay / pc-overlay / 各種ラッパ）はホスト側で
+  packages/build/{target}/.gen/{pkg}/ に生成し、コンテナの /tmp 配下へ
+  read-only でマウントします。ビルドツリー（/build マウント）配下には
+  置きません。openssl の make clean のように配下のシンボリックリンクを
+  全削除する手順があるためです。
+- dep 成果物の .la ファイルのうち、cc1/lto1 が実行時リンクする
+  ライブラリ（gmp / mpfr / mpc / isl）は la-overlay に staging しません。
+  installed=no の dep .la が dependency_libs に入ると libtool が
+  install 時に relink し、relink 出力と同名の .so を lto1 が読み込み
+  中に truncate されて衝突するためです。.so / .a のシンボリックリンクは
+  残るため -l による解決は維持されます。
+- dep glibc の libc.so リンカスクリプトは /lib/libc.so.6 等の絶対パスを
+  参照するため、コンテナ内で /lib を glibc のライブラリディレクトリへの
+  シンボリックリンクとして生成します（ターゲット glibc を優先し、
+  Canadian cross ではホスト glibc にフォールバック）。
+- ld はリンカスクリプトの実パスが sysroot 配下にある場合のみ、
+  スクリプト内の絶対パスへ sysroot を適用します。このため shadow
+  sysroot の lib ディレクトリは /dep への symlink ではなく実コピーです。
+
+## マルチターゲット検証の状況
+
+2026-09-21 時点で次のカタログビルドを完走しています。
+
+- amd64 / v4（BUILD_ENV ベースライン）
+- amd64 / v1（x86-64 baseline への回帰。Canadian gcc を含む）
+- arm64 / v8（カタログ 40 件 + toolchain）
+- riscv64 / rva20u64（同規模）
+
+check --all による動的依存検証は全件グリーンです。ppc64le / s390x は
+bootstrap 全体の検証として別途整理するため本範囲外です。生成バイナリを
+実行できないクロスビルドでは PGO を適用しません。
 
 ## 現状の制約事項
 

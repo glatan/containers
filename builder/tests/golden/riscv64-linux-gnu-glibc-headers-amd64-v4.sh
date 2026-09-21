@@ -6,6 +6,8 @@ mkdir -p ${SYSROOT}/include ${SYSROOT}/lib ${BUILD}
 HDR=/dep/linux-headers/usr/${TRIPLE}/include
 [ -d ${HDR} ] || HDR=/dep/linux-headers/usr/include
 cp -a ${HDR}/. ${SYSROOT}/include/
+ln -sfn /dep/${TRIPLE}-binutils/usr/bin/${TRIPLE}-as /usr/bin/${TRIPLE}-as
+ln -sfn /dep/${TRIPLE}-binutils/usr/bin/${TRIPLE}-ld /usr/bin/${TRIPLE}-ld
 cd ${BUILD}
 unset CFLAGS
 unset CXXFLAGS

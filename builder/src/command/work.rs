@@ -62,7 +62,20 @@ pub fn build(
     dry_run: bool,
 ) -> Result<()> {
     let (targets, all_targets) = super::resolve_targets(targets)?;
-    let roots = super::selected(selection, || package::PACKAGES.to_vec())?;
+    let roots = super::selected(selection, || {
+        package::PACKAGES
+            .iter()
+            .copied()
+            .filter(|package| !matches!(package.role(), Role::BuildEnv))
+            .collect()
+    })?;
+    for root in &roots {
+        if matches!(root.role(), Role::BuildEnv) {
+            return Err(Error::message(
+                "build-env は env compose で合成してください",
+            ));
+        }
+    }
     let options = package::BuildOptions {
         force,
         keep_going,
@@ -221,6 +234,7 @@ fn clean_package(
             // 中断したビルドの atomic publish 残骸
             PathBuf::from(format!("{}.tmp", artifact.display())),
             workspace::build_dir(defined.name(), defined.version(), *target),
+            workspace::gen_dir(defined.name(), defined.version(), *target),
             workspace::log_path(defined.name(), defined.version(), *target),
         ] {
             if let Err(error) = clean_path("packages", &path, dry_run) {

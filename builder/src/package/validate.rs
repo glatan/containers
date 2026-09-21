@@ -201,13 +201,24 @@ pub(crate) fn soname_to_package(soname: &str, target: Target) -> Option<&'static
     if soname.starts_with("libpcre2-") {
         return Some("pcre2");
     }
-    if soname.starts_with("libncurses") || soname.starts_with("libtinfo") {
+    if soname.starts_with("libncurses")
+        || soname.starts_with("libtinfo")
+        || soname.starts_with("libpanel")
+        || soname.starts_with("libmenu")
+        || soname.starts_with("libform")
+    {
         return Some("ncurses");
     }
     if soname.starts_with("libreadline.so") {
         return Some("readline");
     }
-    if soname.starts_with("libglib-") || soname.starts_with("libgobject-") {
+    if soname.starts_with("libglib-")
+        || soname.starts_with("libgobject-")
+        || soname.starts_with("libgio-")
+        || soname.starts_with("libgmodule-")
+        || soname.starts_with("libgthread-")
+        || soname.starts_with("libgirepository-")
+    {
         return Some("glib");
     }
     if soname.starts_with("libstdc++.so")

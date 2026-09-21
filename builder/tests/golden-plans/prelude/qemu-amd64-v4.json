@@ -608,7 +608,33 @@
               "stages": [
                 [
                   {
-                    "Lit": "\"$SOURCE\"/configure"
+                    "Lit": "sed"
+                  },
+                  {
+                    "Lit": "-i"
+                  },
+                  {
+                    "Lit": "'/^\\[tooling\\]/,/^\\[/ { /^\"qemu\" =/d; /^\"setuptools\"/d; /^\"wheel\"/d; /^\"pip\"/d }'"
+                  },
+                  {
+                    "Lit": "pythondeps.toml"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "./configure"
                   },
                   {
                     "Lit": "--prefix=/usr"
@@ -780,7 +806,7 @@
         }
       ],
       "sysroot": false,
-      "workdir": "Build"
+      "workdir": "InSource"
     }
   }
 }

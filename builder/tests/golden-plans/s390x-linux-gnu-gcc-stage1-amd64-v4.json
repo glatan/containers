@@ -301,6 +301,213 @@
         }
       },
       {
+        "If": {
+          "cond": {
+            "DirExists": {
+              "Lit": "/dep/gmp/usr"
+            }
+          },
+          "else_": [
+            {
+              "Set": {
+                "name": "GCC_LIB_FLAGS",
+                "value": {
+                  "Lit": "--with-isl"
+                }
+              }
+            }
+          ],
+          "then": [
+            {
+              "Set": {
+                "name": "GCC_LIB_FLAGS",
+                "value": {
+                  "Quoted": {
+                    "Lit": "--with-gmp=/dep/gmp/usr --with-mpfr=/dep/mpfr/usr --with-mpc=/dep/mpc/usr --with-isl=/dep/isl/usr"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "If": {
+          "cond": {
+            "DirExists": {
+              "Concat": [
+                {
+                  "Lit": "/dep/"
+                },
+                {
+                  "Lit": "zlib"
+                },
+                {
+                  "Lit": "/usr/include"
+                }
+              ]
+            }
+          },
+          "else_": [],
+          "then": [
+            {
+              "Export": {
+                "name": "CFLAGS",
+                "value": {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": " -I/dep/"
+                      },
+                      {
+                        "Lit": "zlib"
+                      },
+                      {
+                        "Lit": "/usr/include"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "Export": {
+                "name": "CXXFLAGS",
+                "value": {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": " -I/dep/"
+                      },
+                      {
+                        "Lit": "zlib"
+                      },
+                      {
+                        "Lit": "/usr/include"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "Export": {
+                "name": "LDFLAGS",
+                "value": {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": " -L/dep/"
+                      },
+                      {
+                        "Lit": "zlib"
+                      },
+                      {
+                        "Lit": "/usr/lib64 -L/dep/"
+                      },
+                      {
+                        "Lit": "zlib"
+                      },
+                      {
+                        "Lit": "/usr/lib"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "If": {
+          "cond": {
+            "DirExists": {
+              "Concat": [
+                {
+                  "Lit": "/dep/"
+                },
+                {
+                  "Lit": "zstd"
+                },
+                {
+                  "Lit": "/usr/include"
+                }
+              ]
+            }
+          },
+          "else_": [],
+          "then": [
+            {
+              "Export": {
+                "name": "CFLAGS",
+                "value": {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": " -I/dep/"
+                      },
+                      {
+                        "Lit": "zstd"
+                      },
+                      {
+                        "Lit": "/usr/include"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "Export": {
+                "name": "CXXFLAGS",
+                "value": {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": " -I/dep/"
+                      },
+                      {
+                        "Lit": "zstd"
+                      },
+                      {
+                        "Lit": "/usr/include"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "Export": {
+                "name": "LDFLAGS",
+                "value": {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": " -L/dep/"
+                      },
+                      {
+                        "Lit": "zstd"
+                      },
+                      {
+                        "Lit": "/usr/lib64 -L/dep/"
+                      },
+                      {
+                        "Lit": "zstd"
+                      },
+                      {
+                        "Lit": "/usr/lib"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
         "Cd": {
           "Var": "BUILD"
         }
@@ -461,7 +668,7 @@
                   "Lit": "--with-system-zlib"
                 },
                 {
-                  "Lit": "--with-isl"
+                  "Var": "GCC_LIB_FLAGS"
                 },
                 {
                   "Lit": "--with-arch=z900"

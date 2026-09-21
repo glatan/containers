@@ -43,12 +43,25 @@ impl Package for Bash {
         crate::flags::Pgo::Profiled
     }
 
-    fn recipe(&self, _ctx: &BuildContext) -> Recipe {
+    fn recipe(&self, ctx: &BuildContext) -> Recipe {
         Recipe::Steps(
             Steps::new(Env::Lto)
                 .pgo(crate::package::recipe::PgoTemplate::Autotools(
                     pgo_workload(),
                 ))
+                // クロスでは builtins/mkbuiltins が CC_FOR_BUILD で
+                // `CFLAGS_FOR_BUILD`（既定 `-g` のみ）でコンパイルされ、
+                // GCC16 の既定 std=gnu23 で `typedef unsigned char bool`
+                // が壊れる。GNU make のコマンドライン変数ではなく env に
+                // するのは Makefile が @CROSS_COMPILE@ を後置するため。
+                .steps(if ctx.cross() {
+                    vec![Step::Export {
+                        name: "CFLAGS_FOR_BUILD",
+                        value: Arg::lit("\"-O2 -std=gnu17\""),
+                    }]
+                } else {
+                    vec![]
+                })
                 .step(Step::configure(&["--prefix=/usr", "--without-bash-malloc"]))
                 .step(Step::make(&[]))
                 .step(Step::make_install(&[]))

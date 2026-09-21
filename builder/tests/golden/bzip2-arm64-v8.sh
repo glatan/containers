@@ -46,7 +46,7 @@ autotools_configure() {
 mkdir -p "$BUILD"
 cp -a "$SOURCE"/. "$BUILD"/
 cd "$BUILD"
-sed -i 's/$(CC) -shared/$(CC) $(LDFLAGS) -shared/' Makefile-libbz2_so
+sed -i -e 's/$(CC) -shared/$(CC) $(LDFLAGS) -shared/' -e 's/$(CFLAGS) -o bzip2-shared/$(CFLAGS) $(LDFLAGS) -o bzip2-shared/' Makefile-libbz2_so
 make -f Makefile-libbz2_so CC="$CC" CFLAGS="$CFLAGS -fpic -fPIC -Wall -Winline -D_FILE_OFFSET_BITS=64" LDFLAGS="$LDFLAGS" CXXFLAGS="${CXXFLAGS:-}"
 make CC="$CC" AR="${AR:-${TRIPLE}-ar}" RANLIB="${RANLIB:-${TRIPLE}-ranlib}" CFLAGS="$CFLAGS -Wall -Winline -D_FILE_OFFSET_BITS=64" LDFLAGS="$LDFLAGS" libbz2.a bzip2 bzip2recover CXXFLAGS="${CXXFLAGS:-}"
 make install PREFIX="$OUT/usr" CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}" DESTDIR="$OUT"

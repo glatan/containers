@@ -17,13 +17,27 @@ use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdout, Command, Stdio};
+use std::sync::{Mutex, MutexGuard};
 
 use super::recipe::{CROSS_CACHE_VARS, Env, Std};
 use super::runner::{Error, Sandbox, glob_match};
 
+/// `cd`/`Subshell` が process-global cwd を触るため、同時に生存する
+/// `ContainerSandbox` は 1 つに直列化する。run-recipe はプロセス毎に
+/// 1 個しか作らず、テストの並列実行ではここで待ち合わせる。
+static CWD_LOCK: Mutex<()> = Mutex::new(());
+
 /// 実環境 `Sandbox`。コンテナ内でそのまま動かす他、tempdir 上の
 /// ホスト検証にも使える（外部依存は `PATH` 上のコマンドのみ）。
+///
+/// process-global cwd を共有資源として使うため Send ではない。
 pub struct ContainerSandbox {
+    /// `CWD_LOCK` の保持ガード。cwd を変える操作の競合を防ぐため
+    /// 生存期間中はロックを持ち続ける。
+    _cwd_guard: MutexGuard<'static, ()>,
+    /// Drop 時に復帰する元 cwd（cd が process-global cwd を変えるため、
+    /// 削除済み tempdir 等を指し残すと後続 spawn が getcwd で壊れる）。
+    initial_cwd: PathBuf,
     /// 変数スコープ。値は `(値, export 済み)`。scope[0] は起動時の
     /// プロセス環境（bash の初期 env 全 export と同じ）。
     scopes: Vec<BTreeMap<String, (String, bool)>>,
@@ -35,8 +49,14 @@ pub struct ContainerSandbox {
 
 impl ContainerSandbox {
     /// 現在のプロセス環境を scope[0]（全 export 済み）として作る。
+    /// `CWD_LOCK` を取得してから返す（cwd 競合の直列化。別の
+    /// `ContainerSandbox` が生存中はブロックする）。
     pub fn new() -> Self {
         Self {
+            // panic 済みのロックでも続行する（cwd は best-effort の
+            // 直列化で、テストの panic で全体を wedged にしない）
+            _cwd_guard: CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner()),
+            initial_cwd: env::current_dir().unwrap_or_else(|_| PathBuf::from("/")),
             scopes: vec![env::vars().map(|(k, v)| (k, (v, true))).collect()],
             removed: vec![BTreeSet::new()],
             cwd_stack: Vec::new(),
@@ -119,6 +139,14 @@ impl ContainerSandbox {
             }
         }
         None
+    }
+}
+
+/// process-global cwd を復帰する。フィールドの drop は impl Drop の
+/// 後に走るため、ここではまだ `CWD_LOCK` を保持したまま復帰できる。
+impl Drop for ContainerSandbox {
+    fn drop(&mut self) {
+        let _ = env::set_current_dir(&self.initial_cwd);
     }
 }
 
@@ -242,6 +270,7 @@ fn open_redirect(path: &str, append: bool) -> Result<File, Error> {
             Error::Exit {
                 argv: vec![format!("> {path}")],
                 code: 1,
+                output: String::new(),
             }
         })
 }
@@ -276,6 +305,7 @@ fn fs_exit(op: &str, path: &Path, e: std::io::Error) -> Error {
     Error::Exit {
         argv: vec![format!("{op} {}", path.display())],
         code: 1,
+        output: String::new(),
     }
 }
 
@@ -286,12 +316,15 @@ fn exit_code(status: std::process::ExitStatus) -> i32 {
         .unwrap_or_else(|| 128 + status.signal().unwrap_or(0))
 }
 
-/// `cp -a src/. dst/` 相当の再帰コピー（symlink 保存・perm 維持）。
+/// `cp -a src/. dst/` 相当の再帰コピー（symlink 保存・perm/mtime 維持）。
+/// owner はコピーしない: コンテナ内では一様に root で実害が無く、
+/// libc::chown 依存を増やすだけになるため。
 fn copy_tree(src: &Path, dst: &Path) -> std::io::Result<()> {
     fs::create_dir_all(dst)?;
+    let src_meta = fs::metadata(src).ok();
     // `cp -a` parity: ディレクトリの mode も保持する
     // （create_dir_all は umask 既定になる）
-    if let Ok(meta) = fs::metadata(src) {
+    if let Some(meta) = &src_meta {
         let _ = fs::set_permissions(dst, meta.permissions());
     }
     for entry in fs::read_dir(src)? {
@@ -316,6 +349,13 @@ fn copy_tree(src: &Path, dst: &Path) -> std::io::Result<()> {
             }
         }
     }
+    // dir の mtime は子を書き終えてから設定する（子の作成で更新される
+    // ため。`cp -a` も同じ順で保持する）
+    if let Some(mtime) = src_meta.and_then(|m| m.modified().ok())
+        && let Ok(f) = File::open(dst)
+    {
+        let _ = f.set_modified(mtime);
+    }
     Ok(())
 }
 
@@ -339,7 +379,7 @@ fn find_named_dirs(dir: &Path, name: &str, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// glob 展開（`*`/`?`。文字クラスは未対応 — `glob_match` と同じ制約）。
+/// glob 展開（`*`/`?`/`[...]`）。
 /// bash の non-nullglob と同じくマッチ無しならパターンをそのまま返す。
 fn expand_glob(pattern: &str) -> Vec<String> {
     let mut cur: Vec<String> = if pattern.starts_with('/') {
@@ -352,7 +392,7 @@ fn expand_glob(pattern: &str) -> Vec<String> {
             continue;
         }
         let mut next = Vec::new();
-        if comp.contains(['*', '?']) {
+        if comp.contains(['*', '?', '[']) {
             for base in &cur {
                 let dir = if base.is_empty() {
                     Path::new(".")
@@ -362,7 +402,11 @@ fn expand_glob(pattern: &str) -> Vec<String> {
                 if let Ok(rd) = fs::read_dir(dir) {
                     for entry in rd.flatten() {
                         let name = entry.file_name().to_string_lossy().into_owned();
-                        if glob_match(comp, &name) {
+                        // bash: 先頭ドットの名前は `.` 始まりのパターン
+                        // でしかマッチしない（dotfiles 規則）
+                        if glob_match(comp, &name)
+                            && (comp.starts_with('.') || !name.starts_with('.'))
+                        {
                             next.push(join(base, &name));
                         }
                     }
@@ -473,6 +517,7 @@ impl Sandbox for ContainerSandbox {
                 Err(code) => Err(Error::Exit {
                     argv: argv.to_vec(),
                     code,
+                    output: String::new(),
                 }),
             };
         }
@@ -490,6 +535,7 @@ impl Sandbox for ContainerSandbox {
             let file = File::open(path).map_err(|_| Error::Exit {
                 argv: vec![format!("< {path}")],
                 code: 1,
+                output: String::new(),
             })?;
             cmd.stdin(Stdio::from(file));
         }
@@ -508,6 +554,7 @@ impl Sandbox for ContainerSandbox {
                 return Err(Error::Exit {
                     argv: argv.to_vec(),
                     code: 127,
+                    output: String::new(),
                 });
             }
             // EACCES（実行ビットなし）は bash の 126
@@ -515,6 +562,7 @@ impl Sandbox for ContainerSandbox {
                 return Err(Error::Exit {
                     argv: argv.to_vec(),
                     code: 126,
+                    output: String::new(),
                 });
             }
             Err(e) => return Err(exit_io("spawn", Path::new(&argv[0]), e)),
@@ -524,13 +572,17 @@ impl Sandbox for ContainerSandbox {
             .wait_with_output()
             .map_err(|e| exit_io("wait", Path::new(&argv[0]), e))?;
         let status = output.status;
+        // 失敗しても捕捉した stdout は残す（bash の `$(f)` は
+        // 部分出力を代入・展開に使う）
+        let captured = String::from_utf8_lossy(&output.stdout).into_owned();
         if !status.success() {
             return Err(Error::Exit {
                 argv: argv.to_vec(),
                 code: exit_code(status),
+                output: captured,
             });
         }
-        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+        Ok(captured)
     }
 
     fn pipeline(
@@ -637,6 +689,7 @@ impl Sandbox for ContainerSandbox {
                 let file = try_reap!(File::open(path).map_err(|_| Error::Exit {
                     argv: vec![format!("< {path}")],
                     code: 1,
+                    output: String::new(),
                 }));
                 cmd.stdin(Stdio::from(file));
             }
@@ -662,6 +715,7 @@ impl Sandbox for ContainerSandbox {
                     return Err(Error::Exit {
                         argv: stage.to_vec(),
                         code: 127,
+                        output: String::new(),
                     });
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
@@ -669,6 +723,7 @@ impl Sandbox for ContainerSandbox {
                     return Err(Error::Exit {
                         argv: stage.to_vec(),
                         code: 126,
+                        output: String::new(),
                     });
                 }
                 Err(e) => {
@@ -681,6 +736,10 @@ impl Sandbox for ContainerSandbox {
             if let Some(bytes) = feed_bytes
                 && let Some(mut pipe) = child.stdin.take()
             {
+                // bash ではパイプの書き手が先に読み手が終了して EPIPE で
+                // 死んでも、パイプラインの結果は各ステージの終了コード
+                // （pipefail）だけで決まる。ここでの write 失敗は同じ意味
+                // なので握り潰す。pipe は drop で閉じて子に EOF を届ける。
                 let _ = pipe.write_all(&bytes);
             }
             if i < last {
@@ -723,6 +782,7 @@ impl Sandbox for ContainerSandbox {
             return Err(Error::Exit {
                 argv: stages[i].clone(),
                 code,
+                output,
             });
         }
         Ok(output)
@@ -748,8 +808,15 @@ impl Sandbox for ContainerSandbox {
             Error::Exit {
                 argv: vec!["cd".to_string(), path.to_string()],
                 code: 1,
+                output: String::new(),
             }
         })
+    }
+
+    fn cwd(&self) -> String {
+        env::current_dir()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default()
     }
 
     fn remove_dir(&mut self, path: &str) -> Result<(), Error> {
@@ -769,17 +836,25 @@ impl Sandbox for ContainerSandbox {
         let mode = u32::from_str_radix(mode, 8).map_err(|_| Error::Exit {
             argv: vec![format!("install -D -m {mode}")],
             code: 1,
+            output: String::new(),
         })?;
         fs::set_permissions(dst, fs::Permissions::from_mode(mode))
             .map_err(|e| fs_exit("install -D", dst, e))
     }
 
     fn symlink(&mut self, target: &str, link: &str, force: bool) -> Result<(), Error> {
-        let link = Path::new(link);
-        if force && link.symlink_metadata().is_ok() {
-            fs::remove_file(link).map_err(|e| fs_exit("ln -sf", link, e))?;
+        let mut link = PathBuf::from(link);
+        // GNU ln の -T 無し既定: link が実在するディレクトリ（dir への
+        // symlink 含む）なら、その中に target の basename でリンクを作る
+        if link.is_dir()
+            && let Some(name) = Path::new(target).file_name()
+        {
+            link.push(name);
         }
-        std::os::unix::fs::symlink(target, link).map_err(|e| fs_exit("ln -s", link, e))
+        if force && link.symlink_metadata().is_ok() {
+            fs::remove_file(&link).map_err(|e| fs_exit("ln -sf", &link, e))?;
+        }
+        std::os::unix::fs::symlink(target, &link).map_err(|e| fs_exit("ln -s", &link, e))
     }
 
     fn dir_exists(&self, path: &str) -> bool {
@@ -1124,6 +1199,86 @@ mod tests {
     }
 
     #[test]
+    fn glob_char_class_and_dotfile_rule() {
+        let dir = tempdir("glob-class");
+        let dir = dir.path();
+        fs::write(dir.join("a1.o"), "").unwrap();
+        fs::write(dir.join("a2.o"), "").unwrap();
+        fs::write(dir.join("ab.o"), "").unwrap();
+        fs::write(dir.join(".hidden.o"), "").unwrap();
+        let sb = ContainerSandbox::new();
+        // `[12]` クラス
+        let pat = format!("{}/a[12].o", dir.display());
+        assert_eq!(
+            sb.glob(&pat),
+            vec![
+                format!("{}/a1.o", dir.display()),
+                format!("{}/a2.o", dir.display())
+            ]
+        );
+        // `[!12]` 否定
+        let pat = format!("{}/a[!12].o", dir.display());
+        assert_eq!(sb.glob(&pat), vec![format!("{}/ab.o", dir.display())]);
+        // `*` はドットファイルを拾わない（bash の dotfiles 規則）
+        let pat = format!("{}/*.o", dir.display());
+        assert!(!sb.glob(&pat).iter().any(|p| p.contains("hidden")));
+        // `.*` 始まりなら拾う
+        let pat = format!("{}/.*", dir.display());
+        assert!(sb.glob(&pat).iter().any(|p| p.ends_with(".hidden.o")));
+    }
+
+    #[test]
+    fn symlink_force_into_existing_dir_links_basename() {
+        // GNU ln: `ln -sf t dir/` で dir が実在 dir なら dir/t を作る
+        let dir = tempdir("ln");
+        let dir = dir.path();
+        let target = dir.join("t");
+        fs::write(&target, "x").unwrap();
+        let dest = dir.join("d");
+        fs::create_dir(&dest).unwrap();
+        let mut sb = ContainerSandbox::new();
+        sb.symlink(
+            target.to_str().unwrap(),
+            &format!("{}/", dest.display()),
+            true,
+        )
+        .unwrap();
+        let made = dest.join("t");
+        assert_eq!(
+            fs::read_link(&made).unwrap(),
+            target,
+            "dir/t が t への symlink になる"
+        );
+        // 二度目の -f でも既存 symlink を置き換えて成功する
+        sb.symlink(
+            target.to_str().unwrap(),
+            &format!("{}/", dest.display()),
+            true,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn copy_into_preserves_dir_mtime() {
+        // `cp -a` parity: ディレクトリの mtime も保持する
+        // （タイムスタンプ比較で再生成されるビルド系への影響を防ぐ）
+        let dir = tempdir("cp-mtime");
+        let dir = dir.path();
+        let src = dir.join("src");
+        let dst = dir.join("dst");
+        fs::create_dir(&src).unwrap();
+        fs::write(src.join("f"), "x").unwrap();
+        let past = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+        File::open(&src).unwrap().set_modified(past).unwrap();
+        let mut sb = ContainerSandbox::new();
+        sb.copy_into(src.to_str().unwrap(), dst.to_str().unwrap())
+            .unwrap();
+        let dst_mtime = fs::metadata(&dst).unwrap().modified().unwrap();
+        assert_eq!(dst_mtime, past);
+        assert_eq!(fs::read_to_string(dst.join("f")).unwrap(), "x");
+    }
+
+    #[test]
     fn write_file_and_append() {
         let dir = tempdir("write");
         let dir = dir.path();
@@ -1177,6 +1332,31 @@ mod tests {
     }
 
     #[test]
+    fn cd_relative_normalizes_pwd() {
+        // bash: `cd sub` 後の $PWD は正規化済みの絶対パスになる
+        // （zlib/openssl/perl の `$PWD` 参照が相対名を拾わない）
+        let dir = tempdir("cd-pwd");
+        let sub = dir.path().join("sub");
+        fs::create_dir(&sub).unwrap();
+        let recipe = Recipe::Steps(Steps {
+            env: Env::None,
+            std: Std::Gnu17,
+            sysroot: false,
+            workdir: Workdir::None,
+            pgo: None,
+            steps: vec![
+                Step::Cd(Arg::Lit(dir.path().display().to_string().into())),
+                Step::Cd(Arg::lit("sub")),
+            ],
+        });
+        let ctx = crate::package::recipe::BuildContext::of(None, Target::BUILD_ENV);
+        let mut sb = ContainerSandbox::new();
+        runner::run(&recipe, &ctx, &mut sb).unwrap();
+        let want = sub.canonicalize().unwrap();
+        assert_eq!(sb.get("PWD").as_deref(), Some(want.to_str().unwrap()));
+    }
+
+    #[test]
     fn pipeline_large_producer_to_builtin_gets_sigpipe() {
         // パイプバッファ（64KiB）超の producer | builtin — drain が
         // 打ち切られて書き手は SIGPIPE（pipefail で 141）。
@@ -1224,7 +1404,7 @@ mod tests {
         let out_path = dir.join("out.txt");
         let mut sb = ContainerSandbox::new();
         sb.pipeline(
-            &vec![argv(&["echo", "hi"]), argv(&["cat"])],
+            &[argv(&["echo", "hi"]), argv(&["cat"])],
             &[],
             None,
             Some((out_path.to_str().unwrap(), false)),
@@ -1241,7 +1421,7 @@ mod tests {
         let mut sb = ContainerSandbox::new();
         let err = sb
             .pipeline(
-                &vec![argv(&["echo", "hi"]), argv(&["cat"])],
+                &[argv(&["echo", "hi"]), argv(&["cat"])],
                 &[],
                 None,
                 Some(("/nonexistent-dir-xyz/f", false)),
@@ -1266,7 +1446,7 @@ mod tests {
             .unwrap_err();
         assert!(matches!(
             err,
-            Error::Exit { code: 127, ref argv } if argv[0] == "nope-xyz-missing"
+            Error::Exit { code: 127, ref argv, .. } if argv[0] == "nope-xyz-missing"
         ));
     }
 
@@ -1289,7 +1469,7 @@ mod tests {
         let mut sb = ContainerSandbox::new();
         let out = sb
             .pipeline(
-                &vec![argv(&["cat"]), argv(&["cat"])],
+                &[argv(&["cat"]), argv(&["cat"])],
                 &[],
                 Some(in_path.to_str().unwrap()),
                 None,

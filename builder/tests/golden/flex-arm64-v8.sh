@@ -60,5 +60,5 @@ EOF
 fi
 autotools_configure --prefix=/usr
 find . -name config.h -exec sed -i '/rpl_malloc/d;/rpl_realloc/d' {} +
-make -j"$(nproc)" CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}"
-make install CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}" DESTDIR="$OUT"
+make -j$(nproc)
+make install DESTDIR="${OUT}"

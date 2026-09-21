@@ -634,7 +634,16 @@
                     "Lit": "-i"
                   },
                   {
+                    "Lit": "-e"
+                  },
+                  {
                     "Lit": "'s/$(CC) -shared/$(CC) $(LDFLAGS) -shared/'"
+                  },
+                  {
+                    "Lit": "-e"
+                  },
+                  {
+                    "Lit": "'s/$(CFLAGS) -o bzip2-shared/$(CFLAGS) $(LDFLAGS) -o bzip2-shared/'"
                   },
                   {
                     "Lit": "Makefile-libbz2_so"

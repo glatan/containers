@@ -22,8 +22,13 @@ use super::recipe::{
 /// それ以外はインタプリタ・環境側の失敗。
 #[derive(Debug)]
 pub enum Error {
-    /// argv/パイプラインが非ゼロ終了。
-    Exit { argv: Vec<String>, code: i32 },
+    /// argv/パイプラインが非ゼロ終了。`output` は捕捉経路（`$( … )` 等）
+    /// の末尾ステージ stdout の部分出力（bash は失敗時も保持する）。
+    Exit {
+        argv: Vec<String>,
+        code: i32,
+        output: String,
+    },
     /// 未定義変数の参照（`set -u` 相当）。
     UnboundVar(String),
     /// ファイル・プロセス操作の失敗。
@@ -33,7 +38,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Exit { argv, code } => write!(f, "{argv:?} が終了コード {code}"),
+            Self::Exit { argv, code, .. } => write!(f, "{argv:?} が終了コード {code}"),
             Self::UnboundVar(name) => write!(f, "未定義変数 ${name}"),
             Self::Io(msg) => write!(f, "{msg}"),
         }
@@ -110,6 +115,9 @@ pub trait Sandbox {
     /// `cp -a src/. dst/`（in-source コピー）。
     fn copy_into(&mut self, src: &str, dst: &str) -> Result<(), Error>;
     fn cd(&mut self, path: &str) -> Result<(), Error>;
+    /// `cd` 後の実際の作業ディレクトリ（`PWD` 設定用）。bash の PWD
+    /// と同じく `cd ..` 等でも正規化されたパスを返すこと。
+    fn cwd(&self) -> String;
     fn remove_dir(&mut self, path: &str) -> Result<(), Error>;
     /// `install -D -m mode src dst`。
     fn install(&mut self, src: &str, dst: &str, mode: &str) -> Result<(), Error>;
@@ -380,12 +388,13 @@ fn eval_assign(arg: &Arg, sb: &mut dyn SandboxTrait) -> Result<String, Error> {
         }
         Arg::Opt(name, value) => Ok(format!("--{name}={}", eval_assign(value, sb)?)),
         Arg::Quoted(inner) => eval_assign(inner, sb),
-        Arg::Subst(pipe) => Ok(eval_pipe(pipe, sb, None)?
+        Arg::Subst(pipe) => Ok(eval_pipe(pipe, sb, None, true)?
             .trim_end_matches('\n')
             .to_string()),
-        Arg::SubstOr(pipe) => Ok(match eval_pipe(pipe, sb, None) {
-            Ok(out) => out.trim_end_matches('\n').to_string(),
-            Err(Error::Exit { .. }) => String::new(),
+        Arg::SubstOr(pipe) => Ok(match eval_pipe(pipe, sb, None, true) {
+            Ok(out) | Err(Error::Exit { output: out, .. }) => {
+                out.trim_end_matches('\n').to_string()
+            }
             Err(e) => return Err(e),
         }),
     }
@@ -434,9 +443,10 @@ fn eval_verbatim(arg: &Arg, sb: &mut dyn SandboxTrait) -> Result<String, Error> 
         }
         Arg::Opt(name, value) => Ok(format!("--{name}={}", eval_verbatim(value, sb)?)),
         Arg::Quoted(inner) => Ok(format!("\"{}\"", eval_verbatim(inner, sb)?)),
-        Arg::Subst(pipe) | Arg::SubstOr(pipe) => Ok(match eval_pipe(pipe, sb, None) {
-            Ok(out) => out.trim_end_matches('\n').to_string(),
-            Err(Error::Exit { .. }) => String::new(),
+        Arg::Subst(pipe) | Arg::SubstOr(pipe) => Ok(match eval_pipe(pipe, sb, None, true) {
+            Ok(out) | Err(Error::Exit { output: out, .. }) => {
+                out.trim_end_matches('\n').to_string()
+            }
             Err(e) => return Err(e),
         }),
     }
@@ -463,12 +473,12 @@ fn eval_value(arg: &Arg, sb: &mut dyn SandboxTrait) -> Result<String, Error> {
         Arg::Quoted(inner) => eval_value(inner, sb),
         Arg::Subst(pipe) | Arg::SubstOr(pipe) => {
             // `$( )` は末尾改行を除去する。失敗しても bash は外側の
-            // コマンドを空展開で続行する（ステータスを継承するのは
+            // コマンドを部分出力のまま続行する（ステータスを継承するのは
             // `X=$(f)` 型の裸の代入だけ。そちらは eval_assign）。
-            // 部分出力は Err 経路では取れないため空に倒す。
-            Ok(match eval_pipe(pipe, sb, None) {
-                Ok(out) => out.trim_end_matches('\n').to_string(),
-                Err(Error::Exit { .. }) => String::new(),
+            Ok(match eval_pipe(pipe, sb, None, true) {
+                Ok(out) | Err(Error::Exit { output: out, .. }) => {
+                    out.trim_end_matches('\n').to_string()
+                }
                 Err(e) => return Err(e),
             })
         }
@@ -517,11 +527,10 @@ fn eval_words(arg: &Arg, sb: &mut dyn SandboxTrait) -> Result<Vec<String>, Error
         Arg::Opt(name, value) => Ok(vec![format!("--{name}={}", eval_value(value, sb)?)]),
         Arg::Quoted(inner) => Ok(vec![eval_value(inner, sb)?]),
         Arg::Subst(pipe) | Arg::SubstOr(pipe) => {
-            // `$(f)` が失敗しても外側コマンドは空展開で継続する
+            // `$(f)` が失敗しても外側コマンドは部分出力で継続する
             // （bash）。`$UNSET` 等の非 Exit エラーは伝播する。
-            let out = match eval_pipe(pipe, sb, None) {
-                Ok(out) => out,
-                Err(Error::Exit { .. }) => String::new(),
+            let out = match eval_pipe(pipe, sb, None, true) {
+                Ok(out) | Err(Error::Exit { output: out, .. }) => out,
                 Err(e) => return Err(e),
             };
             let mut words = Vec::new();
@@ -563,6 +572,7 @@ fn eval_pipe(
     pipe: &Pipe,
     sb: &mut dyn SandboxTrait,
     redirect: Option<(&str, bool)>,
+    capture: bool,
 ) -> Result<String, Error> {
     let mut stages = Vec::with_capacity(pipe.stages.len());
     for stage in &pipe.stages {
@@ -605,7 +615,7 @@ fn eval_pipe(
             .as_ref()
             .map(|(path, append)| (path.as_str(), *append)),
         stderr.as_deref(),
-        true,
+        capture,
     )
 }
 
@@ -675,7 +685,10 @@ fn lookup_dyn(sb: &mut impl Sandbox, name: &str) -> Result<String, Error> {
 /// `Arg::Var("PWD")` を参照するレシピ（zlib/openssl/perl）用に追跡する。
 fn sb_cd(sb: &mut impl Sandbox, dir: &str) -> Result<(), Error> {
     sb.cd(dir)?;
-    sb.set("PWD", dir);
+    // bash は PWD に cd 後の正規化済みパスを設定する（`cd ..` でも
+    // 相対のまま残らない）。実環境では current_dir() が返す物理パス。
+    let cwd = sb.cwd();
+    sb.set("PWD", &cwd);
     // PWD は bash で export 済みが一般的なので export フラグを立てる
     sb.reexport("PWD");
     Ok(())
@@ -949,6 +962,7 @@ fn exec_step(
                 return Err(Error::Exit {
                     argv: vec!["install".to_string()],
                     code: 1,
+                    output: String::new(),
                 });
             }
             sb.install(&src[0], &dst[0], mode)
@@ -964,6 +978,7 @@ fn exec_step(
                 return Err(Error::Exit {
                     argv: vec!["ln".to_string()],
                     code: 1,
+                    output: String::new(),
                 });
             }
             sb.symlink(&target[0], &link[0], *force)
@@ -1199,7 +1214,9 @@ fn eval_cond(cond: &Cond, sb: &mut impl Sandbox) -> Result<bool, Error> {
         }
         Cond::NonEmpty(value) => Ok(!eval_value(value, sb)?.is_empty()),
         Cond::EnvSet(name) => Ok(sb.get(name).is_some_and(|v| !v.is_empty())),
-        Cond::Cmd(pipe) => match eval_pipe(pipe, sb, None) {
+        // bash の `if cmd` は出力を継承するので capture しない
+        // （`command -v x` 等の診断出力がビルドログに残る）
+        Cond::Cmd(pipe) => match eval_pipe(pipe, sb, None, false) {
             Ok(_) => Ok(true),
             Err(Error::Exit { .. }) => Ok(false),
             Err(e) => Err(e),
@@ -1216,17 +1233,69 @@ fn eval_cond(cond: &Cond, sb: &mut impl Sandbox) -> Result<bool, Error> {
     }
 }
 
-/// 簡易 fnmatch（`*`=`[^/]*`、`?`=1 文字、文字クラスなし）。
+/// 簡易 fnmatch（`*`=`[^/]*`、`?`=1 文字、`[...]`/`[!...]` 文字クラス）。
+/// 閉じられない `[` はリテラル `[` として扱う（bash と同じ）。
+/// `/` またぎはしない（呼び出し側でコンポーネント毎に適用する前提）。
 pub(crate) fn glob_match(pattern: &str, path: &str) -> bool {
     fn inner(p: &[u8], s: &[u8]) -> bool {
         match p.first() {
             None => s.is_empty(),
             Some(b'*') => (0..=s.len()).any(|i| inner(&p[1..], &s[i..])),
             Some(b'?') => !s.is_empty() && inner(&p[1..], &s[1..]),
+            Some(b'[') => match parse_class(p) {
+                Some((class, rest)) => match s.first() {
+                    Some(&c) => {
+                        class.ranges.iter().any(|&(lo, hi)| lo <= c && c <= hi) != class.negate
+                            && inner(rest, &s[1..])
+                    }
+                    None => false,
+                },
+                None => s.first() == Some(&b'[') && inner(&p[1..], &s[1..]),
+            },
             Some(&c) => s.first() == Some(&c) && inner(&p[1..], &s[1..]),
         }
     }
     inner(pattern.as_bytes(), path.as_bytes())
+}
+
+/// パース済み `[...]` 文字クラス。
+struct CharClass {
+    /// マッチする `(low, high)` バイト範囲の集合。
+    ranges: Vec<(u8, u8)>,
+    /// `[!...]`/`[^...]` の否定。
+    negate: bool,
+}
+
+/// `[...]` クラスをパースして `(クラス, 残り)` を返す。
+/// `!`/`^` 先頭は否定、`]` 先頭はリテラル `]`（POSIX 規則）。
+/// 閉じ `]` が無ければ None。
+fn parse_class(p: &[u8]) -> Option<(CharClass, &[u8])> {
+    let mut i = 1;
+    let negate = matches!(p.get(i), Some(b'!') | Some(b'^'));
+    if negate {
+        i += 1;
+    }
+    let mut ranges = Vec::new();
+    if p.get(i) == Some(&b']') {
+        ranges.push((b']', b']'));
+        i += 1;
+    }
+    while let Some(&c) = p.get(i) {
+        if c == b']' {
+            return (!ranges.is_empty()).then_some((CharClass { ranges, negate }, &p[i + 1..]));
+        }
+        if p.get(i + 1) == Some(&b'-')
+            && let Some(&hi) = p.get(i + 2)
+            && hi != b']'
+        {
+            ranges.push((c, hi));
+            i += 3;
+        } else {
+            ranges.push((c, c));
+            i += 1;
+        }
+    }
+    None
 }
 
 // ---------- テスト/デバッグ用トレース sandbox ----------
@@ -1239,7 +1308,8 @@ pub struct Trace {
     /// 記録した操作（`exec …`/`export NAME=…`/`cd …` 等）。
     pub ops: Vec<String>,
     /// `pipeline`/`exec` が返す結果のキュー（順に消費、空なら成功）。
-    pub results: VecDeque<Result<String, i32>>,
+    /// `Err` は `(exit code, 部分 stdout)`。
+    pub results: VecDeque<Result<String, (i32, String)>>,
     /// 存在するディレクトリとして振る舞うパス。
     pub dirs: BTreeSet<String>,
     /// 存在するファイルとして振る舞うパス。
@@ -1248,7 +1318,8 @@ pub struct Trace {
     pub files: BTreeMap<String, String>,
     /// 現在の作業ディレクトリ（`cd` で記録）。
     pub cwd: Option<String>,
-    /// 失敗させる fs 操作名（`"cd"`/`"write"`/`"install"` 等）。
+    /// 失敗させる fs 操作名（`"cd"`/`"write"`/`"install"`/`"mkdir_p"`/
+    /// `"copy_into"`/`"remove_dir"`/`"symlink"`）。
     /// 実 sandbox 側のエラー経路を runner テストで検証するための
     /// 失敗注入ポイント。
     pub fail_ops: BTreeSet<&'static str>,
@@ -1373,9 +1444,10 @@ impl Sandbox for Trace {
         self.ops
             .push(format!("exec {env} {}{io}{cap}", argv.join(" ")));
         match self.results.pop_front() {
-            Some(Err(code)) => Err(Error::Exit {
+            Some(Err((code, output))) => Err(Error::Exit {
                 argv: argv.to_vec(),
                 code,
+                output,
             }),
             Some(Ok(out)) => Ok(out),
             None => Ok(String::new()),
@@ -1414,9 +1486,10 @@ impl Sandbox for Trace {
         match self.results.pop_front() {
             // pipefail は最右の非ゼロコードを返すので、注入された
             // 失敗は末尾ステージの argv として報告する
-            Some(Err(code)) => Err(Error::Exit {
+            Some(Err((code, output))) => Err(Error::Exit {
                 argv: stages.last().cloned().unwrap_or_default(),
                 code,
+                output,
             }),
             Some(Ok(out)) => Ok(out),
             None => Ok(String::new()),
@@ -1429,6 +1502,7 @@ impl Sandbox for Trace {
             return Err(Error::Exit {
                 argv: vec!["write".to_string(), path.to_string()],
                 code: 1,
+                output: String::new(),
             });
         }
         let body = if lines.is_empty() {
@@ -1449,12 +1523,31 @@ impl Sandbox for Trace {
 
     fn mkdir_p(&mut self, path: &str) -> Result<(), Error> {
         self.ops.push(format!("mkdir -p {path}"));
+        if self.fail_ops.contains("mkdir_p") {
+            return Err(Error::Exit {
+                argv: vec!["mkdir".to_string(), "-p".to_string(), path.to_string()],
+                code: 1,
+                output: String::new(),
+            });
+        }
         self.dirs.insert(path.to_string());
         Ok(())
     }
 
     fn copy_into(&mut self, src: &str, dst: &str) -> Result<(), Error> {
         self.ops.push(format!("cp -a {src}/. {dst}/"));
+        if self.fail_ops.contains("copy_into") {
+            return Err(Error::Exit {
+                argv: vec![
+                    "cp".to_string(),
+                    "-a".to_string(),
+                    src.to_string(),
+                    dst.to_string(),
+                ],
+                code: 1,
+                output: String::new(),
+            });
+        }
         Ok(())
     }
 
@@ -1464,14 +1557,26 @@ impl Sandbox for Trace {
             return Err(Error::Exit {
                 argv: vec!["cd".to_string(), path.to_string()],
                 code: 1,
+                output: String::new(),
             });
         }
         self.cwd = Some(path.to_string());
         Ok(())
     }
 
+    fn cwd(&self) -> String {
+        self.cwd.clone().unwrap_or_default()
+    }
+
     fn remove_dir(&mut self, path: &str) -> Result<(), Error> {
         self.ops.push(format!("rm -rf {path}"));
+        if self.fail_ops.contains("remove_dir") {
+            return Err(Error::Exit {
+                argv: vec!["rm".to_string(), "-rf".to_string(), path.to_string()],
+                code: 1,
+                output: String::new(),
+            });
+        }
         self.dirs.remove(path);
         Ok(())
     }
@@ -1482,6 +1587,7 @@ impl Sandbox for Trace {
             return Err(Error::Exit {
                 argv: vec!["install".to_string(), dst.to_string()],
                 code: 1,
+                output: String::new(),
             });
         }
         self.present_files.insert(dst.to_string());
@@ -1493,6 +1599,18 @@ impl Sandbox for Trace {
             "ln -s{} {target} {link}",
             if force { "f" } else { "" }
         ));
+        if self.fail_ops.contains("symlink") {
+            return Err(Error::Exit {
+                argv: vec![
+                    "ln".to_string(),
+                    "-sf".to_string(),
+                    target.to_string(),
+                    link.to_string(),
+                ],
+                code: 1,
+                output: String::new(),
+            });
+        }
         Ok(())
     }
 
@@ -1605,7 +1723,7 @@ mod tests {
             }],
         }]);
         let mut trace = Trace::new();
-        trace.results.push_back(Err(1));
+        trace.results.push_back(Err((1, String::new())));
         run(&recipe, &ctx(), &mut trace).unwrap();
         assert!(trace.ops.contains(&"exec  echo fallback".to_string()));
     }
@@ -1632,7 +1750,7 @@ mod tests {
             }],
         }]);
         let mut trace = Trace::new();
-        trace.results.push_back(Err(1));
+        trace.results.push_back(Err((1, String::new())));
         trace.results.push_back(Ok(String::new()));
         run(&recipe, &ctx(), &mut trace).unwrap();
         assert!(trace.ops.contains(&"exec  echo ok".to_string()));
@@ -1680,7 +1798,7 @@ mod tests {
             ]),
         }]);
         let mut trace = Trace::new();
-        trace.results.push_back(Err(1));
+        trace.results.push_back(Err((1, String::new())));
         run(&recipe, &ctx(), &mut trace).unwrap();
         // argv = ["echo", ""]（空文字 1 ワード = bash の "$(f)" と同じ）
         assert!(trace.ops.contains(&"exec  echo ".to_string()));
@@ -1695,7 +1813,7 @@ mod tests {
             value: Arg::Subst(Box::new(pipe(&["false"]))),
         }]);
         let mut trace = Trace::new();
-        trace.results.push_back(Err(1));
+        trace.results.push_back(Err((1, String::new())));
         let err = run(&recipe, &ctx(), &mut trace).unwrap_err();
         assert!(matches!(err, Error::Exit { code: 1, .. }));
     }
@@ -1760,8 +1878,8 @@ mod tests {
             .with_var("OUT", "/out");
         run(&recipe, &ctx(), &mut trace).unwrap();
         let ops = &trace.ops;
-        // configure → generate → make → workload → distclean →
-        // use → configure → make → install の順で記録される。
+        // configure → generate → make → ld_library_path → workload →
+        // distclean → use → configure → make → install の順で記録される。
         let pos = |needle: &str, from: usize| -> usize {
             ops.iter()
                 .enumerate()
@@ -1773,11 +1891,51 @@ mod tests {
         let cfg1 = pos("configure Autotools", 0);
         let gen_ = pos("-fprofile-generate", cfg1);
         let make1 = pos("exec  make -j8", gen_);
-        let workload = pos("pgo-workload-cmd", make1);
+        // instrumented バイナリを workload が実行する直前に
+        // LD_LIBRARY_PATH が張られる
+        let ldpath = pos("pgo_ld_library_path", make1);
+        let workload = pos("pgo-workload-cmd", ldpath);
         let clean = pos("exec  make distclean", workload);
         let use_ = pos("-fprofile-use", clean);
         let cfg2 = pos("configure Autotools", use_);
         let make2 = pos("exec  make -j8", cfg2);
+        let install = pos("exec  make install", make2);
+        assert!(install > make2, "{ops:?}");
+    }
+
+    #[test]
+    fn pgo_make_runs_phases() {
+        // テンプレート B: generate → make → ld_library_path → workload →
+        // clean → use → make → install（configure を持たない）
+        let recipe = Recipe::Steps(Steps {
+            env: Env::None,
+            std: Std::Gnu17,
+            sysroot: false,
+            workdir: Workdir::None,
+            pgo: Some(PgoTemplate::Make(vec![Step::Exec {
+                env: vec![],
+                pipe: Pipe::cmd(argv(&["pgo-workload-cmd"])),
+            }])),
+            steps: vec![Step::make(&[]), Step::make_install(&[])],
+        });
+        let mut trace = Trace::new().with_var("OUT", "/out");
+        run(&recipe, &ctx(), &mut trace).unwrap();
+        let ops = &trace.ops;
+        let pos = |needle: &str, from: usize| -> usize {
+            ops.iter()
+                .enumerate()
+                .skip(from)
+                .find(|(_, op)| op.contains(needle))
+                .map(|(i, _)| i)
+                .unwrap_or_else(|| panic!("{needle} が見つからない: {ops:?}"))
+        };
+        let gen_ = pos("-fprofile-generate", 0);
+        let make1 = pos("exec  make -j8", gen_);
+        let ldpath = pos("pgo_ld_library_path", make1);
+        let workload = pos("pgo-workload-cmd", ldpath);
+        let clean = pos("exec  make clean", workload);
+        let use_ = pos("-fprofile-use", clean);
+        let make2 = pos("exec  make -j8", use_);
         let install = pos("exec  make install", make2);
         assert!(install > make2, "{ops:?}");
     }
@@ -1847,10 +2005,73 @@ mod tests {
             },
         ]);
         let mut trace = Trace::new();
-        trace.results.push_back(Err(1));
+        trace.results.push_back(Err((1, String::new())));
         run(&recipe, &ctx(), &mut trace).unwrap();
         assert!(trace.ops.contains(&"set SRC=".to_string()));
         assert!(trace.ops.contains(&"exec  echo".to_string()));
+    }
+
+    #[test]
+    fn glob_match_char_classes() {
+        assert!(glob_match("a[12].o", "a1.o"));
+        assert!(glob_match("a[0-9].o", "a7.o"));
+        assert!(glob_match("a[!12].o", "ab.o"));
+        assert!(glob_match("a[^0-9].o", "ab.o"));
+        assert!(!glob_match("a[12].o", "ab.o"));
+        assert!(!glob_match("a[!12].o", "a1.o"));
+        // `[]]` はリテラル `]` を含むクラス
+        assert!(glob_match("a[]x].o", "a].o"));
+        // 閉じられない `[` はリテラル
+        assert!(glob_match("a[.o", "a[.o"));
+        assert!(!glob_match("a[.o", "a1.o"));
+    }
+
+    #[test]
+    fn subst_or_keeps_partial_stdout() {
+        // `$(cmd || true)`: cmd が出力を出してから失敗しても
+        // bash は部分出力を保持する（|| true は出力を出さない）
+        let recipe = steps(vec![
+            Step::Set {
+                name: "SRC",
+                value: Arg::SubstOr(Box::new(pipe(&["find-tool"]))),
+            },
+            Step::Exec {
+                env: Vec::new(),
+                pipe: Pipe::cmd(vec![Arg::lit("echo"), Arg::Var("SRC")]),
+            },
+        ]);
+        let mut trace = Trace::new();
+        trace.results.push_back(Err((
+            1,
+            "found
+"
+            .to_string(),
+        )));
+        run(&recipe, &ctx(), &mut trace).unwrap();
+        assert!(trace.ops.contains(&"set SRC=found".to_string()));
+        assert!(trace.ops.contains(&"exec  echo found".to_string()));
+    }
+
+    #[test]
+    fn failing_subst_in_args_keeps_partial_output() {
+        // bash: `echo "$(printf hi; false)"` → 引数は "hi"
+        // （argv 内の $( ) は終了コードを伝播させず部分出力だけ使う）
+        let recipe = steps(vec![Step::Exec {
+            env: Vec::new(),
+            pipe: Pipe::cmd(vec![
+                Arg::lit("echo"),
+                Arg::quoted(Arg::Subst(Box::new(pipe(&["emit-then-fail"])))),
+            ]),
+        }]);
+        let mut trace = Trace::new();
+        trace.results.push_back(Err((
+            1,
+            "hi
+"
+            .to_string(),
+        )));
+        run(&recipe, &ctx(), &mut trace).unwrap();
+        assert!(trace.ops.contains(&"exec  echo hi".to_string()));
     }
 
     #[test]
@@ -2050,7 +2271,7 @@ mod tests {
             },
         ]);
         let mut trace = Trace::new();
-        trace.results.push_back(Err(1));
+        trace.results.push_back(Err((1, String::new())));
         let err = run(&recipe, &ctx(), &mut trace).unwrap_err();
         // lhs の Set は ( … ) 相当のスコープに閉じるため外から見えない
         assert!(matches!(err, Error::UnboundVar(n) if n == "LEAK"));
@@ -2131,7 +2352,7 @@ mod tests {
             }]),
         };
         let mut trace = Trace::new();
-        trace.results.push_back(Err(1));
+        trace.results.push_back(Err((1, String::new())));
         run_plan(&plan, &ctx(), &mut trace).unwrap();
         assert!(trace.ops.contains(&"exec  echo body".to_string()));
     }
@@ -2197,7 +2418,7 @@ mod tests {
         }]);
         let mut trace = Trace::new();
         trace.results.push_back(Ok(String::new())); // cond: true
-        trace.results.push_back(Err(1)); // false
+        trace.results.push_back(Err((1, String::new()))); // false
         trace.results.push_back(Ok(String::new())); // echo survived
         run(&recipe, &ctx(), &mut trace).unwrap();
         assert!(
@@ -2224,7 +2445,7 @@ mod tests {
             }],
         }]);
         let mut trace = Trace::new();
-        trace.results.push_back(Err(1)); // cond 失敗
+        trace.results.push_back(Err((1, String::new()))); // cond 失敗
         run(&recipe, &ctx(), &mut trace).unwrap();
         assert!(trace.ops.contains(&"exec  echo else".to_string()));
         assert!(!trace.ops.contains(&"exec  echo then".to_string()));
@@ -2262,5 +2483,43 @@ mod tests {
         let err = run(&recipe, &ctx(), &mut trace).unwrap_err();
         assert!(matches!(err, Error::Exit { code: 1, .. }));
         assert!(!trace.ops.contains(&"exec  echo unreachable".to_string()));
+    }
+
+    #[test]
+    fn fail_ops_injects_into_all_fs_ops() {
+        // cd/write/install 以外の fs 操作も対称的に失敗注入できる
+        let mut trace = Trace::new();
+        for op in ["mkdir_p", "copy_into", "remove_dir", "symlink"] {
+            trace.fail_ops.insert(op);
+        }
+        assert!(trace.mkdir_p("/d").is_err());
+        assert!(trace.copy_into("/a", "/b").is_err());
+        assert!(trace.remove_dir("/d").is_err());
+        assert!(trace.symlink("t", "/l", true).is_err());
+        // 失敗注入は実行結果のみを変え、ops には操作が記録される
+        for op in ["mkdir -p /d", "cp -a /a/. /b/", "rm -rf /d", "ln -sf t /l"] {
+            assert!(trace.ops.iter().any(|line| line == op), "{op}");
+        }
+    }
+
+    #[test]
+    fn mkdir_failure_aborts_recipe() {
+        // Workdir::Build の mkdir -p 失敗でレシピが中断する
+        let recipe = Recipe::Steps(Steps {
+            env: Env::None,
+            std: Std::Gnu17,
+            sysroot: false,
+            workdir: Workdir::Build,
+            pgo: None,
+            steps: vec![Step::Exec {
+                env: Vec::new(),
+                pipe: pipe(&["echo", "unreachable"]),
+            }],
+        });
+        let mut trace = Trace::new().with_var("BUILD", "/build");
+        trace.fail_ops.insert("mkdir_p");
+        let err = run(&recipe, &ctx(), &mut trace).unwrap_err();
+        assert!(matches!(err, Error::Exit { code: 1, .. }));
+        assert!(!trace.ops.iter().any(|op| op.contains("unreachable")));
     }
 }

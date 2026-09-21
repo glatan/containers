@@ -42,6 +42,9 @@ impl Package for X8664LinuxGnuGccStage2 {
     fn supports(&self, target: Target) -> bool {
         target == Target::BUILD_ENV
     }
+    fn host_tools(&self, _target: Target) -> Vec<&'static str> {
+        gcc::RUNTIME_LIBS.iter().map(|dep| dep.name).collect()
+    }
     fn gnu_triple(&self) -> Option<&'static str> {
         Some(TRIPLE)
     }

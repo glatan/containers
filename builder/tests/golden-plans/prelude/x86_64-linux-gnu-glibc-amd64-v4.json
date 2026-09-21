@@ -440,6 +440,110 @@
           }
         },
         {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "ln"
+                  },
+                  {
+                    "Lit": "-sfn"
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "/dep/"
+                      },
+                      {
+                        "Var": "TRIPLE"
+                      },
+                      {
+                        "Lit": "-binutils/usr/bin/"
+                      },
+                      {
+                        "Var": "TRIPLE"
+                      },
+                      {
+                        "Lit": "-as"
+                      }
+                    ]
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "/usr/bin/"
+                      },
+                      {
+                        "Var": "TRIPLE"
+                      },
+                      {
+                        "Lit": "-as"
+                      }
+                    ]
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "ln"
+                  },
+                  {
+                    "Lit": "-sfn"
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "/dep/"
+                      },
+                      {
+                        "Var": "TRIPLE"
+                      },
+                      {
+                        "Lit": "-binutils/usr/bin/"
+                      },
+                      {
+                        "Var": "TRIPLE"
+                      },
+                      {
+                        "Lit": "-ld"
+                      }
+                    ]
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "/usr/bin/"
+                      },
+                      {
+                        "Var": "TRIPLE"
+                      },
+                      {
+                        "Lit": "-ld"
+                      }
+                    ]
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
           "Cd": {
             "Var": "BUILD"
           }

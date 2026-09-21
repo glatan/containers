@@ -154,6 +154,11 @@ impl Steps {
         self.steps.push(step);
         self
     }
+
+    pub fn steps(mut self, steps: Vec<Step>) -> Self {
+        self.steps.extend(steps);
+        self
+    }
 }
 
 /// env プリリュード。

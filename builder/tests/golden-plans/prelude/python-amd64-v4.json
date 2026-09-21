@@ -584,6 +584,29 @@
                                 }
                               }
                             }
+                          },
+                          {
+                            "Export": {
+                              "name": "LD_LIBRARY_PATH",
+                              "value": {
+                                "Quoted": {
+                                  "Concat": [
+                                    {
+                                      "Lit": "/dep/"
+                                    },
+                                    {
+                                      "Var": "_dep"
+                                    },
+                                    {
+                                      "Lit": "/usr/lib"
+                                    },
+                                    {
+                                      "Lit": "${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+                                    }
+                                  ]
+                                }
+                              }
+                            }
                           }
                         ]
                       }
@@ -635,6 +658,29 @@
                           }
                         }
                       }
+                    },
+                    {
+                      "Export": {
+                        "name": "LD_LIBRARY_PATH",
+                        "value": {
+                          "Quoted": {
+                            "Concat": [
+                              {
+                                "Lit": "/dep/"
+                              },
+                              {
+                                "Var": "_dep"
+                              },
+                              {
+                                "Lit": "/usr/lib64"
+                              },
+                              {
+                                "Lit": "${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+                              }
+                            ]
+                          }
+                        }
+                      }
                     }
                   ]
                 }
@@ -677,6 +723,23 @@
           }
         },
         {
+          "Export": {
+            "name": "CFLAGS",
+            "value": {
+              "Quoted": {
+                "Concat": [
+                  {
+                    "Var": "CFLAGS"
+                  },
+                  {
+                    "Lit": " -DOPENSSL_NO_SSL3 -DOPENSSL_NO_SSL3_METHOD -DOPENSSL_NO_TLS1_METHOD -DOPENSSL_NO_TLS1_1_METHOD -DOPENSSL_NO_TLS1_2_METHOD"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
           "Configure": [
             "--prefix=/usr",
             "--enable-shared",
@@ -704,7 +767,7 @@
         }
       ],
       "sysroot": true,
-      "workdir": "Build"
+      "workdir": "InSource"
     }
   }
 }

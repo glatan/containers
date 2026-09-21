@@ -556,7 +556,7 @@
                                   "Var": "_sysroot"
                                 },
                                 {
-                                  "Lit": "/lib "
+                                  "Lit": "/lib /dep/libxcrypt/usr/lib /dep/libxcrypt/usr/lib64 "
                                 },
                                 {
                                   "Var": "_sysroot"
