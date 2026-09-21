@@ -119,6 +119,40 @@ LTO や PGO の適用方針はパッケージの種別ごとに異なります�
 - レイヤーのハッシュ計算はストリーミング方式で行い、アーカイブ全体をメモリ上に展開しません。
 - SPDX SBOM は Layout ディレクトリ内の `sbom.spdx.json` に配置します。OCI Image Specification ではレイアウト内の未知の追加ファイルを許容しているため、この配置は仕様に適合します。なお、referrers による attestation としての公開は現時点では未実装です。
 
+## コンテナ内ステージングの規約
+
+- 生成オーバーレイ（la-overlay / pc-overlay / 各種ラッパ）はホスト側で
+  packages/build/{target}/.gen/{pkg}/ に生成し、コンテナの /tmp 配下へ
+  read-only でマウントします。ビルドツリー（/build マウント）配下には
+  置きません。openssl の make clean のように配下のシンボリックリンクを
+  全削除する手順があるためです。
+- dep 成果物の .la ファイルのうち、cc1/lto1 が実行時リンクする
+  ライブラリ（gmp / mpfr / mpc / isl）は la-overlay に staging しません。
+  installed=no の dep .la が dependency_libs に入ると libtool が
+  install 時に relink し、relink 出力と同名の .so を lto1 が読み込み
+  中に truncate されて衝突するためです。.so / .a のシンボリックリンクは
+  残るため -l による解決は維持されます。
+- dep glibc の libc.so リンカスクリプトは /lib/libc.so.6 等の絶対パスを
+  参照するため、コンテナ内で /lib を glibc のライブラリディレクトリへの
+  シンボリックリンクとして生成します（ターゲット glibc を優先し、
+  Canadian cross ではホスト glibc にフォールバック）。
+- ld はリンカスクリプトの実パスが sysroot 配下にある場合のみ、
+  スクリプト内の絶対パスへ sysroot を適用します。このため shadow
+  sysroot の lib ディレクトリは /dep への symlink ではなく実コピーです。
+
+## マルチターゲット検証の状況
+
+2026-09-21 時点で次のカタログビルドを完走しています。
+
+- amd64 / v4（BUILD_ENV ベースライン）
+- amd64 / v1（x86-64 baseline への回帰。Canadian gcc を含む）
+- arm64 / v8（カタログ 40 件 + toolchain）
+- riscv64 / rva20u64（同規模）
+
+check --all による動的依存検証は全件グリーンです。ppc64le / s390x は
+bootstrap 全体の検証として別途整理するため本範囲外です。生成バイナリを
+実行できないクロスビルドでは PGO を適用しません。
+
 ## 現状の制約事項
 
 - 対象とする architecture / variant の一覧は [platforms.md](../image/platforms.md) および `targets` コマンドを参照してください。シード環境ではクロス gcc が提供されていないため、`--all-targets` 指定時は ppc64le および s390x をスキップします。合成済み `build-env` が利用可能な状態ではスキップせずにビルドを実行します。

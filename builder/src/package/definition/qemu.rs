@@ -68,6 +68,12 @@ impl Package for Qemu {
     fn supports(&self, target: Target) -> bool {
         target == Target::BUILD_ENV
     }
+    fn host_tools(&self, _target: Target) -> Vec<&'static str> {
+        // configure は meson を内部起動し、python3 / pkg-config /
+        // ninja を要求する。イメージには python3 が無いため
+        // HOST 成果物をマウントする。
+        vec!["python", "meson", "ninja", "pkgconf"]
+    }
     /// meson の sizeof 検査はリンクもする。--sysroot は HOST glibc に
     /// /usr/include が無く sizeof(void*)=-1 になり、64-bit linux-user の
     /// TCG が全部落ちるため CFLAGS 系から strip する。
@@ -92,7 +98,9 @@ impl Package for Qemu {
         Recipe::Steps(
             Steps::new(Env::None)
                 .sysroot(false)
-                .workdir(Workdir::Build)
+                // pythondeps.toml を sed するためソースを /build へコピーする
+                //（/src は read-only マウント）。
+                .workdir(Workdir::InSource)
                 .step(strip_export("CFLAGS"))
                 .step(strip_export("CXXFLAGS"))
                 .step(strip_export("LDFLAGS"))
@@ -188,10 +196,23 @@ impl Package for Qemu {
                     }],
                     else_: vec![],
                 })
+                // tooling グループの path install（qemu）と setuptools /
+                // wheel / pip の解決は PyPI 到達が必要で network=none では
+                // 失敗する。qemu.qmp の bundled wheel のみ残して configure
+                // 時の mkvenv を完走させる。
                 .step(Step::Exec {
                     env: vec![],
                     pipe: Pipe::cmd(argv(&[
-                        "\"$SOURCE\"/configure",
+                        "sed",
+                        "-i",
+                        "'/^\\[tooling\\]/,/^\\[/ { /^\"qemu\" =/d; /^\"setuptools\"/d; /^\"wheel\"/d; /^\"pip\"/d }'",
+                        "pythondeps.toml",
+                    ])),
+                })
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(argv(&[
+                        "./configure",
                         "--prefix=/usr",
                         "--target-list=x86_64-linux-user,aarch64-linux-user,riscv64-linux-user,ppc64le-linux-user,s390x-linux-user",
                         "--enable-tcg",

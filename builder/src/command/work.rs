@@ -62,7 +62,20 @@ pub fn build(
     dry_run: bool,
 ) -> Result<()> {
     let (targets, all_targets) = super::resolve_targets(targets)?;
-    let roots = super::selected(selection, || package::PACKAGES.to_vec())?;
+    let roots = super::selected(selection, || {
+        package::PACKAGES
+            .iter()
+            .copied()
+            .filter(|package| !matches!(package.role(), Role::BuildEnv))
+            .collect()
+    })?;
+    for root in &roots {
+        if matches!(root.role(), Role::BuildEnv) {
+            return Err(Error::message(
+                "build-env は env compose で合成してください",
+            ));
+        }
+    }
     let options = package::BuildOptions {
         force,
         keep_going,

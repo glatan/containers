@@ -1,5 +1,6 @@
 set -euxo pipefail
 mkdir -p "$BUILD"
+cp -a "$SOURCE"/. "$BUILD"/
 cd "$BUILD"
 export CFLAGS="$(printf '%s' "${CFLAGS:-}" | sed -E 's/--sysroot=[^ ]+//g') -flto=auto"
 export CXXFLAGS="$(printf '%s' "${CXXFLAGS:-}" | sed -E 's/--sysroot=[^ ]+//g') -flto=auto"
@@ -27,7 +28,8 @@ fi
 if [ -d /dep/glib ]; then
   export PKG_CONFIG_SYSROOT_DIR=/dep/glib
 fi
-"$SOURCE"/configure --prefix=/usr --target-list=x86_64-linux-user,aarch64-linux-user,riscv64-linux-user,ppc64le-linux-user,s390x-linux-user --enable-tcg --disable-system --disable-tools --disable-docs --disable-guest-agent --disable-slirp --disable-vnc --disable-sdl --disable-gtk --disable-curses --disable-brlapi --disable-spice --disable-libnfs --disable-libusb --disable-vde --disable-nettle --disable-gnutls --disable-gcrypt --disable-auth-pam
+sed -i '/^\[tooling\]/,/^\[/ { /^"qemu" =/d; /^"setuptools"/d; /^"wheel"/d; /^"pip"/d }' pythondeps.toml
+./configure --prefix=/usr --target-list=x86_64-linux-user,aarch64-linux-user,riscv64-linux-user,ppc64le-linux-user,s390x-linux-user --enable-tcg --disable-system --disable-tools --disable-docs --disable-guest-agent --disable-slirp --disable-vnc --disable-sdl --disable-gtk --disable-curses --disable-brlapi --disable-spice --disable-libnfs --disable-libusb --disable-vde --disable-nettle --disable-gnutls --disable-gcrypt --disable-auth-pam
 make -j"$(nproc)"
 make install DESTDIR="$OUT"
 if command -v qemu-s390x >/dev/null; then
