@@ -52,10 +52,13 @@ impl Package for X8664LinuxGnuGcc {
     fn gnu_triple(&self) -> Option<&'static str> {
         Some(TRIPLE)
     }
-}
-
-impl Bootstrap for X8664LinuxGnuGcc {
+    /// `Bootstrap` を実装（bootstrap パッケージ）。
+    fn as_bootstrap(&self) -> Option<&dyn Bootstrap> {
+        Some(self)
+    }
     fn pacman(&self) -> &'static [&'static str] {
         gcc::PACMAN
     }
 }
+
+impl Bootstrap for X8664LinuxGnuGcc {}

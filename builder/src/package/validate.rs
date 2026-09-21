@@ -286,7 +286,6 @@ mod tests {
         name: &'static str,
         dependencies: &'static [Dependency],
         build_dependencies: &'static [Dependency],
-        role: crate::package::Role,
         gnu_triple: Option<&'static str>,
         target_artifact: bool,
         build_only: bool,
@@ -325,9 +324,6 @@ mod tests {
         fn flags(&self, _target: crate::target::Target) -> crate::flags::Flag {
             crate::flags::Flag::new(vec![], vec![])
         }
-        fn role(&self) -> crate::package::Role {
-            self.role
-        }
         fn gnu_triple(&self) -> Option<&'static str> {
             self.gnu_triple
         }
@@ -364,7 +360,7 @@ mod tests {
                 name: "linux-headers",
                 version: "1.0",
             }],
-            role: crate::package::Role::Package,
+
             gnu_triple: Some("x86_64-linux-gnu"),
             target_artifact: true,
             build_only: false,
@@ -388,7 +384,7 @@ mod tests {
             name: "x86_64-linux-gnu-glibc",
             dependencies: &[],
             build_dependencies: &[],
-            role: crate::package::Role::Package,
+
             gnu_triple: Some("x86_64-linux-gnu"),
             target_artifact: true,
             build_only: false,
@@ -412,7 +408,7 @@ mod tests {
                 name: "linux-headers",
                 version: "1.0",
             }],
-            role: crate::package::Role::Package,
+
             gnu_triple: None,
             target_artifact: false,
             build_only: false,
@@ -436,7 +432,7 @@ mod tests {
                 name: "linux-headers",
                 version: "1.0",
             }],
-            role: crate::package::Role::Package,
+
             gnu_triple: None,
             target_artifact: false,
             build_only: false,
@@ -456,7 +452,7 @@ mod tests {
                 version: "1.0",
             }],
             build_dependencies: &[],
-            role: crate::package::Role::Package,
+
             gnu_triple: None,
             target_artifact: false,
             build_only: false,
@@ -479,7 +475,7 @@ mod tests {
                 version: "1.0",
             }],
             build_dependencies: &[],
-            role: crate::package::Role::Package,
+
             gnu_triple: None,
             target_artifact: false,
             build_only: false,

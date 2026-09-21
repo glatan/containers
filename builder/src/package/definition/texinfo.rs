@@ -17,6 +17,10 @@ impl Package for Texinfo {
     fn host_tools(&self, _target: Target) -> Vec<&'static str> {
         vec!["perl"]
     }
+    /// HOST 側で実行されるツール。依存として常に BUILD_ENV 成果物を使う。
+    fn runs_on_host(&self) -> bool {
+        true
+    }
 
     fn source(&self) -> Source {
         Source {

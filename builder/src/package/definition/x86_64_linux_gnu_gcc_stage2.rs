@@ -48,9 +48,10 @@ impl Package for X8664LinuxGnuGccStage2 {
     fn gnu_triple(&self) -> Option<&'static str> {
         Some(TRIPLE)
     }
-}
-
-impl Bootstrap for X8664LinuxGnuGccStage2 {
+    /// `Bootstrap` を実装（bootstrap パッケージ）。
+    fn as_bootstrap(&self) -> Option<&dyn Bootstrap> {
+        Some(self)
+    }
     fn pacman(&self) -> &'static [&'static str] {
         if self.seed() {
             gcc::PACMAN_STAGE_SEED
@@ -58,6 +59,9 @@ impl Bootstrap for X8664LinuxGnuGccStage2 {
             gcc::PACMAN_STAGE
         }
     }
+}
+
+impl Bootstrap for X8664LinuxGnuGccStage2 {
     /// シード（Arch base-devel）相の中間ステージ。
     fn seed(&self) -> bool {
         true

@@ -19,7 +19,7 @@ pub fn ls(images: bool) -> Result<()> {
             "{}\t{}\t{}\t{}\t{}",
             defined.name(),
             defined.version(),
-            describe_role(defined.role()),
+            describe_role(defined),
             if runtime.is_empty() {
                 "なし"
             } else {
@@ -45,7 +45,7 @@ pub fn info(name: &str, target: Target) -> Result<()> {
             artifact.variant()
         );
     }
-    println!("ロール: {}", describe_role(defined.role()));
+    println!("ロール: {}", describe_role(defined));
     println!("ソース: {}", defined.source().url);
     println!("sha3-512: {}", defined.source().sha3_512);
     println!("blake3: {}", defined.source().blake3);
@@ -158,7 +158,7 @@ fn print_tree(
                 dep_target.variant()
             ));
         }
-        if package::find_bootstrap(dependency.name).is_some() {
+        if found.as_bootstrap().is_some() {
             tags.push("bootstrap".to_string());
         }
         let tags = if tags.is_empty() {
@@ -239,7 +239,7 @@ fn print_reverse(
                 depender_target.variant()
             ));
         }
-        if package::find_bootstrap(depender.name()).is_some() {
+        if depender.as_bootstrap().is_some() {
             tags.push("bootstrap".to_string());
         }
         let tags = if tags.is_empty() {
@@ -303,12 +303,13 @@ fn list_deps(dependencies: &[Dependency]) -> String {
         .join(", ")
 }
 
-fn describe_role(role: package::Role) -> String {
-    match role {
-        package::Role::Catalog => "catalog".to_owned(),
-        package::Role::Package => "package".to_owned(),
-        package::Role::LinuxHeaders => "linux-headers".to_owned(),
-        package::Role::BuildEnv => "build-env".to_owned(),
+fn describe_role(defined: &dyn package::Package) -> String {
+    if defined.compose_root() {
+        "build-env".to_owned()
+    } else if defined.catalog() {
+        "catalog".to_owned()
+    } else {
+        "package".to_owned()
     }
 }
 

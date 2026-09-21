@@ -1,6 +1,6 @@
 use crate::error::{Error, Result};
 use crate::image;
-use crate::package::{self, Package, Role};
+use crate::package::{self, Package};
 use crate::target::Target;
 use crate::workspace;
 use std::collections::BTreeMap;
@@ -66,11 +66,11 @@ pub fn build(
         package::PACKAGES
             .iter()
             .copied()
-            .filter(|package| !matches!(package.role(), Role::BuildEnv))
+            .filter(|package| !package.compose_root())
             .collect()
     })?;
     for root in &roots {
-        if matches!(root.role(), Role::BuildEnv) {
+        if root.compose_root() {
             return Err(Error::message(
                 "build-env は env compose で合成してください",
             ));
@@ -137,7 +137,7 @@ pub fn pack(
         None => package::PACKAGES
             .iter()
             .copied()
-            .filter(|package| !package.build_only() && !matches!(package.role(), Role::BuildEnv))
+            .filter(|package| !package.build_only() && !package.compose_root())
             .collect(),
     };
     if packages.is_empty() {
@@ -167,7 +167,7 @@ pub fn pack(
 }
 
 fn packable(defined: &'static dyn Package) -> Result<&'static dyn Package> {
-    if matches!(defined.role(), Role::BuildEnv) {
+    if defined.compose_root() {
         return Err(Error::message(
             "build-env は env compose で合成してください",
         ));

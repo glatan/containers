@@ -17,7 +17,7 @@
 | `command/` | サブコマンドの実行ロジック（`mod` = 引数解析と選択、`query` = 照会、`work` = 作業、`env` = ビルド環境） |
 | `error.rs` / `process.rs` | 型付きエラー定義と外部コマンドプロセスの実行制御 |
 | `package/mod.rs` | `Package` および `Bootstrap` トレイトと共通データ構造の定義 |
-| `package/definition/` | 個別パッケージの定義実装、`PACKAGES`、および `BOOTSTRAP` の登録一覧 |
+| `package/definition/` | 個別パッケージの定義実装と `PACKAGES` 登録一覧 |
 | `package/{fetch,build}.rs` | ソースコードの取得・検証とパッケージのコンパイル制御（シード環境および自前環境） |
 | `package/build/container.rs` | ビルドのファイルロック、成果物の atomic publish、コンテナ起動引数と plan の組み立て |
 | `package/recipe.rs` | 型付きビルド手順（`Recipe` / `Step`）から実行 plan へのコンパイルと bash 描画 |
@@ -69,7 +69,7 @@ OCI 仕様準拠のテスト群は `tests/oci_spec.rs`、CLI 仕様のテスト�
 ```
 fetch            ソース取得 + SHA3-512 / BLAKE3 検証 + 展開（--deps で依存閉包）
     ↓                 packages/sources/{package}/
-env bootstrap    BOOTSTRAP 閉包を HOST 上で一度歩き、失敗しても後続を続ける
+env bootstrap    build-env の依存閉包を HOST 上で一度歩き、失敗しても後続を続ける
     ↓                 packages/artifacts/ および packages/logs/bootstrap.log
 build            依存関係をトポロジカル順に取得・ビルドしたのち、podman 上でビルドスクリプトを実行
     ↓                 packages/artifacts/{package}-{version}-{arch}-{variant}/
@@ -84,7 +84,7 @@ ls / info / tree / targets / env plan  照会系（tree --reverse は逆依存�
 ```
 
 ビルドスクリプトへ渡す環境変数と `/dep` へのマウントは [package/README.md](../package/README.md) です。
-`build` は依存パッケージを先にビルドします。ルートが `BOOTSTRAP` に載っている場合、合成済みビルド環境の有無にかかわらずグラフには `Bootstrap` の依存を使います。`own`（合成済みイメージの使用、`pacman` 前置きの有無、ネットワーク遮断）だけを `build_env_ready()` で決めます。成果物ディレクトリが既に存在し空でない場合はそのターゲットのコンパイルをスキップし、ビルド途中で失敗した成果物は不整合を防ぐため自動的に削除します。`podman` の出力は `packages/logs/` の個別ファイルへ tee し、失敗してもログは残します。
+`build` は依存パッケージを先にビルドします。ルートが `Bootstrap` を実装している場合、合成済みビルド環境の有無にかかわらずグラフには `Bootstrap` の依存を使います。`own`（合成済みイメージの使用、`pacman` 前置きの有無、ネットワーク遮断）だけを `build_env_ready()` で決めます。成果物ディレクトリが既に存在し空でない場合はそのターゲットのコンパイルをスキップし、ビルド途中で失敗した成果物は不整合を防ぐため自動的に削除します。`podman` の出力は `packages/logs/` の個別ファイルへ tee し、失敗してもログは残します。
 
 コンテナ内で plan を解釈する runner は、ビルドツール自身を `/tmp/runner` にマウントして起動します。マウントするバイナリは `CONTAINERS_BUILDER_RUNNER` 環境変数の明示指定を最優先とし、次に cargo 規約パス `target/x86_64-unknown-linux-musl/<profile>/containers-builder` の musl 静的ビルドを探し、見つからなければ実行中のバイナリを使います。musl 静的ビルドはコンテナ側 libc に依存しないため推奨であり、`rustup target add x86_64-unknown-linux-musl` ののち `cargo build --target x86_64-unknown-linux-musl` で生成します。フォールバック時は、コンテナ側 glibc がホストより古いと runner が起動しない旨の警告を一度だけ出力します。実際にマウントした runner のパスは個別ログの `runner:` 行に記録します。
 
@@ -92,10 +92,10 @@ runner の意味論は bash 描画スクリプトと揃えています。`$(cmd)
 LTO や PGO の適用方針はパッケージの種別ごとに異なります。個別の指定内容は [各パッケージのビルド設定](../package/definition/) を参照してください。
 
 ビルド専用のパッケージ定義（`build_only`）は、中間成果物としてのみ扱い、パッケージイメージ化は行いません。これらは他のパッケージの `build-dependencies` にのみ現れます。
-`BOOTSTRAP` 一覧に登録されたパッケージは、シード環境（Arch Linux イメージ）上で直接ビルドできます。`Package` トレイトには `bootstrap()` メソッドを設けず、`Bootstrap` トレイトによりブートストラップ処理を分離して実装します。
-自前で合成したビルド環境イメージ上では `--network=none` を指定して完全に隔離された状態でビルドします。一方、シード環境では `Bootstrap::pacman()` によるパッケージ導入や、カタログのクロス gcc 導入のためにネットワークアクセスを許可します。
+`Bootstrap` トレイトを実装したパッケージは、シード環境（Arch Linux イメージ）上で直接ビルドできます。判定は `Package::as_bootstrap()` で行い、登録一覧は持ちません。`env bootstrap` の対象は `build-env` の依存閉包から導出します。
+自前で合成したビルド環境イメージ上では `--network=none` を指定して完全に隔離された状態でビルドします。一方、シード環境では `Package::pacman()` によるパッケージ導入や、カタログのクロス gcc 導入のためにネットワークアクセスを許可します。
 
-新規パッケージを定義する場合は、`builder/src/package/definition/{name}.rs` に `Package` トレイトを実装し、`builder/src/package/definition/mod.rs` の一覧へ登録します。`BOOTSTRAP` に載せるのは x86_64 ツールチェーンと POSIX PATH、cmake、mold です。他の Host tools は配列に無く、依存グラフ経由で入ります。プレフィックス付きツールチェーンは配列の外でも Bootstrap グラフを使います。`flags(target)` メソッドの実装は必須であり、フラグを要求しない場合は空の `Flag` を返します。
+新規パッケージを定義する場合は、`builder/src/package/definition/{name}.rs` に `Package` トレイトを実装し、`builder/src/package/definition/mod.rs` の一覧へ登録します。`Bootstrap` を実装するのは x86_64 ツールチェーン、POSIX PATH、cmake、mold、linux-headers です。他の Host tools は `env bootstrap` の対象に依存グラフ経由で入ります。`flags(target)` メソッドの実装は必須であり、フラグを要求しない場合は空の `Flag` を返します。
 文書としては、[`docs/package/definition/{name}.md`](../package/definition/) にビルド設定を記述します。1 パッケージ 1 ファイルです。索引は [definition/README.md](../package/definition/README.md) です。Host tools の共通前処理については [host-tools.md](../package/host-tools.md)、プレフィックス付きツールチェーンのステージ順については [toolchain.md](../package/toolchain.md) を参照してください。モジュール名の `linux_headers.rs` はパッケージ名 `linux-headers` に対応します。プレフィックス付きパッケージも 1 パッケージ 1 ファイルで、`x86_64_linux_gnu_binutils.rs` が `x86_64-linux-gnu-binutils` に対応します。ステージ共通の実装（レシピ・依存表・バージョン）は `definition/` 直下の `binutils.rs` / `gcc.rs` / `gcc_stage1.rs` / `gcc_stage2.rs` / `glibc.rs` / `glibc_headers.rs`（共有部品は `stages.rs`）に置き、各タプルのリーフは `impl Package` / `impl Bootstrap` で共有実装へ委譲します。
 
 ## クロスビルドの構成

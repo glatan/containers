@@ -13,39 +13,25 @@ pub mod runner;
 pub mod sandbox;
 pub(crate) mod validate;
 
-/// パッケージの役割。`Role::LinuxHeaders` / `Role::BuildEnv`
-/// は依存グラフ解決やコンテナ内環境構築で特別扱いされる。
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Role {
-    /// 公開対象のカタログパッケージ。
-    Catalog,
-    /// 通常パッケージ（ホストツール・ライブラリ）。
-    Package,
-    LinuxHeaders,
-    BuildEnv,
-}
-
+/// `Bootstrap` を実装したパッケージは bootstrap パッケージであり、
+/// シード（Arch base-devel）イメージ上でもビルドできる。
+/// 判定は `Package::as_bootstrap()` で行い、パッケージ名の別リストは持たない。
 pub trait Bootstrap: Package {
-    /// シード（Arch base-devel）上で pacman -Sy する追加パッケージ。
-    fn pacman(&self) -> &'static [&'static str] {
-        &[]
-    }
     /// シード（Arch）上のコンパイラでビルドする中間ステージ。
     /// `false` のパッケージは自前の gcc / glibc を使い、予定 Platform 向けにビルドする。
     fn seed(&self) -> bool {
         false
     }
     /// 依存グラフの上書き。`Some` を返すと `Package` の依存宣言は
-    /// 全ターゲットでこのペアに置き換わる（`find_bootstrap` 登録
-    /// パッケージのみ有効）。`{triple}-binutils` が glibc との循環を
-    /// 避けて実行時依存を空にするために使う。
+    /// 全ターゲットでこのペアに置き換わる。`{triple}-binutils` が
+    /// glibc との循環を避けて実行時依存を空にするために使う。
     fn seed_dependencies(&self, _target: Target) -> Option<(Vec<Dependency>, Vec<Dependency>)> {
         None
     }
 }
 
 pub use build::{BuildOptions, build_bootstrap, build_package, build_packages};
-pub use definition::{BOOTSTRAP, PACKAGES, all, find, find_bootstrap, images};
+pub use definition::{PACKAGES, all, find, images};
 pub use fetch::fetch_package;
 pub use recipe::{BuildContext, Recipe};
 
@@ -117,9 +103,24 @@ pub trait Package: Sync {
     fn supports(&self, _target: Target) -> bool {
         true
     }
-    /// パッケージの役割。
-    fn role(&self) -> Role {
-        Role::Package
+    /// `Bootstrap` を実装している場合 `Some(self)`。
+    /// bootstrap パッケージの判定はこのメソッドのみで行う。
+    fn as_bootstrap(&self) -> Option<&dyn Bootstrap> {
+        None
+    }
+    /// シード（Arch base-devel）イメージ上でビルドするときに
+    /// pacman -Sy する追加のディストリパッケージ。
+    fn pacman(&self) -> &'static [&'static str] {
+        &[]
+    }
+    /// 公開対象のカタログパッケージ（query の表示分類）。
+    fn catalog(&self) -> bool {
+        false
+    }
+    /// 合成ルートの疑似パッケージ。fetch/build/pack/イメージレイヤの
+    /// 対象外で、依存グラフのエントリポイントとしてのみ使う。
+    fn compose_root(&self) -> bool {
+        false
     }
     /// 依存として使われるとき常に HOST (BUILD_ENV) 側で実行されるか。
     /// `true` なら成果物ターゲットが常に BUILD_ENV になる。

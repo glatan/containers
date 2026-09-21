@@ -56,14 +56,14 @@ fn plan(name: Option<&str>) -> Result<()> {
     let lookup = |name: &str| package::find(name);
     let requested = name.map(package::find).transpose()?;
     let bootstrap_root = match requested {
-        Some(defined) if package::find_bootstrap(defined.name()).is_some() => defined,
+        Some(defined) if defined.as_bootstrap().is_some() => defined,
         _ => package::find(workspace::BUILD_ENV_NAME)?,
     };
     let order =
         package::build::packages_in_graph_order(bootstrap_root, &lookup, Target::BUILD_ENV)?;
     let seed: Vec<_> = order
         .iter()
-        .filter(|(defined, _)| defined.name() != workspace::BUILD_ENV_NAME)
+        .filter(|(defined, _)| !defined.compose_root())
         .collect();
     println!(
         "Phase 1: シード（Arch base-devel）上でビルド ({} 件)",

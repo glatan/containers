@@ -126,7 +126,7 @@ fn visit_runtime<'a>(
     }
     visiting.remove(name);
     visited.insert(name);
-    if !package.build_only() && !matches!(package.role(), crate::package::Role::BuildEnv) {
+    if !package.build_only() && !package.compose_root() {
         order.push(package);
     }
     Ok(())

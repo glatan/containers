@@ -2,7 +2,7 @@ use crate::flags::Flag;
 use crate::package::recipe::{
     Arg, BuildContext, Cond, Env, Pipe, Recipe, Redirect, Step, Steps, Workdir, argv,
 };
-use crate::package::{Dependency, Package, Role, Source};
+use crate::package::{Dependency, Package, Source};
 use crate::target::Target;
 
 pub struct Zlib;
@@ -20,8 +20,8 @@ impl Package for Zlib {
         "Zlib"
     }
 
-    fn role(&self) -> Role {
-        Role::Catalog
+    fn catalog(&self) -> bool {
+        true
     }
 
     fn source(&self) -> Source {

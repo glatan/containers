@@ -6,7 +6,7 @@ use std::io::Write;
 use std::sync::{Arc, Mutex};
 
 use crate::error::{Error, Result};
-use crate::package::{self, Dependency, Package, Role};
+use crate::package::{self, Dependency, Package};
 use crate::target::Target;
 use crate::workspace;
 
@@ -199,23 +199,17 @@ pub fn build_bootstrap(mut report: impl FnMut(String)) -> Result<()> {
     }
 }
 
+/// `env bootstrap` の対象集合。`build-env` 合成ルートの依存グラフを
+/// 走査して導出する（手動リストは持たない）。ルート自身はビルド不可の
+/// 疑似パッケージなので除く。
 fn bootstrap_closure<'a>(
     lookup: &dyn Fn(&str) -> Result<&'a dyn Package>,
     target: Target,
 ) -> Result<Vec<(&'a dyn Package, Target)>> {
-    let mut order = Vec::new();
-    let mut visiting = BTreeSet::new();
-    let mut visited = BTreeSet::new();
-    for root in package::BOOTSTRAP {
-        visit(
-            lookup(root.name())?,
-            lookup,
-            target,
-            &mut visiting,
-            &mut visited,
-            &mut order,
-        )?;
-    }
+    let root = package::find(workspace::BUILD_ENV_NAME)
+        .expect("build-env は PACKAGES に登録済みです");
+    let mut order = packages_in_graph_order(root, lookup, target)?;
+    order.retain(|(defined, _)| !defined.compose_root());
     Ok(order)
 }
 
@@ -368,15 +362,16 @@ pub(crate) fn fetch_closure(roots: &[&'static dyn Package]) -> Result<Vec<&'stat
 }
 
 /// 実行時依存とビルド依存のペアを返す。
-/// `find_bootstrap` 登録パッケージは
-/// `Bootstrap::seed_dependencies` でグラフを無条件に上書きできる
+/// `Bootstrap` 実装パッケージは `Bootstrap::seed_dependencies` で
+/// グラフを無条件に上書きできる
 /// （binutils が glibc との循環を避けて実行時依存を空にする用途）。
 pub(crate) fn graph_deps(
     package: &dyn Package,
     target: Target,
 ) -> (Vec<Dependency>, Vec<Dependency>) {
-    if let Some(bootstrap) = package::find_bootstrap(package.name())
-        && let Some(deps) = bootstrap.seed_dependencies(target)
+    if let Some(deps) = package
+        .as_bootstrap()
+        .and_then(|bootstrap| bootstrap.seed_dependencies(target))
     {
         return deps;
     }
@@ -387,9 +382,6 @@ pub(crate) fn graph_deps(
 }
 
 pub(crate) fn artifact_target(package: &dyn Package, depender: Target) -> Target {
-    if matches!(package.role(), Role::LinuxHeaders) {
-        return Target::BUILD_ENV;
-    }
     if package.runs_on_host() && package.supports(Target::BUILD_ENV) {
         return Target::BUILD_ENV;
     }
@@ -433,12 +425,9 @@ fn visit<'a>(
     visited: &mut BTreeSet<(&'static str, Target)>,
     order: &mut Vec<(&'a dyn Package, Target)>,
 ) -> Result<()> {
+    // ノードのターゲットは呼出側が supports でゲート済み。
+    // 依存は artifact_target 経由で BUILD_ENV 等へ正規化される。
     let name = package.name();
-    let target = if matches!(package.role(), Role::LinuxHeaders) {
-        Target::BUILD_ENV
-    } else {
-        target
-    };
     let key = (name, target);
     if visited.contains(&key) {
         return Ok(());
@@ -630,7 +619,7 @@ mod tests {
         resolve_runner, stage_generated, wrap_script,
     };
     use super::*;
-    use crate::package::{Dependency, Role, Source};
+    use crate::package::{Dependency, Source};
     use crate::target::{Amd64Variant, Arm64Variant, Target};
     use std::path::{Path, PathBuf};
 
@@ -643,7 +632,6 @@ mod tests {
         build_dependencies: &'static [Dependency],
         source_dir: PathBuf,
         artifacts: PathBuf,
-        role: Role,
     }
 
     impl Package for Fake {
@@ -655,9 +643,6 @@ mod tests {
         }
         fn license(&self) -> &'static str {
             "MIT"
-        }
-        fn role(&self) -> Role {
-            self.role
         }
         fn source(&self) -> Source {
             Source {
@@ -710,7 +695,6 @@ mod tests {
             build_dependencies,
             source_dir,
             artifacts,
-            role: Role::Package,
         }
     }
 
@@ -737,8 +721,7 @@ mod tests {
     #[test]
     fn build_order_puts_dependencies_first() {
         let (_keep, source, artifacts) = empty_dirs();
-        let mut headers = fake("linux-headers", &[], &[], source.clone(), artifacts.clone());
-        headers.role = Role::LinuxHeaders;
+        let headers = fake("linux-headers", &[], &[], source.clone(), artifacts.clone());
         let glibc = fake(
             "glibc",
             &[],
@@ -825,8 +808,7 @@ mod tests {
     #[test]
     fn build_order_rejects_version_mismatch() {
         let (_keep, source, artifacts) = empty_dirs();
-        let mut headers = fake("linux-headers", &[], &[], source.clone(), artifacts.clone());
-        headers.role = Role::LinuxHeaders;
+        let headers = fake("linux-headers", &[], &[], source.clone(), artifacts.clone());
         let glibc = fake(
             "glibc",
             &[],
@@ -1593,7 +1575,7 @@ dependency_libs=' -L/usr/lib /dep/mpfr/usr/lib/libmpfr.la'
     #[test]
     fn graph_deps_binutils_override_applies_unconditionally() {
         // `seed_dependencies` は名前に反して seed 相限定ではなく、
-        // `find_bootstrap` 登録パッケージの全ターゲットでグラフを
+        // `Bootstrap` 実装パッケージの全ターゲットでグラフを
         // 上書きする（旧 Prefixed と同じ契約）。aarch64 のような
         // non-seed タプルでも実行時依存は空になる。
         let binutils = crate::package::find("aarch64-linux-gnu-binutils").unwrap();

@@ -20,7 +20,7 @@
 
 ## 依存
 
-実行時はパッケージ Platform の `{triple}-glibc` に加え、libffi、zlib、openssl、expat、sqlite、ncurses、readline、xz、bzip2、zstd です。ビルド専用は linux-headers です。対象 Platform と共通前処理は [host-tools.md](../host-tools.md) です。python は `BOOTSTRAP` 配列に載せず、`build-env` 合成後に自前環境で組みます。openssl などの実行時依存は python のグラフが引きます。他パッケージがビルド時に実行する python は HOST 成果物をマウントします。
+実行時はパッケージ Platform の `{triple}-glibc` に加え、libffi、zlib、openssl、expat、sqlite、ncurses、readline、xz、bzip2、zstd です。ビルド専用は linux-headers です。対象 Platform と共通前処理は [host-tools.md](../host-tools.md) です。python は `Bootstrap` を実装せず、`build-env` 合成後に自前環境で組みます。openssl などの実行時依存は python のグラフが引きます。他パッケージがビルド時に実行する python は HOST 成果物をマウントします。
 
 ## ビルド設定
 

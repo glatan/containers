@@ -1,6 +1,6 @@
 use crate::flags::Flag;
 use crate::package::recipe::{Arg, BuildContext, Env, Pipe, Recipe, Step, Steps, Workdir};
-use crate::package::{Dependency, Package, Role, Source};
+use crate::package::{Bootstrap, Dependency, Package, Source};
 use crate::target::Target;
 
 pub struct LinuxHeaders;
@@ -22,8 +22,25 @@ impl Package for LinuxHeaders {
         true
     }
 
-    fn role(&self) -> Role {
-        Role::LinuxHeaders
+    /// 全アーキテクチャの UAPI ヘッダを内包する単一成果物のため
+    /// BUILD_ENV（ホスト）でのみビルドする。
+    fn supports(&self, target: Target) -> bool {
+        target == Target::BUILD_ENV
+    }
+
+    /// 成果物は常に BUILD_ENV スコープ。
+    fn runs_on_host(&self) -> bool {
+        true
+    }
+
+    /// コンパイルを伴わないため cc ラッパを注入しない。
+    fn uses_cc_wrapper(&self) -> bool {
+        false
+    }
+
+    /// `Bootstrap` を実装（bootstrap パッケージ）。
+    fn as_bootstrap(&self) -> Option<&dyn Bootstrap> {
+        Some(self)
     }
 
     fn source(&self) -> Source {
@@ -114,5 +131,13 @@ impl Package for LinuxHeaders {
                     ]),
                 }),
         )
+    }
+}
+
+impl Bootstrap for LinuxHeaders {
+    /// シード（Arch base-devel）相の中間ステージ。toolchain 成果物が
+    /// まだ存在しないため、シードの無印コンパイラでビルドする。
+    fn seed(&self) -> bool {
+        true
     }
 }

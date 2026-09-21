@@ -51,10 +51,13 @@ impl Package for Powerpc64leLinuxGnuGlibc {
     fn gnu_triple(&self) -> Option<&'static str> {
         Some(TRIPLE)
     }
-}
-
-impl Bootstrap for Powerpc64leLinuxGnuGlibc {
+    /// `Bootstrap` を実装（bootstrap パッケージ）。
+    fn as_bootstrap(&self) -> Option<&dyn Bootstrap> {
+        Some(self)
+    }
     fn pacman(&self) -> &'static [&'static str] {
         glibc::PACMAN
     }
 }
+
+impl Bootstrap for Powerpc64leLinuxGnuGlibc {}

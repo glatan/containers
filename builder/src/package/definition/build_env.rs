@@ -1,6 +1,6 @@
 use crate::flags::Flag;
 use crate::package::recipe::{BuildContext, Recipe};
-use crate::package::{Dependency, Package, Role, Source};
+use crate::package::{Dependency, Package, Source};
 use crate::target::Target;
 
 const fn dep(name: &'static str, version: &'static str) -> Dependency {
@@ -19,8 +19,9 @@ impl Package for BuildEnv {
     fn license(&self) -> &'static str {
         "CC0-1.0"
     }
-    fn role(&self) -> Role {
-        Role::BuildEnv
+    /// 依存グラフのエントリポイントとしてのみ使う合成ルート。
+    fn compose_root(&self) -> bool {
+        true
     }
 
     fn source(&self) -> Source {

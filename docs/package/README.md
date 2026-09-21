@@ -106,7 +106,7 @@
 
 ## ブートストラップと定義の管理
 
-`Package` トレイト自体にはブートストラップ用のメソッドを設けず、ブートストラップ処理は [`Bootstrap`](../../builder/src/package/mod.rs) トレイトおよび `BOOTSTRAP` 登録一覧として分離して定義しています。`BOOTSTRAP` に登録されたパッケージは、合成済みビルド環境イメージが存在しない初期段階において、シード環境（Arch Linux）と pacman を用いてビルドします。それ以外のパッケージは、合成済みビルド環境が存在する場合はそれをベースとし、未合成の場合はシード環境へフォールバックしてビルドします。
+ブートストラップ処理は [`Bootstrap`](../../builder/src/package/mod.rs) トレイトとして分離して定義し、判定は `Package::as_bootstrap()` で行います（登録一覧は持ちません）。`Bootstrap` を実装したパッケージは、合成済みビルド環境イメージが存在しない初期段階において、シード環境（Arch Linux）と pacman を用いてビルドします。それ以外のパッケージは、合成済みビルド環境が存在する場合はそれをベースとし、未合成の場合はシード環境へフォールバックしてビルドします。
 
 ビルド手順は `recipe(&self, ctx)` メソッドが返す型付きの [`Recipe`](../../builder/src/package/recipe.rs)（`Step::Configure` / `Make` / `MakeInstall` / `Install` / `Symlink` 等）として記述します。定型の autotools パッケージは `Recipe::autotools(&[...])` で configure 引数のみを列挙します。`ctx`（`BuildContext`）は `target`・`$TRIPLE`・`$HOST_TRIPLE`・クロス判定を保持するため、クロス限定の configure 引数は Rust 側の条件分岐で静的に解決します。全ての手順を型付き `Step` として記述します（生のシェル文字列への逃げ道はありません）。configure、make、`DESTDIR` を用いたインストール手順のみを記述し、pacman コマンドなどのホスト環境を変更する処理は含めません。
 

@@ -48,9 +48,10 @@ impl Package for Riscv64LinuxGnuGccStage2 {
     fn gnu_triple(&self) -> Option<&'static str> {
         Some(TRIPLE)
     }
-}
-
-impl Bootstrap for Riscv64LinuxGnuGccStage2 {
+    /// `Bootstrap` を実装（bootstrap パッケージ）。
+    fn as_bootstrap(&self) -> Option<&dyn Bootstrap> {
+        Some(self)
+    }
     fn pacman(&self) -> &'static [&'static str] {
         if self.seed() {
             gcc::PACMAN_STAGE_SEED
@@ -59,3 +60,5 @@ impl Bootstrap for Riscv64LinuxGnuGccStage2 {
         }
     }
 }
+
+impl Bootstrap for Riscv64LinuxGnuGccStage2 {}
