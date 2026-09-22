@@ -5,6 +5,7 @@ use crate::oci::ZstdLevel;
 use crate::package::{self, Package};
 use crate::target::Target;
 
+mod docs;
 mod env;
 mod query;
 mod work;
@@ -49,6 +50,12 @@ enum Command {
     },
     /// 有効なターゲットの一覧を表示します
     Targets,
+    /// 定義文書の生成ブロックを PACKAGES から再生成します
+    Docs {
+        /// 差分のみ検査して書き込みません
+        #[arg(long)]
+        check: bool,
+    },
     /// ソースアーカイブを取得します
     Fetch {
         #[command(flatten)]
@@ -192,6 +199,7 @@ pub fn run() -> Result<()> {
             reverse,
         } => query::tree(&package, parse_target(&target)?, reverse),
         Command::Targets => query::targets(),
+        Command::Docs { check } => docs::docs(check),
         Command::Fetch { selection, deps } => work::fetch(&selection, deps),
         Command::Build {
             selection,

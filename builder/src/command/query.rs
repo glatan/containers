@@ -15,8 +15,9 @@ pub fn ls(images: bool) -> Result<()> {
     for defined in packages {
         let runtime = join_names(&defined.dependencies(Target::BUILD_ENV));
         let build = join_names(&defined.build_dependencies(Target::BUILD_ENV));
+        let host = join_names(&defined.host_dependencies(Target::BUILD_ENV));
         println!(
-            "{}\t{}\t{}\t{}\t{}",
+            "{}\t{}\t{}\t{}\t{}\t{}",
             defined.name(),
             defined.version(),
             describe_role(defined),
@@ -25,7 +26,8 @@ pub fn ls(images: bool) -> Result<()> {
             } else {
                 &runtime
             },
-            if build.is_empty() { "なし" } else { &build }
+            if build.is_empty() { "なし" } else { &build },
+            if host.is_empty() { "なし" } else { &host }
         );
     }
     Ok(())
@@ -54,9 +56,9 @@ pub fn info(name: &str, target: Target) -> Result<()> {
         "ビルド依存: {}",
         list_deps(&defined.build_dependencies(target))
     );
-    let host_tools = defined.host_tools(target);
-    if !host_tools.is_empty() {
-        println!("ホストツール: {}", host_tools.join(" "));
+    let host_deps = defined.host_dependencies(target);
+    if !host_deps.is_empty() {
+        println!("ホスト依存: {}", list_deps(&host_deps));
     }
     // ビルド設定（型付きフラグ/recipe の構造出力）
     let flags = defined.flags(target);
@@ -135,21 +137,34 @@ fn print_tree(
     prefix: &str,
     shown: &mut std::collections::BTreeSet<&'static str>,
 ) -> Result<()> {
-    let (runtime, build) = package::build::graph_deps(defined, target);
-    let edges: Vec<(&Dependency, bool)> = runtime
+    let graph = package::build::graph_deps(defined, target);
+    let edges: Vec<(&Dependency, &'static str)> = graph
+        .runtime
         .iter()
-        .map(|dependency| (dependency, false))
-        .chain(build.iter().map(|dependency| (dependency, true)))
+        .map(|dependency| (dependency, "runtime"))
+        .chain(graph.build.iter().map(|dependency| (dependency, "build")))
+        .chain(graph.host.iter().map(|dependency| (dependency, "host")))
         .collect();
     let total = edges.len();
-    for (index, (dependency, is_build)) in edges.into_iter().enumerate() {
+    for (index, (dependency, category)) in edges.into_iter().enumerate() {
         let last = index + 1 == total;
         let connector = if last { "└── " } else { "├── " };
         let found = package::find(dependency.name)?;
-        let dep_target = package::build::artifact_target(found, target);
+        let dep_target = package::build::artifact_target(
+            found,
+            if category == "host" {
+                Target::BUILD_ENV
+            } else {
+                target
+            },
+        );
         let mut tags = Vec::new();
-        if is_build {
-            tags.push("build".to_string());
+        match category {
+            "build" | "host" => tags.push(category.to_string()),
+            _ => {}
+        }
+        if let Some(tag) = via_tag(dependency.via) {
+            tags.push(tag);
         }
         if dep_target != target {
             tags.push(format!(
@@ -190,27 +205,33 @@ fn print_tree(
 fn dependers_of(
     name: &'static str,
     node_target: Target,
-) -> Result<Vec<(&'static dyn package::Package, bool)>> {
+) -> Result<Vec<(&'static dyn package::Package, &'static str, package::Via)>> {
     let mut dependers = Vec::new();
     for candidate in package::PACKAGES {
         let candidate_target = package::build::artifact_target(*candidate, node_target);
-        let (runtime, build) = package::build::graph_deps(*candidate, candidate_target);
-        let mut matched = false;
-        let mut is_build = false;
-        for (deps, build_edge) in [(&runtime, false), (&build, true)] {
+        let graph = package::build::graph_deps(*candidate, candidate_target);
+        let mut category: Option<&'static str> = None;
+        let mut via = package::Via::Ordered;
+        for (deps, edge_category, edge_target) in [
+            (&graph.runtime, "runtime", candidate_target),
+            (&graph.build, "build", candidate_target),
+            (&graph.host, "host", Target::BUILD_ENV),
+        ] {
             for dependency in deps.iter() {
                 if dependency.name != name {
                     continue;
                 }
                 let found = package::find(dependency.name)?;
-                if package::build::artifact_target(found, candidate_target) == node_target {
-                    is_build |= build_edge;
-                    matched = true;
+                if package::build::artifact_target(found, edge_target) == node_target
+                    && category.is_none()
+                {
+                    category = Some(edge_category);
+                    via = dependency.via;
                 }
             }
         }
-        if matched {
-            dependers.push((*candidate, is_build));
+        if let Some(category) = category {
+            dependers.push((*candidate, category, via));
         }
     }
     Ok(dependers)
@@ -224,13 +245,16 @@ fn print_reverse(
 ) -> Result<()> {
     let dependers = dependers_of(defined.name(), node_target)?;
     let total = dependers.len();
-    for (index, &(depender, is_build)) in dependers.iter().enumerate() {
+    for (index, &(depender, category, via)) in dependers.iter().enumerate() {
         let last = index + 1 == total;
         let connector = if last { "└── " } else { "├── " };
         let depender_target = package::build::artifact_target(depender, node_target);
         let mut tags = Vec::new();
-        if is_build {
-            tags.push("build".to_string());
+        if category != "runtime" {
+            tags.push(category.to_string());
+        }
+        if let Some(tag) = via_tag(via) {
+            tags.push(tag);
         }
         if depender_target != node_target {
             tags.push(format!(
@@ -292,13 +316,32 @@ fn join_names(dependencies: &[Dependency]) -> String {
         .join(", ")
 }
 
+/// 切断辺の表示タグ。Ordered 辺（通常の順序依存）はタグなし。
+fn via_tag(via: package::Via) -> Option<String> {
+    match via {
+        package::Via::Ordered => None,
+        package::Via::Seed(distro) => Some(if distro.is_empty() {
+            "seed".to_string()
+        } else {
+            format!("seed:{distro}")
+        }),
+        package::Via::Artifact => Some("artifact".to_string()),
+        package::Via::Optional => Some("optional".to_string()),
+    }
+}
+
 fn list_deps(dependencies: &[Dependency]) -> String {
     if dependencies.is_empty() {
         return "なし".to_string();
     }
     dependencies
         .iter()
-        .map(|dependency| format!("{} {}", dependency.name, dependency.version))
+        .map(|dependency| {
+            let tag = via_tag(dependency.via)
+                .map(|tag| format!(" ({tag})"))
+                .unwrap_or_default();
+            format!("{} {}{}", dependency.name, dependency.version, tag)
+        })
         .collect::<Vec<_>>()
         .join(", ")
 }

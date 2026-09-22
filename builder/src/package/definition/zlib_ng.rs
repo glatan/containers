@@ -2,7 +2,7 @@ use crate::flags::Flag;
 use crate::package::recipe::{
     Arg, BuildContext, Env, Pipe, Recipe, Redirect, Step, Steps, Workdir, argv,
 };
-use crate::package::{Dependency, Package, Source};
+use crate::package::{Dependency, Package, Source, dep};
 use crate::target::Target;
 
 pub struct ZlibNg;
@@ -43,12 +43,14 @@ impl Package for ZlibNg {
     }
 
     fn build_dependencies(&self, _target: Target) -> Vec<Dependency> {
-        let mut dependencies = crate::package::headers_dep();
-        dependencies.push(Dependency {
-            name: "cmake",
-            version: "4.4.3",
-        });
-        dependencies
+        crate::package::headers_dep()
+    }
+
+    /// cmake ビルド系で cmake を実行するため必須の HOST 依存。
+    fn host_dependencies(&self, target: Target) -> Vec<Dependency> {
+        let mut deps = crate::package::cc_deps(self, target);
+        deps.push(dep("cmake", "4.4.3"));
+        deps
     }
 
     fn flags(&self, target: Target) -> Flag {

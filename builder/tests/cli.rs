@@ -34,6 +34,7 @@ fn help_lists_flat_commands() {
         .stdout(contains("info"))
         .stdout(contains("tree"))
         .stdout(contains("targets"))
+        .stdout(contains("docs"))
         .stdout(contains("fetch"))
         .stdout(contains("build"))
         .stdout(contains("check"))

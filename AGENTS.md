@@ -11,6 +11,7 @@
   `rustup target add x86_64-unknown-linux-musl` ののち `cargo build --target x86_64-unknown-linux-musl`。
   無い場合はホストバイナリにフォールバックする（コンテナ側 glibc がホストより古いと起動しない）。
 - パッケージ成果物は `packages/artifacts/`、作業ツリーは `packages/build/`、ログは `packages/logs/`。
+- `docs/package/definition/*.md` の先頭部（タイトル・メタデータ・ソース・依存表）と `definition/README.md` の索引は `<!-- GENERATED -->` マーカーで囲まれた生成ブロック。依存宣言やバージョンを変えたら `containers-builder docs` で再生成し、`docs --check` で差分を検査する。手書きの補足はマーカーの外側に書く。
 - 成果物が存在すると `artifact_ready` によりビルドがスキップされる。再ビルド前は `clean` で削除する。
 
 ## clean

@@ -4,12 +4,26 @@ use super::stages::dep;
 use crate::package::LINUX_HEADERS;
 use crate::package::recipe::{Arg, BuildContext, Cond, Env, Pipe, Step, Steps, Workdir};
 use crate::package::{Dependency, GCC_VERSION, Source};
+use crate::target::Target;
 
 pub const LICENSE: &str = "LGPL-2.1-or-later";
 pub const PACMAN: &[&str] = &["python", "bison", "gawk", "make", "mold"];
-/// glibc / glibc-headers は依存宣言にない HOST ツールを optional mount する
-/// （glibc→python→openssl→glibc の循環を避けるため依存には書かない）。
-pub const HOST_TOOLS: &[&str] = &["bison", "python", "m4"];
+
+/// glibc / glibc-headers の HOST 側依存。configure が python3/bison/m4 を
+/// 要求する。python→openssl→glibc の循環は via(Seed) で断つ
+/// （シード相は distro パッケージが担保し、env では成果物必須）。
+pub fn host_deps<P: crate::package::Package + ?Sized>(
+    package: &P,
+    target: Target,
+) -> Vec<Dependency> {
+    let mut deps = crate::package::cc_deps(package, target);
+    deps.extend([
+        dep("python", "3.14.7").via(crate::package::Via::Seed("python")),
+        dep("bison", "3.8.2").via(crate::package::Via::Seed("bison")),
+        dep("m4", "1.4.21").via(crate::package::Via::Seed("m4")),
+    ]);
+    deps
+}
 
 pub const SOURCE: Source = Source {
     url: "https://ftp.gnu.org/gnu/glibc/glibc-2.44.tar.xz",

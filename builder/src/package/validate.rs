@@ -280,12 +280,12 @@ fn is_glibc_soname(soname: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::package::{Dependency, Source};
+    use crate::package::{Dependency, Source, dep};
 
     struct Fake {
         name: &'static str,
-        dependencies: &'static [Dependency],
-        build_dependencies: &'static [Dependency],
+        dependencies: Vec<Dependency>,
+        build_dependencies: Vec<Dependency>,
         gnu_triple: Option<&'static str>,
         target_artifact: bool,
         build_only: bool,
@@ -314,6 +314,10 @@ mod tests {
         }
         fn build_dependencies(&self, _target: crate::target::Target) -> Vec<Dependency> {
             self.build_dependencies.to_vec()
+        }
+        /// テスト用に toolchain 辺を持たない。
+        fn host_dependencies(&self, _target: crate::target::Target) -> Vec<Dependency> {
+            Vec::new()
         }
         fn recipe(
             &self,
@@ -355,11 +359,8 @@ mod tests {
     fn glibc_self_sonames_are_satisfied_by_symlink_names() {
         let glibc = Fake {
             name: "x86_64-linux-gnu-glibc",
-            dependencies: &[],
-            build_dependencies: &[Dependency {
-                name: "linux-headers",
-                version: "1.0",
-            }],
+            dependencies: vec![],
+            build_dependencies: vec![dep("linux-headers", "1.0")],
 
             gnu_triple: Some("x86_64-linux-gnu"),
             target_artifact: true,
@@ -382,8 +383,8 @@ mod tests {
     fn glibc_missing_own_soname_is_an_error() {
         let glibc = Fake {
             name: "x86_64-linux-gnu-glibc",
-            dependencies: &[],
-            build_dependencies: &[],
+            dependencies: vec![],
+            build_dependencies: vec![],
 
             gnu_triple: Some("x86_64-linux-gnu"),
             target_artifact: true,
@@ -403,11 +404,8 @@ mod tests {
     fn openssl_glibc_sonames_require_declared_glibc() {
         let openssl = Fake {
             name: "openssl",
-            dependencies: &[],
-            build_dependencies: &[Dependency {
-                name: "linux-headers",
-                version: "1.0",
-            }],
+            dependencies: vec![],
+            build_dependencies: vec![dep("linux-headers", "1.0")],
 
             gnu_triple: None,
             target_artifact: false,
@@ -424,14 +422,8 @@ mod tests {
 
         let openssl = Fake {
             name: "openssl",
-            dependencies: &[Dependency {
-                name: "x86_64-linux-gnu-glibc",
-                version: "1.0",
-            }],
-            build_dependencies: &[Dependency {
-                name: "linux-headers",
-                version: "1.0",
-            }],
+            dependencies: vec![dep("x86_64-linux-gnu-glibc", "1.0")],
+            build_dependencies: vec![dep("linux-headers", "1.0")],
 
             gnu_triple: None,
             target_artifact: false,
@@ -447,11 +439,8 @@ mod tests {
 
         let bash = Fake {
             name: "bash",
-            dependencies: &[Dependency {
-                name: "x86_64-linux-gnu-glibc",
-                version: "1.0",
-            }],
-            build_dependencies: &[],
+            dependencies: vec![dep("x86_64-linux-gnu-glibc", "1.0")],
+            build_dependencies: vec![],
 
             gnu_triple: None,
             target_artifact: false,
@@ -470,11 +459,8 @@ mod tests {
     fn unknown_soname_is_rejected() {
         let openssl = Fake {
             name: "openssl",
-            dependencies: &[Dependency {
-                name: "x86_64-linux-gnu-glibc",
-                version: "1.0",
-            }],
-            build_dependencies: &[],
+            dependencies: vec![dep("x86_64-linux-gnu-glibc", "1.0")],
+            build_dependencies: vec![],
 
             gnu_triple: None,
             target_artifact: false,

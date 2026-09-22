@@ -2,7 +2,7 @@ use crate::flags::Flag;
 use crate::package::recipe::{
     Arg, BuildContext, Cond, Env, Pipe, Recipe, Step, Steps, Workdir, argv,
 };
-use crate::package::{Dependency, Package, Source};
+use crate::package::{Dependency, Package, Source, dep};
 use crate::target::Target;
 
 pub struct Qemu;
@@ -34,32 +34,17 @@ impl Package for Qemu {
         crate::package::with_libc(
             target,
             &[
-                Dependency {
-                    name: "glib",
-                    version: "2.90.0",
-                },
-                Dependency {
-                    name: "zlib",
-                    version: "1.3.2",
-                },
-                Dependency {
-                    name: "zstd",
-                    version: "1.5.7",
-                },
+                dep("glib", "2.90.0"),
+                dep("zlib", "1.3.2"),
+                dep("zstd", "1.5.7"),
             ],
         )
     }
     fn build_dependencies(&self, _target: Target) -> Vec<Dependency> {
         vec![
             crate::package::LINUX_HEADERS,
-            Dependency {
-                name: "pcre2",
-                version: "10.48",
-            },
-            Dependency {
-                name: "libffi",
-                version: "3.8.0",
-            },
+            dep("pcre2", "10.48"),
+            dep("libffi", "3.8.0"),
         ]
     }
     fn flags(&self, _target: Target) -> Flag {
@@ -68,11 +53,17 @@ impl Package for Qemu {
     fn supports(&self, target: Target) -> bool {
         target == Target::BUILD_ENV
     }
-    fn host_tools(&self, _target: Target) -> Vec<&'static str> {
-        // configure は meson を内部起動し、python3 / pkg-config /
-        // ninja を要求する。イメージには python3 が無いため
-        // HOST 成果物をマウントする。
-        vec!["python", "meson", "ninja", "pkgconf"]
+    /// configure は meson を内部起動し、python3 / pkg-config /
+    /// ninja を要求する。イメージには無いため HOST 成果物を使う。
+    fn host_dependencies(&self, target: Target) -> Vec<Dependency> {
+        let mut deps = crate::package::cc_deps(self, target);
+        deps.extend([
+            dep("python", "3.14.7"),
+            dep("meson", "1.12.0"),
+            dep("ninja", "1.13.2"),
+            dep("pkgconf", "2.5.1"),
+        ]);
+        deps
     }
     /// meson の sizeof 検査はリンクもする。--sysroot は HOST glibc に
     /// /usr/include が無く sizeof(void*)=-1 になり、64-bit linux-user の

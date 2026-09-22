@@ -2,7 +2,7 @@ use crate::flags::Flag;
 use crate::package::recipe::{
     Arg, BuildContext, Cond, Env, Pipe, Recipe, Step, Steps, Workdir, args, argv,
 };
-use crate::package::{Dependency, Package, Source};
+use crate::package::{Dependency, Package, Source, dep};
 use crate::target::Target;
 
 pub struct Openssl;
@@ -38,12 +38,14 @@ impl Package for Openssl {
     }
 
     fn build_dependencies(&self, _target: Target) -> Vec<Dependency> {
-        let mut dependencies = crate::package::headers_dep();
-        dependencies.push(Dependency {
-            name: "perl",
-            version: "5.42.3",
-        });
-        dependencies
+        crate::package::headers_dep()
+    }
+
+    /// Configure スクリプトが perl を実行するため必須の HOST 依存。
+    fn host_dependencies(&self, target: Target) -> Vec<Dependency> {
+        let mut deps = crate::package::cc_deps(self, target);
+        deps.push(dep("perl", "5.42.3"));
+        deps
     }
 
     fn flags(&self, target: Target) -> Flag {

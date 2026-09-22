@@ -8,11 +8,11 @@
 
 qemu 以外の Host tools の `supports` は `Target::all()` です。GNU Autotools は `autotools_configure` により `--build=$HOST_TRIPLE --host=$PACKAGE_HOST` を付けます。cmake / python / meson / ninja / mold も同じ集合向けに組みます。
 
-cmake は mold の build-dep として seed 上で先に組み、python は `build-env` 合成後に HOST で組み、Phase 4 で `Target::all()` 向け成果物も出します。perl も HOST で先に組み、続けて各 Platform 向け成果物を出します。HOST 以外の perl は HOST の perl を `-Dhostperl` に渡し、入れ子の host `miniperl` は組みません。meson は自前 python に実行時依存します。最初の `build-env` 合成には python / cmake / qemu を入れません。他パッケージのビルドが実行する python / cmake / meson / ninja / perl は HOST 成果物をマウントします。
+cmake は mold のホスト依存として seed 上で先に組み、python は `build-env` 合成後に HOST で組み、Phase 4 で `Target::all()` 向け成果物も出します。perl も HOST で先に組み、続けて各 Platform 向け成果物を出します。HOST 以外の perl は HOST の perl を `-Dhostperl` に渡し、入れ子の host `miniperl` は組みません。meson は自前 python に実行時依存します。最初の `build-env` 合成には python / cmake / qemu を入れません。他パッケージのビルドが実行する python / cmake / meson / ninja / perl は `host_dependencies` 辺として宣言され、HOST 成果物が `dep:false` でマウントされます。
 
 コンパイラ接頭辞はパッケージ Platform の GNU triple です。`gcc` や `cc` という名前の実行ファイルは置きません。実行時 libc は、そのパッケージ Platform の `{triple}-glibc` です。
 
-ビルド環境イメージの合成、および `check` による動的リンク検証には、実行時依存（`Package::dependencies(target)`）を使用します。`Bootstrap::seed_dependencies(target)` でシード相のグラフを上書きするのは `{triple}-binutils` のみです（glibc との循環回避のため実行時依存を空にします）。シード上でビルドする Host tools は POSIX PATH と cmake、mold です。gmp などは依存グラフ経由で入ります。
+ビルド環境イメージの合成、および `check` による動的リンク検証には、実行時依存（`Package::dependencies(target)`）を使用します。ビルド中に実行するツール（python / cmake / meson / ninja / perl / pkgconf、および `{triple}-gcc` / `{triple}-binutils` の C ツールチェーン）は `Package::host_dependencies(target)` で宣言し、`dep:false`（PATH には載るがターゲット向け `-I` / `-L` には載らない）でマウントします。依存辺の `Via` が充足方法を表します。`Via::Ordered` 辺のみがビルド順を決め、循環を断つ辺は `Via::Seed`（シード相は distro パッケージが担保、env では成果物必須）・`Via::Artifact`（常に成果物必須）・`Via::Optional`（任意）で明示します。`{triple}-binutils` の glibc / zlib / zstd への循環は `Via::Seed` 辺で断ちます。シード上でビルドする Host tools は POSIX PATH と cmake、mold です。gmp などは依存グラフ経由で入ります。
 
 シード中のリンクは Arch の mold（`-fuse-ld=mold`）です。compose 後は自前 mold を PATH に載せます。builder が `-fuse-ld=mold` を剥がすのは、合成後かつ自前 mold 成果物が無いときに限ります。
 

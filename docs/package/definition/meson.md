@@ -1,3 +1,4 @@
+<!-- GENERATED -->
 # meson
 
 | 項目 | 値 |
@@ -5,8 +6,7 @@
 | パッケージ名 | `meson` |
 | バージョン | 1.12.0 |
 | ライセンス | Apache-2.0 |
-| パッケージイメージ | 公開対象（[公開一覧](../../image/packages.md)） |
-| ネットワーク | 不要（シード環境では builder が導入） |
+| 分類 | パッケージ |
 | 定義 | [`builder/src/package/definition/meson.rs`](../../../builder/src/package/definition/meson.rs) |
 
 ## ソース
@@ -20,21 +20,26 @@
 
 ## 依存
 
+`amd64/v4`（`Target::BUILD_ENV`）で評価した宣言です。他 Platform では `{triple}-glibc` などがその Platform の triple 名に変わり、ターゲット条件付きの辺（クロス時の自己参照など）はここには現れません。via 列は充足方法です（`seed` = シード相は distro パッケージが担保・合成 env では成果物必須、`artifact` = 常に成果物必須、`optional` = あれば使う）。
+
 ### dependencies
 
-| パッケージ | バージョン | 用途 |
+| パッケージ | バージョン | via |
 |-|-|-|
-| [python](./python.md) | 3.14.7 | meson の実行インタプリタ（実行時にも必要） |
+| [python](./python.md) | 3.14.7 | — |
 
 ### build-dependencies
 
 なし。
 
-### ビルド環境
+### host-dependencies
 
-| 名前 | 用途 |
-|-|-|
-| 共通の[ビルド環境イメージ](../README.md) | `build` によるインストール（実行する python は HOST 成果物をマウント） |
+なし。
+
+<!-- /GENERATED -->
+
+
+
 
 ## ビルド設定
 

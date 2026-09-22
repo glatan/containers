@@ -1,3 +1,4 @@
+<!-- GENERATED -->
 # qemu
 
 | 項目 | 値 |
@@ -5,13 +6,8 @@
 | パッケージ名 | `qemu` |
 | バージョン | 11.1.1 |
 | ライセンス | GPL-2.0-only |
-| パッケージイメージ | 公開対象（[公開一覧](../../image/packages.md)） |
-| ネットワーク | 不要 |
+| 分類 | パッケージ |
 | 定義 | [`builder/src/package/definition/qemu.rs`](../../../builder/src/package/definition/qemu.rs) |
-
-ホスト環境向けとして linux-user エミュレータのみを成果物に含め、システムエミュレータ（system emulator）は含めません。
-
-インストール後、`qemu-s390x -cpu help` を実行してサポート CPU 一覧に `z900`、`z990`、および `z9EC` が正しく表示されることを確認します。
 
 ## ソース
 
@@ -24,30 +20,42 @@
 
 ## 依存
 
+`amd64/v4`（`Target::BUILD_ENV`）で評価した宣言です。他 Platform では `{triple}-glibc` などがその Platform の triple 名に変わり、ターゲット条件付きの辺（クロス時の自己参照など）はここには現れません。via 列は充足方法です（`seed` = シード相は distro パッケージが担保・合成 env では成果物必須、`artifact` = 常に成果物必須、`optional` = あれば使う）。
+
 ### dependencies
 
-| パッケージ | バージョン | 用途 |
+| パッケージ | バージョン | via |
 |-|-|-|
-| [x86_64-linux-gnu-glibc](./x86_64-linux-gnu-glibc.md) | 2.44 | 動的リンク（`-B` / `-L` により参照） |
-| [glib](./glib.md) | 2.90.0 | `glib-2.0` ライブラリの利用 |
-| [zlib](./zlib.md) | 1.3.2 | pkg-config による参照 |
-| [zstd](./zstd.md) | 1.5.7 | 圧縮ライブラリの利用 |
-
-シード（Arch Linux）環境の `glib-2.0.pc` への依存を防ぐため、`PKG_CONFIG_PATH` を空にして `PKG_CONFIG_LIBDIR` を `/dep/{glib,pcre2,zlib,libffi}/usr/lib{,64}/pkgconfig` のみに限定します。`/dep` には直接依存パッケージのみがマウントされるため、`glib-2.0.pc` の `Requires.private` が参照する `pcre2` および `libffi` も明示的に依存関係へ加えてマウントします。glib の成果物が存在する場合は、`PKG_CONFIG_SYSROOT_DIR=/dep/glib` も追加で指定します。
+| [x86_64-linux-gnu-glibc](./x86_64-linux-gnu-glibc.md) | 2.44 | — |
+| [glib](./glib.md) | 2.90.0 | — |
+| [zlib](./zlib.md) | 1.3.2 | — |
+| [zstd](./zstd.md) | 1.5.7 | — |
 
 ### build-dependencies
 
-| パッケージ | バージョン | 用途 |
+| パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | `-idirafter /dep/linux-headers/usr/include` によるカーネルヘッダ参照 |
-| [pcre2](./pcre2.md) | 10.48 | glib の pkg-config 解決用 |
-| [libffi](./libffi.md) | 3.8.0 | glib の pkg-config 解決用 |
+| [linux-headers](./linux-headers.md) | 6.18.33 | — |
+| [pcre2](./pcre2.md) | 10.48 | — |
+| [libffi](./libffi.md) | 3.8.0 | — |
 
-### ビルド環境
+### host-dependencies
 
-| 名前 | 用途 |
-|-|-|
-| 共通の[ビルド環境イメージ](../README.md) | `build` によるコンパイル（実行する meson / ninja / pkgconf / python は HOST 成果物をマウント） |
+| パッケージ | バージョン | via |
+|-|-|-|
+| [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | seed |
+| [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | seed |
+| [python](./python.md) | 3.14.7 | — |
+| [meson](./meson.md) | 1.12.0 | — |
+| [ninja](./ninja.md) | 1.13.2 | — |
+| [pkgconf](./pkgconf.md) | 2.5.1 | — |
+
+host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
+<!-- /GENERATED -->
+
+
+
+シード（Arch Linux）環境の `glib-2.0.pc` への依存を防ぐため、`PKG_CONFIG_PATH` を空にして `PKG_CONFIG_LIBDIR` を `/dep/{glib,pcre2,zlib,libffi}/usr/lib{,64}/pkgconfig` のみに限定します。`/dep` には直接依存パッケージのみがマウントされるため、`glib-2.0.pc` の `Requires.private` が参照する `pcre2` および `libffi` も明示的に依存関係へ加えてマウントします。glib の成果物が存在する場合は、`PKG_CONFIG_SYSROOT_DIR=/dep/glib` も追加で指定します。
 
 ## 対象プラットフォーム
 

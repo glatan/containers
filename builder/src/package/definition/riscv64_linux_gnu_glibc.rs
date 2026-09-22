@@ -42,8 +42,11 @@ impl Package for Riscv64LinuxGnuGlibc {
     fn target_artifact(&self) -> bool {
         true
     }
-    fn host_tools(&self, _target: Target) -> Vec<&'static str> {
-        glibc::HOST_TOOLS.to_vec()
+    /// glibc の configure は python3/bison/m4 を要求する。
+    /// python→openssl→glibc の循環は via(Seed) で断つ
+    /// （シード相は distro パッケージが担保、env では成果物必須）。
+    fn host_dependencies(&self, target: Target) -> Vec<Dependency> {
+        glibc::host_deps(self, target)
     }
     fn uses_cc_wrapper(&self) -> bool {
         false

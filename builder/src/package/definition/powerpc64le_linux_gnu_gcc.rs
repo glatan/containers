@@ -42,12 +42,10 @@ impl Package for Powerpc64leLinuxGnuGcc {
     fn uses_cc_wrapper(&self) -> bool {
         false
     }
-    fn host_tools(&self, target: Target) -> Vec<&'static str> {
-        if target == Target::BUILD_ENV {
-            vec![]
-        } else {
-            vec![NAME]
-        }
+    /// 最終 gcc の HOST 側依存（cc 辺 + ビルド補助ツール +
+    /// 非 BUILD_ENV ビルドでの旧成果物の自己参照）。
+    fn host_dependencies(&self, target: Target) -> Vec<Dependency> {
+        gcc::host_deps(self, target, NAME)
     }
     fn gnu_triple(&self) -> Option<&'static str> {
         Some(TRIPLE)

@@ -1,5 +1,6 @@
 use crate::package::recipe::{Arg, BuildContext, Env, Pipe, Recipe, Step, Steps, Workdir};
-use crate::package::{Package, Source};
+use crate::package::{Dependency, Package, Source};
+use crate::target::Target;
 
 pub struct Meson;
 
@@ -27,16 +28,16 @@ impl Package for Meson {
         }
     }
     fn dependencies(&self, _target: crate::target::Target) -> Vec<crate::package::Dependency> {
-        vec![crate::package::Dependency {
-            name: "python",
-            version: "3.14.7",
-        }]
+        vec![crate::package::dep("python", "3.14.7")]
     }
     fn build_dependencies(
         &self,
         _target: crate::target::Target,
     ) -> Vec<crate::package::Dependency> {
         vec![]
+    }
+    fn host_dependencies(&self, _target: Target) -> Vec<Dependency> {
+        Vec::new()
     }
     fn flags(&self, _target: crate::target::Target) -> crate::flags::Flag {
         crate::flags::Flag::new(vec![], vec![])

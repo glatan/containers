@@ -1,3 +1,4 @@
+<!-- GENERATED -->
 # glib
 
 | 項目 | 値 |
@@ -5,8 +6,7 @@
 | パッケージ名 | `glib` |
 | バージョン | 2.90.0 |
 | ライセンス | LGPL-2.1-or-later |
-| パッケージイメージ | 公開対象（[公開一覧](../../image/packages.md)） |
-| ネットワーク | 不要（シード環境では builder が導入） |
+| 分類 | パッケージ |
 | 定義 | [`builder/src/package/definition/glib.rs`](../../../builder/src/package/definition/glib.rs) |
 
 ## ソース
@@ -20,30 +20,39 @@
 
 ## 依存
 
+`amd64/v4`（`Target::BUILD_ENV`）で評価した宣言です。他 Platform では `{triple}-glibc` などがその Platform の triple 名に変わり、ターゲット条件付きの辺（クロス時の自己参照など）はここには現れません。via 列は充足方法です（`seed` = シード相は distro パッケージが担保・合成 env では成果物必須、`artifact` = 常に成果物必須、`optional` = あれば使う）。
+
 ### dependencies
 
-| パッケージ | バージョン | 用途 |
+| パッケージ | バージョン | via |
 |-|-|-|
-| [x86_64-linux-gnu-glibc](./x86_64-linux-gnu-glibc.md)（他 Platform ではその `{triple}-glibc`） | 2.44 | `--sysroot`（`/dep/${TRIPLE}-glibc/usr/${TRIPLE}` 優先）によるリンク |
-| [libffi](./libffi.md) | 3.8.0 | 外部関数インターフェース（FFI） |
-| [pcre2](./pcre2.md) | 10.48 | 正規表現処理 |
-| [zlib](./zlib.md) | 1.3.2 | データ圧縮処理 |
+| [x86_64-linux-gnu-glibc](./x86_64-linux-gnu-glibc.md) | 2.44 | — |
+| [libffi](./libffi.md) | 3.8.0 | — |
+| [pcre2](./pcre2.md) | 10.48 | — |
+| [zlib](./zlib.md) | 1.3.2 | — |
 
 ### build-dependencies
 
-| パッケージ | バージョン | 用途 |
+| パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | `-idirafter /dep/linux-headers/usr/include` によるカーネルヘッダ参照 |
-| [meson](./meson.md) | 1.12.0 | ビルドシステム（HOST 成果物をマウント） |
-| [ninja](./ninja.md) | 1.13.2 | ビルド実行（HOST 成果物をマウント） |
-| [python](./python.md) | 3.14.7 | meson のインタプリタ（HOST 成果物をマウント） |
-| [pkgconf](./pkgconf.md) | 2.5.1 | 依存ライブラリ検出（HOST 成果物をマウント） |
+| [linux-headers](./linux-headers.md) | 6.18.33 | — |
 
-### ビルド環境
+### host-dependencies
 
-| 名前 | 用途 |
-|-|-|
-| 共通の[ビルド環境イメージ](../README.md) | `build` によるコンパイル（実行する meson / ninja / pkgconf / python は HOST 成果物をマウント） |
+| パッケージ | バージョン | via |
+|-|-|-|
+| [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | seed |
+| [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | seed |
+| [meson](./meson.md) | 1.12.0 | — |
+| [ninja](./ninja.md) | 1.13.2 | — |
+| [python](./python.md) | 3.14.7 | — |
+| [pkgconf](./pkgconf.md) | 2.5.1 | — |
+| [mold](./mold.md) | 2.42.1 | optional |
+
+host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
+<!-- /GENERATED -->
+
+
 
 ## ビルド設定
 

@@ -1,6 +1,6 @@
 use crate::flags::Flag;
 use crate::package::recipe::{Arg, BuildContext, Cond, Env, Recipe, Step, Steps, Workdir};
-use crate::package::{Dependency, Package, Source};
+use crate::package::{Dependency, Package, Source, dep};
 use crate::target::Target;
 
 pub struct Python;
@@ -36,46 +36,16 @@ impl Package for Python {
         crate::package::with_libc(
             target,
             &[
-                Dependency {
-                    name: "libffi",
-                    version: "3.8.0",
-                },
-                Dependency {
-                    name: "zlib",
-                    version: "1.3.2",
-                },
-                Dependency {
-                    name: "openssl",
-                    version: "4.0.2",
-                },
-                Dependency {
-                    name: "expat",
-                    version: "2.8.4",
-                },
-                Dependency {
-                    name: "sqlite",
-                    version: "3.53.4",
-                },
-                Dependency {
-                    name: "ncurses",
-                    version: "6.6",
-                },
-                Dependency {
-                    name: "readline",
-                    version: "8.3",
-                },
-                Dependency {
-                    name: "xz",
-                    version: "5.8.4",
-                },
-                Dependency {
-                    name: "bzip2",
-                    version: "1.0.8",
-                },
-                Dependency {
-                    name: "zstd",
-                    version: "1.5.7",
-                },
+                dep("libffi", "3.8.0"),
+                dep("zlib", "1.3.2"),
+                dep("openssl", "4.0.2"),
+                dep("expat", "2.8.4"),
+                dep("sqlite", "3.53.4"),
+                dep("ncurses", "6.6"),
+                dep("readline", "8.3"),
+                dep("xz", "5.8.4"),
+                dep("bzip2", "1.0.8"),
+                dep("zstd", "1.5.7"),
                 crate::package::gcc_dep(target),
             ],
         )
@@ -88,13 +58,17 @@ impl Package for Python {
     /// configure の stdlib 拡張モジュール検出（_ssl/_hashlib/readline 等）は
     /// pkg-config を使うため、pkgconf を HOST ツールとしてマウントする。
     /// （dep グラフ外のため artifact 未作成なら mount されない点に注意）
-    fn host_tools(&self, target: Target) -> Vec<&'static str> {
-        let mut tools = vec!["pkgconf"];
-        if target != Target::BUILD_ENV {
-            // クロスでは --with-build-python に BUILD_ENV の python が必要
-            tools.push("python");
+    /// configure の stdlib 拡張モジュール検出（_ssl/_hashlib/
+    /// readline 等）は pkg-config を使うため pkgconf が必須。
+    /// クロスでは --with-build-python に同バージョンの BUILD_ENV
+    /// python が必須（自己参照。バージョン固定のため distro では賄えない）。
+    fn host_dependencies(&self, target: Target) -> Vec<crate::package::Dependency> {
+        let mut deps = crate::package::cc_deps(self, target);
+        deps.push(crate::package::dep("pkgconf", "2.5.1"));
+        if !matches!(target, crate::target::Target::Amd64(_)) {
+            deps.push(crate::package::dep("python", "3.14.7").via(crate::package::Via::Artifact));
         }
-        tools
+        deps
     }
 
     fn flags(&self, target: Target) -> Flag {

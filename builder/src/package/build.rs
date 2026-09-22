@@ -206,8 +206,8 @@ fn bootstrap_closure<'a>(
     lookup: &dyn Fn(&str) -> Result<&'a dyn Package>,
     target: Target,
 ) -> Result<Vec<(&'a dyn Package, Target)>> {
-    let root = package::find(workspace::BUILD_ENV_NAME)
-        .expect("build-env は PACKAGES に登録済みです");
+    let root =
+        package::find(workspace::BUILD_ENV_NAME).expect("build-env は PACKAGES に登録済みです");
     let mut order = packages_in_graph_order(root, lookup, target)?;
     order.retain(|(defined, _)| !defined.compose_root());
     Ok(order)
@@ -361,24 +361,45 @@ pub(crate) fn fetch_closure(roots: &[&'static dyn Package]) -> Result<Vec<&'stat
         .collect())
 }
 
-/// 実行時依存とビルド依存のペアを返す。
-/// `Bootstrap` 実装パッケージは `Bootstrap::seed_dependencies` で
-/// グラフを無条件に上書きできる
-/// （binutils が glibc との循環を避けて実行時依存を空にする用途）。
-pub(crate) fn graph_deps(
-    package: &dyn Package,
-    target: Target,
-) -> (Vec<Dependency>, Vec<Dependency>) {
-    if let Some(deps) = package
-        .as_bootstrap()
-        .and_then(|bootstrap| bootstrap.seed_dependencies(target))
-    {
-        return deps;
+/// 宣言済み依存の 3 種別セット。`Via::Ordered` 辺のみがスケジューリングに
+/// 参加し、via 辺は循環を断つ切断辺として検証・マウント解決の対象になる。
+pub(crate) struct GraphDeps {
+    /// `dependencies()` — 成果物の実行時依存。`dep:true` でマウント。
+    pub runtime: Vec<Dependency>,
+    /// `build_dependencies()` — ターゲット向け `-I`/`-L` 入力。
+    /// `dep:true` でマウント。
+    pub build: Vec<Dependency>,
+    /// `host_dependencies()` — HOST 実行ツール。`dep:false` でマウント。
+    pub host: Vec<Dependency>,
+}
+
+impl GraphDeps {
+    /// 宣言された全辺（検証・表示用）。
+    pub fn all(&self) -> impl Iterator<Item = &Dependency> {
+        self.runtime.iter().chain(&self.build).chain(&self.host)
     }
-    (
-        package.dependencies(target),
-        package.build_dependencies(target),
-    )
+    /// `dep:true` でマウントされる辺（runtime + build）。
+    pub fn dep_edges(&self) -> impl Iterator<Item = &Dependency> {
+        self.runtime.iter().chain(&self.build)
+    }
+}
+
+/// 実行時依存・ビルド依存・HOST 依存を返す。
+/// `-fuse-ld=mold` を使うパッケージには mold の任意 HOST 辺を派生させる
+/// （`flags` 由来。mold 不在時は `linker_env` がフラグを剥がす）。
+pub(crate) fn graph_deps(package: &dyn Package, target: Target) -> GraphDeps {
+    let mut host = package.host_dependencies(target);
+    if container::uses_mold(package, target)
+        && !host.iter().any(|dependency| dependency.name == "mold")
+        && let Ok(mold) = package::find("mold")
+    {
+        host.push(package::dep("mold", mold.version()).via(package::Via::Optional));
+    }
+    GraphDeps {
+        runtime: package.dependencies(target),
+        build: package.build_dependencies(target),
+        host,
+    }
 }
 
 pub(crate) fn artifact_target(package: &dyn Package, depender: Target) -> Target {
@@ -434,7 +455,7 @@ fn visit<'a>(
     }
     if !visiting.insert(key) {
         return Err(Error::message(format!(
-            "依存が循環しています: {name} ({}/{})",
+            "依存が循環しています: {name} ({}/{})。循環を断つ辺に via を指定してください",
             target.architecture(),
             target.variant()
         )));
@@ -443,8 +464,12 @@ fn visit<'a>(
     {
         visit(package, lookup, Target::BUILD_ENV, visiting, visited, order)?;
     }
-    let (runtime, build) = graph_deps(package, target);
-    for dependency in runtime.iter().chain(build.iter()) {
+    let deps = graph_deps(package, target);
+    for (dependency, host_edge) in deps
+        .dep_edges()
+        .map(|dependency| (dependency, false))
+        .chain(deps.host.iter().map(|dependency| (dependency, true)))
+    {
         let found = lookup(dependency.name)?;
         if found.version() != dependency.version {
             return Err(Error::message(format!(
@@ -454,14 +479,14 @@ fn visit<'a>(
                 found.version()
             )));
         }
-        visit(
-            found,
-            lookup,
-            artifact_target(found, target),
-            visiting,
-            visited,
-            order,
-        )?;
+        // Ordered 辺のみ下降する。via 辺は循環を断つ切断辺で順序付けに
+        // 参加しない（充足判定・マウントは build_target / blocked_reason）。
+        if !dependency.ordered() {
+            continue;
+        }
+        // HOST 依存の成果物は常に BUILD_ENV 側。
+        let mounted = artifact_target(found, if host_edge { Target::BUILD_ENV } else { target });
+        visit(found, lookup, mounted, visiting, visited, order)?;
     }
     visiting.remove(&key);
     visited.insert(key);
@@ -523,7 +548,7 @@ fn walk_nodes<'a>(
                 defined.name(),
                 defined.version()
             ));
-            if let Some(reason) = blocked_reason(defined, target, &blocked, lookup) {
+            if let Some(reason) = blocked_reason(defined, target, &blocked, lookup, own) {
                 report(format!(
                     "スキップ: {} {} ({}/{}): {reason}",
                     defined.name(),
@@ -588,15 +613,30 @@ fn blocked_reason<'a>(
     target: Target,
     blocked: &BTreeSet<(&'static str, Target)>,
     lookup: &dyn Fn(&str) -> Result<&'a dyn Package>,
+    own: bool,
 ) -> Option<String> {
-    let (runtime, build) = graph_deps(package, target);
-    for dependency in runtime.iter().chain(build.iter()) {
+    let deps = graph_deps(package, target);
+    for (dependency, host_edge) in deps
+        .dep_edges()
+        .map(|dependency| (dependency, false))
+        .chain(deps.host.iter().map(|dependency| (dependency, true)))
+    {
         let Ok(found) = lookup(dependency.name) else {
             return Some(format!("依存パッケージがありません: {}", dependency.name));
         };
         // 依存が実際にマウントされるターゲットで失敗した場合だけブロックする
         // （同名パッケージの別ターゲットの失敗で過剰ブロックしない）
-        let mounted = artifact_target(found, target);
+        let mounted = artifact_target(found, if host_edge { Target::BUILD_ENV } else { target });
+        // via 辺の必須性。シード相（!own）の Seed 辺は distro が担保する
+        // ためブロックしない。Optional は常に任意。
+        let required = match dependency.via {
+            package::Via::Ordered | package::Via::Artifact => true,
+            package::Via::Seed(_) => own,
+            package::Via::Optional => false,
+        };
+        if !required {
+            continue;
+        }
         if blocked.contains(&(dependency.name, mounted)) {
             return Some(format!(
                 "依存が失敗しています: {} ({}/{})",
@@ -615,11 +655,11 @@ fn blocked_reason<'a>(
 #[cfg(test)]
 mod tests {
     use super::container::{
-        Mount, Prep, allow_network, build_plan, compiler_cc, dep_paths, extra_host_tool_names,
-        resolve_runner, stage_generated, wrap_script,
+        Mount, Prep, allow_network, build_plan, compiler_cc, dep_paths, resolve_runner,
+        stage_generated, wrap_script,
     };
     use super::*;
-    use crate::package::{Dependency, Source};
+    use crate::package::{Dependency, Source, dep};
     use crate::target::{Amd64Variant, Arm64Variant, Target};
     use std::path::{Path, PathBuf};
 
@@ -628,8 +668,8 @@ mod tests {
     struct Fake {
         name: &'static str,
         version: &'static str,
-        dependencies: &'static [Dependency],
-        build_dependencies: &'static [Dependency],
+        dependencies: Vec<Dependency>,
+        build_dependencies: Vec<Dependency>,
         source_dir: PathBuf,
         artifacts: PathBuf,
     }
@@ -658,6 +698,11 @@ mod tests {
         fn build_dependencies(&self, _target: Target) -> Vec<Dependency> {
             self.build_dependencies.to_vec()
         }
+        /// テスト用に toolchain 辺を持たない（lookup が実パッケージを
+        /// 解決しないため）。
+        fn host_dependencies(&self, _target: Target) -> Vec<Dependency> {
+            Vec::new()
+        }
         /// 失敗するビルドを再現するため常に `false` を実行する。
         fn recipe(
             &self,
@@ -683,8 +728,8 @@ mod tests {
 
     fn fake(
         name: &'static str,
-        dependencies: &'static [Dependency],
-        build_dependencies: &'static [Dependency],
+        dependencies: Vec<Dependency>,
+        build_dependencies: Vec<Dependency>,
         source_dir: PathBuf,
         artifacts: PathBuf,
     ) -> Fake {
@@ -721,14 +766,17 @@ mod tests {
     #[test]
     fn build_order_puts_dependencies_first() {
         let (_keep, source, artifacts) = empty_dirs();
-        let headers = fake("linux-headers", &[], &[], source.clone(), artifacts.clone());
+        let headers = fake(
+            "linux-headers",
+            vec![],
+            vec![],
+            source.clone(),
+            artifacts.clone(),
+        );
         let glibc = fake(
             "glibc",
-            &[],
-            &[Dependency {
-                name: "linux-headers",
-                version: "1",
-            }],
+            vec![],
+            vec![dep("linux-headers", "1")],
             source.clone(),
             artifacts,
         );
@@ -749,24 +797,12 @@ mod tests {
         let (_keep, source, artifacts) = empty_dirs();
         let a = fake(
             "a",
-            &[Dependency {
-                name: "b",
-                version: "1",
-            }],
-            &[],
+            vec![dep("b", "1")],
+            vec![],
             source.clone(),
             artifacts.clone(),
         );
-        let b = fake(
-            "b",
-            &[Dependency {
-                name: "a",
-                version: "1",
-            }],
-            &[],
-            source,
-            artifacts,
-        );
+        let b = fake("b", vec![dep("a", "1")], vec![], source, artifacts);
         let packages = [&a, &b];
         let find = lookup(&packages);
         let error = match packages_in_build_order(&a, &find) {
@@ -777,10 +813,41 @@ mod tests {
     }
 
     #[test]
+    fn build_order_allows_cycles_broken_by_via_edges() {
+        // a→b は Ordered、b→a は via(Seed) の切断辺。via 辺を含む
+        // 循環は許容され、Ordered 部分グラフの順序だけが使われる。
+        let (_keep, source, artifacts) = empty_dirs();
+        let a = fake(
+            "a",
+            vec![dep("b", "1")],
+            vec![],
+            source.clone(),
+            artifacts.clone(),
+        );
+        let b = fake(
+            "b",
+            vec![dep("a", "1").via(crate::package::Via::Seed("a"))],
+            vec![],
+            source,
+            artifacts,
+        );
+        let packages = [&a, &b];
+        let find = lookup(&packages);
+        let order = packages_in_build_order(&a, &find).unwrap();
+        assert_eq!(
+            order
+                .iter()
+                .map(|package| package.name())
+                .collect::<Vec<_>>(),
+            ["b", "a"]
+        );
+    }
+
+    #[test]
     fn skips_targets_with_existing_artifacts() {
         let (_keep, source, artifacts) = empty_dirs();
         let target = Target::Amd64(Amd64Variant::V1);
-        let package = fake("cached", &[], &[], source, artifacts);
+        let package = fake("cached", vec![], vec![], source, artifacts);
         let dir = package.artifact_dir(target);
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("kept"), "ok").unwrap();
@@ -799,7 +866,7 @@ mod tests {
     fn empty_artifact_dir_is_not_skipped() {
         let (_keep, source, artifacts) = empty_dirs();
         let target = Target::Amd64(Amd64Variant::V1);
-        let package = fake("empty", &[], &[], source, artifacts);
+        let package = fake("empty", vec![], vec![], source, artifacts);
         let dir = package.artifact_dir(target);
         fs::create_dir_all(&dir).unwrap();
         assert!(!workspace::artifact_ready(&dir));
@@ -808,14 +875,17 @@ mod tests {
     #[test]
     fn build_order_rejects_version_mismatch() {
         let (_keep, source, artifacts) = empty_dirs();
-        let headers = fake("linux-headers", &[], &[], source.clone(), artifacts.clone());
+        let headers = fake(
+            "linux-headers",
+            vec![],
+            vec![],
+            source.clone(),
+            artifacts.clone(),
+        );
         let glibc = fake(
             "glibc",
-            &[],
-            &[Dependency {
-                name: "linux-headers",
-                version: "2",
-            }],
+            vec![],
+            vec![dep("linux-headers", "2")],
             source,
             artifacts,
         );
@@ -836,7 +906,7 @@ mod tests {
         let done = Target::Amd64(Amd64Variant::V1);
         let built = Target::Amd64(Amd64Variant::V4);
         let fail = Target::S390x(crate::target::S390xVariant::Z17);
-        let package = fake("cached", &[], &[], source, artifacts);
+        let package = fake("cached", vec![], vec![], source, artifacts);
         let dir = package.artifact_dir(done);
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("kept"), "ok").unwrap();
@@ -876,7 +946,7 @@ mod tests {
     #[test]
     fn native_without_network_flag_is_isolated() {
         let (_keep, source, artifacts) = empty_dirs();
-        let isolated = fake("zlib", &[], &[], source, artifacts);
+        let isolated = fake("zlib", vec![], vec![], source, artifacts);
         assert!(!allow_network(
             &isolated,
             Target::Amd64(Amd64Variant::V1),
@@ -930,13 +1000,21 @@ mod tests {
         assert_eq!(artifact_target(glibc, arm), arm);
         let gcc = crate::package::find("aarch64-linux-gnu-gcc").unwrap();
         assert_eq!(artifact_target(gcc, arm), Target::BUILD_ENV);
-        let names = extra_host_tool_names(glibc, arm);
+        let names: Vec<_> = glibc
+            .host_dependencies(arm)
+            .iter()
+            .map(|dependency| dependency.name)
+            .collect();
         for tool in ["bison", "python", "m4"] {
             assert!(names.contains(&tool), "{names:?}");
         }
         assert!(names.contains(&"x86_64-linux-gnu-gcc"), "{names:?}");
         let x86_glibc = crate::package::find("x86_64-linux-gnu-glibc").unwrap();
-        let names = extra_host_tool_names(x86_glibc, Target::Amd64(Amd64Variant::V4));
+        let names: Vec<_> = x86_glibc
+            .host_dependencies(Target::Amd64(Amd64Variant::V4))
+            .iter()
+            .map(|dependency| dependency.name)
+            .collect();
         assert!(!names.contains(&"x86_64-linux-gnu-gcc"), "{names:?}");
     }
 
@@ -1117,6 +1195,7 @@ libdir=/usr/lib
         ]
         .into_iter()
         .map(|(name, dir)| Mount {
+            pkg: name,
             name: name.to_owned(),
             dir: dir.clone(),
             dep: true,
@@ -1260,18 +1339,15 @@ libdir=/usr/lib
     fn continue_on_error_skips_dependents_and_builds_unrelated() {
         let (_keep, source, artifacts) = empty_dirs();
         let target = Target::BUILD_ENV;
-        let a = fake("a", &[], &[], source.clone(), artifacts.clone());
+        let a = fake("a", vec![], vec![], source.clone(), artifacts.clone());
         let b = fake(
             "b",
-            &[Dependency {
-                name: "a",
-                version: "1",
-            }],
-            &[],
+            vec![dep("a", "1")],
+            vec![],
             source.clone(),
             artifacts.clone(),
         );
-        let c = fake("c", &[], &[], source, artifacts);
+        let c = fake("c", vec![], vec![], source, artifacts);
         let order: Vec<(&dyn Package, Target)> = vec![(&a, target), (&b, target), (&c, target)];
         let mut compiled = Vec::new();
         let mut log = Vec::new();
@@ -1319,18 +1395,16 @@ libdir=/usr/lib
         let arm64 = Target::Arm64(Arm64Variant::V8);
         // Fake の artifact_dir は `<root>/<arch>-<variant>` で名前を含まないため
         // パッケージごとに別 root を渡す
-        let dep = fake("dep", &[], &[], source.clone(), artifacts.join("dep"));
+        let dep_pkg = fake("dep", vec![], vec![], source.clone(), artifacts.join("dep"));
         let user = fake(
             "user",
-            &[Dependency {
-                name: "dep",
-                version: "1",
-            }],
-            &[],
+            vec![dep("dep", "1")],
+            vec![],
             source,
             artifacts.join("user"),
         );
-        let order: Vec<(&dyn Package, Target)> = vec![(&dep, host), (&dep, arm64), (&user, arm64)];
+        let order: Vec<(&dyn Package, Target)> =
+            vec![(&dep_pkg, host), (&dep_pkg, arm64), (&user, arm64)];
         let mut compiled = Vec::new();
         let mut log = Vec::new();
         let failed = walk_nodes(
@@ -1353,7 +1427,7 @@ libdir=/usr/lib
                 fs::write(dir.join("f"), "").unwrap();
                 Ok(())
             },
-            &lookup(&[&dep, &user]),
+            &lookup(&[&dep_pkg, &user]),
         )
         .unwrap();
         assert_eq!(failed, ["dep"]);
@@ -1455,6 +1529,7 @@ libdir=/usr/lib
         fs::write(dir.join("usr/lib/.hidden.la"), "").unwrap();
         fs::write(dir.join("usr/lib/x.txt"), "").unwrap();
         let mounts = [Mount {
+            pkg: "zlib",
             name: "zlib".to_owned(),
             dir,
             dep: true,
@@ -1512,11 +1587,13 @@ dependency_libs=' -L/usr/lib /dep/mpfr/usr/lib/libmpfr.la'
         .unwrap();
         let mounts = [
             Mount {
+                pkg: "gmp",
                 name: "gmp".to_owned(),
                 dir: gmp,
                 dep: true,
             },
             Mount {
+                pkg: "zlib",
                 name: "zlib".to_owned(),
                 dir: zlib,
                 dep: true,
@@ -1573,18 +1650,30 @@ dependency_libs=' -L/usr/lib /dep/mpfr/usr/lib/libmpfr.la'
     }
 
     #[test]
-    fn graph_deps_binutils_override_applies_unconditionally() {
-        // `seed_dependencies` は名前に反して seed 相限定ではなく、
-        // `Bootstrap` 実装パッケージの全ターゲットでグラフを
-        // 上書きする（旧 Prefixed と同じ契約）。aarch64 のような
-        // non-seed タプルでも実行時依存は空になる。
+    fn binutils_cycle_breakers_are_via_seed_edges() {
+        // binutils → glibc/zlib/zstd の循環は via(Seed) 辺で断つ。
+        // 依存宣言自体は全ターゲット共通（旧 seed_dependencies の
+        // グラフ上書きは廃止）。
         let binutils = crate::package::find("aarch64-linux-gnu-binutils").unwrap();
-        let (runtime, _build) = super::graph_deps(binutils, Target::Arm64(Arm64Variant::V8));
-        assert!(runtime.is_empty(), "{runtime:?}");
-        // 非登録パッケージは `Package` の宣言がそのまま使われる。
+        let runtime = super::graph_deps(binutils, Target::Arm64(Arm64Variant::V8)).runtime;
+        assert!(
+            runtime
+                .iter()
+                .all(|d| matches!(d.via, crate::package::Via::Seed(_))),
+            "{runtime:?}"
+        );
+        for name in ["aarch64-linux-gnu-glibc", "zlib", "zstd"] {
+            assert!(runtime.iter().any(|d| d.name == name), "{runtime:?}");
+        }
+        // 通常パッケージは Ordered の実行時依存を持つ。
         let zlib = crate::package::find("zlib").unwrap();
-        let (runtime, _) = super::graph_deps(zlib, Target::Arm64(Arm64Variant::V8));
-        assert!(runtime.iter().any(|d| d.name == "aarch64-linux-gnu-glibc"));
+        let runtime = super::graph_deps(zlib, Target::Arm64(Arm64Variant::V8)).runtime;
+        assert!(
+            runtime
+                .iter()
+                .any(|d| d.name == "aarch64-linux-gnu-glibc" && d.ordered()),
+            "{runtime:?}"
+        );
     }
 
     #[test]

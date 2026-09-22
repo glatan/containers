@@ -182,6 +182,7 @@ pub fn find(name: &str) -> Result<&'static dyn Package> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::target::Target;
 
     #[test]
     fn registry_names_are_unique() {
@@ -285,11 +286,14 @@ mod tests {
                 let declared = find(dependency.name).unwrap();
                 assert_eq!(declared.version(), dependency.version);
             }
-            for dependency in package
-                .dependencies(target)
-                .iter()
-                .chain(package.build_dependencies(target).iter())
-            {
+            let mut host = std::collections::BTreeSet::new();
+            for dependency in package.host_dependencies(target) {
+                assert!(
+                    host.insert(dependency.name),
+                    "{} のホスト依存が重複しています: {}",
+                    package.name(),
+                    dependency.name
+                );
                 let declared = find(dependency.name).unwrap();
                 assert_eq!(declared.version(), dependency.version);
             }
@@ -590,17 +594,17 @@ mod tests {
         }
         assert!(find("x86_64-linux-gnu-gcc").unwrap().supports(host));
         assert!(find("x86_64-linux-gnu-gcc").unwrap().supports(arm));
-        assert!(find("x86_64-linux-gnu-binutils").unwrap().supports(arm));
+        let x86_binutils = find("x86_64-linux-gnu-binutils").unwrap();
+        assert!(x86_binutils.supports(arm));
+        // glibc/zlib/zstd との循環は via(Seed) 辺で断つ（全ターゲット共通）。
         assert!(
-            find("x86_64-linux-gnu-binutils")
-                .unwrap()
-                .build_depends_on(arm, "zlib")
+            x86_binutils
+                .dependencies(arm)
+                .iter()
+                .all(|d| matches!(d.via, crate::package::Via::Seed(_)))
         );
-        assert!(
-            !find("x86_64-linux-gnu-binutils")
-                .unwrap()
-                .build_depends_on(host, "zlib")
-        );
+        assert!(x86_binutils.depends_on(arm, "zlib"));
+        assert!(x86_binutils.depends_on(host, "zlib"));
         assert!(find("aarch64-linux-gnu-gcc").unwrap().supports(host));
         assert!(find("aarch64-linux-gnu-gcc").unwrap().supports(arm));
         // *_FOR_TARGET は Canadian（PACKAGE_HOST != HOST_TRIPLE）のみ emit。
@@ -610,7 +614,13 @@ mod tests {
                 .rendered_script(arm)
                 .contains("CC_FOR_TARGET")
         );
-        assert!(find("glib").unwrap().build_depends_on(host, "meson"));
+        assert!(
+            find("glib")
+                .unwrap()
+                .host_dependencies(host)
+                .iter()
+                .any(|d| d.name == "meson" && d.ordered())
+        );
         assert!(find("make").unwrap().supports(arm));
         assert!(
             find("make")
@@ -646,7 +656,13 @@ mod tests {
                 .rendered_script(host)
                 .contains("autotools_configure")
         );
-        assert!(find("openssl").unwrap().build_depends_on(host, "perl"));
+        assert!(
+            find("openssl")
+                .unwrap()
+                .host_dependencies(host)
+                .iter()
+                .any(|d| d.name == "perl" && d.ordered())
+        );
         assert!(!find("x86_64-linux-gnu-gcc-stage1").unwrap().supports(arm));
         assert!(find("x86_64-linux-gnu-glibc").unwrap().supports(host));
         assert!(!find("x86_64-linux-gnu-glibc").unwrap().supports(arm));
@@ -682,6 +698,40 @@ mod tests {
             .filter(|package| package.as_bootstrap().is_some())
             .count();
         assert_eq!(bootstrap, 46);
+    }
+
+    #[test]
+    fn host_dependencies_cover_cc_edges() {
+        // host_dependencies() を上書きする実装は cc_deps の戻り値に
+        // 追記する契約。C ツールチェーンを使わないパッケージだけが
+        // 空を返してよい。
+        const NO_CC: &[&str] = &["meson", "ca-certificates", "build-env"];
+        for package in PACKAGES {
+            for target in Target::all() {
+                if !package.supports(target) {
+                    continue;
+                }
+                let cc = crate::package::cc_deps(*package, target);
+                let host = package.host_dependencies(target);
+                if NO_CC.contains(&package.name()) {
+                    assert!(
+                        host.is_empty(),
+                        "{} は C ツールチェーンを使わないはず",
+                        package.name()
+                    );
+                    continue;
+                }
+                for edge in &cc {
+                    assert!(
+                        host.iter().any(|d| d.name == edge.name),
+                        "{} ({:?}) の host_dependencies に cc 辺 {} がありません",
+                        package.name(),
+                        target,
+                        edge.name
+                    );
+                }
+            }
+        }
     }
 
     #[test]

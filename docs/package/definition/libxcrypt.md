@@ -1,3 +1,4 @@
+<!-- GENERATED -->
 # libxcrypt
 
 | 項目 | 値 |
@@ -5,8 +6,7 @@
 | パッケージ名 | `libxcrypt` |
 | バージョン | 4.5.2 |
 | ライセンス | LGPL-2.1-or-later |
-| パッケージイメージ | 公開対象（[公開一覧](../../image/packages.md)） |
-| ネットワーク | 不要（シード環境では builder が導入） |
+| 分類 | パッケージ |
 | 定義 | [`builder/src/package/definition/libxcrypt.rs`](../../../builder/src/package/definition/libxcrypt.rs) |
 
 ## ソース
@@ -20,23 +20,33 @@
 
 ## 依存
 
+`amd64/v4`（`Target::BUILD_ENV`）で評価した宣言です。他 Platform では `{triple}-glibc` などがその Platform の triple 名に変わり、ターゲット条件付きの辺（クロス時の自己参照など）はここには現れません。via 列は充足方法です（`seed` = シード相は distro パッケージが担保・合成 env では成果物必須、`artifact` = 常に成果物必須、`optional` = あれば使う）。
+
 ### dependencies
 
-| パッケージ | バージョン | 用途 |
+| パッケージ | バージョン | via |
 |-|-|-|
-| [x86_64-linux-gnu-glibc](./x86_64-linux-gnu-glibc.md)（他 Platform ではその `{triple}-glibc`） | 2.44 | `--sysroot`（`/dep/${TRIPLE}-glibc/usr/${TRIPLE}` 優先）によるリンク |
+| [x86_64-linux-gnu-glibc](./x86_64-linux-gnu-glibc.md) | 2.44 | — |
 
 ### build-dependencies
 
-| パッケージ | バージョン | 用途 |
+| パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | `-idirafter /dep/linux-headers/usr/include` によるカーネルヘッダ参照 |
+| [linux-headers](./linux-headers.md) | 6.18.33 | — |
 
-### ビルド環境
+### host-dependencies
 
-| 名前 | 用途 |
-|-|-|
-| 共通の[ビルド環境イメージ](../README.md) | `build` によるコンパイル。build スクリプト生成に必要な perl は host tool としてマウント（`host_tools()`） |
+| パッケージ | バージョン | via |
+|-|-|-|
+| [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | seed |
+| [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | seed |
+| [perl](./perl.md) | 5.42.3 | optional |
+| [mold](./mold.md) | 2.42.1 | optional |
+
+host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
+<!-- /GENERATED -->
+
+
 
 ## ビルド設定
 

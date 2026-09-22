@@ -1,3 +1,4 @@
+<!-- GENERATED -->
 # linux-headers
 
 | 項目 | 値 |
@@ -5,8 +6,7 @@
 | パッケージ名 | `linux-headers` |
 | バージョン | 6.18.33 |
 | ライセンス | GPL-2.0-only WITH Linux-syscall-note |
-| パッケージイメージ | 公開対象外（ビルド専用） |
-| ネットワーク | 不要 |
+| 分類 | ビルド専用（Bootstrap・seed） |
 | 定義 | [`builder/src/package/definition/linux_headers.rs`](../../../builder/src/package/definition/linux_headers.rs) |
 
 ## ソース
@@ -20,6 +20,8 @@
 
 ## 依存
 
+`amd64/v4`（`Target::BUILD_ENV`）で評価した宣言です。他 Platform では `{triple}-glibc` などがその Platform の triple 名に変わり、ターゲット条件付きの辺（クロス時の自己参照など）はここには現れません。via 列は充足方法です（`seed` = シード相は distro パッケージが担保・合成 env では成果物必須、`artifact` = 常に成果物必須、`optional` = あれば使う）。
+
 ### dependencies
 
 なし。
@@ -28,11 +30,14 @@
 
 なし。
 
-### ビルド環境
+### host-dependencies
 
-| 名前 | 用途 |
-|-|-|
-| 共通の[ビルド環境イメージ](../README.md) | `build` によるコンパイル |
+なし。
+
+<!-- /GENERATED -->
+
+
+
 
 ## ヘッダファイルの配置構成
 

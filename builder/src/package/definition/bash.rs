@@ -22,13 +22,7 @@ impl Package for Bash {
         }
     }
     fn dependencies(&self, target: crate::target::Target) -> Vec<crate::package::Dependency> {
-        crate::package::with_libc(
-            target,
-            &[crate::package::Dependency {
-                name: "ncurses",
-                version: "6.6",
-            }],
-        )
+        crate::package::with_libc(target, &[crate::package::dep("ncurses", "6.6")])
     }
     fn build_dependencies(
         &self,
