@@ -20,7 +20,7 @@
 
 ## 上流ソース
 
-ハッシュの正本はこの表です。各 `{パッケージ名}.md` は依存と triple 固有設定だけを書きます。
+ハッシュは各 `{パッケージ名}.md` の生成ブロックにも現れます（正本は各定義の `Source` で、生成ブロックは `containers-builder docs` が再生成します）。
 
 | 上流 | バージョン | URL | 展開ディレクトリ |
 |-|-|-|-|
@@ -49,7 +49,7 @@ glibc blake3: `6d07bc16d8d066b1c0ae713d762175f261e27df9cab8015ec11e1c980c05e79b0
   → *-gcc            (C/C++、PGO 適用、`--disable-bootstrap`)
 ```
 
-対象とする `{triple}` は、`x86_64-linux-gnu`、`aarch64-linux-gnu`、`riscv64-linux-gnu`、`powerpc64le-linux-gnu`、および `s390x-linux-gnu` の 5 種類です。段階ごとのコマンドは [build-flow.md](./build-flow.md) です。プレフィックス付きパッケージは `Bootstrap` グラフを使います。
+対象とする `{triple}` は、`x86_64-linux-gnu`、`aarch64-linux-gnu`、`riscv64-linux-gnu`、`powerpc64le-linux-gnu`、および `s390x-linux-gnu` の 5 種類です。段階ごとのコマンドは [build-flow.md](./build-flow.md) です。プレフィックス付きパッケージも他パッケージと同じ `Package` 宣言グラフに載り、ツールチェーンの循環（binutils ↔ glibc、glibc ↔ gcc 等）は `Via::Seed` / `Via::Artifact` の切断辺で明示します。
 
 | パッケージ | バージョン | パッケージイメージ化 |
 |-|-|-|

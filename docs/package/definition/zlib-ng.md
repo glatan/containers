@@ -1,3 +1,4 @@
+<!-- GENERATED -->
 # zlib-ng
 
 | 項目 | 値 |
@@ -5,8 +6,7 @@
 | パッケージ名 | `zlib-ng` |
 | バージョン | 2.3.3 |
 | ライセンス | Zlib |
-| パッケージイメージ | 公開対象（[公開一覧](../../image/packages.md)） |
-| ネットワーク | 不要（シード環境では builder が cmake を導入） |
+| 分類 | カタログ |
 | 定義 | [`builder/src/package/definition/zlib_ng.rs`](../../../builder/src/package/definition/zlib_ng.rs) |
 
 ## ソース
@@ -20,25 +20,35 @@
 
 ## 依存
 
+`amd64/v4`（`Target::BUILD_ENV`）で評価した宣言です。他 Platform では `{triple}-glibc` などがその Platform の triple 名に変わり、ターゲット条件付きの辺（クロス時の自己参照など）はここには現れません。via 列は充足方法です（`seed` = シード相は distro パッケージが担保・合成 env では成果物必須、`artifact` = 常に成果物必須、`optional` = あれば使う）。
+
 ### dependencies
 
-| パッケージ | バージョン | 用途 |
+| パッケージ | バージョン | via |
 |-|-|-|
-| [x86_64-linux-gnu-glibc](./x86_64-linux-gnu-glibc.md)（他 Platform ではその `{triple}-glibc`） | 2.44 | `--sysroot`（`/dep/${TRIPLE}-glibc/usr/${TRIPLE}` 優先）によるリンク |
+| [x86_64-linux-gnu-glibc](./x86_64-linux-gnu-glibc.md) | 2.44 | — |
 
 ### build-dependencies
 
-| パッケージ | バージョン | 用途 |
+| パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | `-idirafter /dep/linux-headers/usr/include` によるカーネルヘッダ参照 |
+| [linux-headers](./linux-headers.md) | 6.18.33 | — |
+
+### host-dependencies
+
+| パッケージ | バージョン | via |
+|-|-|-|
+| [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | seed |
+| [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | seed |
+| [cmake](./cmake.md) | 4.4.3 | — |
+| [mold](./mold.md) | 2.42.1 | optional |
+
+host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
+<!-- /GENERATED -->
+
+
 
 openssl からは依存されません。標準 zlib の `libz.so` とは配置パスを分離して共存可能にします。
-
-### ビルド環境
-
-| 名前 | 用途 |
-|-|-|
-| 共通の[ビルド環境イメージ](../README.md) | `build` によるコンパイル（シード環境では builder が cmake を導入） |
 
 ## ターゲット
 

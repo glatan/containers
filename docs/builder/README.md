@@ -32,10 +32,11 @@
 | `info {package} -t {arch}/{variant}` | パッケージ定義のメタデータおよび設定内容を表示する |
 | `tree {package} -t {arch}/{variant} [--reverse]` | パッケージの依存ツリー（`--reverse` で逆依存）を表示する |
 | `targets` | 有効な `arch`/`variant` の一覧を表示する |
+| `docs [--check]` | 定義文書（[package/definition/](../package/definition/)）の生成ブロックと索引を `PACKAGES` から再生成する（`--check` は差分の検査のみ） |
 
 `info` は `-t` で対象 Platform を指定し（必須）、ターゲットに応じたロール・依存・CFLAGS / LDFLAGS・PGO・recipe（env / `-std` / sysroot / workdir / configure 引数）を表示します。成果物の配置ターゲットが指定ターゲットと異なる場合は `成果物ターゲット` を、対応する全ターゲットを `対応ターゲット` に列挙します。
 
-`tree` は実行時依存とビルド時依存を再帰的に表示します。`[build]` はビルド時依存の辺、`[bootstrap]` は `Bootstrap` を実装しシード上で組めるノード、異なる Target の成果物を参照する辺には `{arch}/{variant}` を表示します。`--reverse` はこのパッケージに依存する側をたどり、同じタグを depender 側の意味で付与します。
+`tree` は実行時依存・ビルド時依存・ホスト依存を再帰的に表示します。`[build]` はビルド時依存の辺、`[host]` は HOST 成果物をマウントして実行するツールの辺、`[seed]` / `[seed:{name}]` はシード相を distro パッケージ（空欄はベースイメージ同梱）が担保する切断辺、`[artifact]` は常に成果物が必須の切断辺、`[optional]` はあれば使う任意辺、`[bootstrap]` は `Bootstrap` を実装しシード上で組めるノード、異なる Target の成果物を参照する辺には `{arch}/{variant}` を表示します。`--reverse` はこのパッケージに依存する側をたどり、同じタグを depender 側の意味で付与します。
 
 ### 作業
 
@@ -60,7 +61,7 @@
 - `--no-deps`: 依存をビルドせず対象パッケージのみをビルドします（`--all`・`--keep-going` との同時指定はできません）。
 - `--dry-run`: ビルドせず計画のみを表示します（`[cached]` / `[will-build]` / `[skip:unsupported]` / `[skip:no-cross]`）。
 
-`build` の実行時は、対象パッケージをコンパイルする前に、指定した Target ごとの `dependencies` および `build-dependencies` をトポロジカル順で先にビルドします。`--all-targets` はこのグラフを Target ごとに組み、（パッケージ, ターゲット）単位の重複を除いた単一の順序で処理します。非対応の `-t` はエラーです。プレフィックス付き toolchain は `Bootstrap` グラフを使い、binutils と `{triple}-glibc` の循環を避けます。イメージ参照、シード向け `pacman` 前置き、ネットワーク許可だけを、合成済みビルド環境の有無で切り替えます。依存グラフに循環がある場合はエラーとして処理を中断します。ソースコードが未展開の場合は自動的に `fetch` を実行します。成果物ディレクトリ（`packages/artifacts/`）に既にファイルが存在する場合は、そのターゲットのビルドをスキップします。ビルドに失敗した場合は、不完全な成果物を残さないよう出力ディレクトリを自動的に削除します（最初からビルドを再試行する場合は、該当する成果物ディレクトリを手動で削除します）。`--keep-going` 指定時を除き、最初の失敗でコマンドは終了します。
+`build` の実行時は、対象パッケージをコンパイルする前に、指定した Target ごとの宣言済み依存を先にビルドします。順序付けに参加するのは `Via::Ordered` 辺のみで、`dependencies` / `build-dependencies` / `host-dependencies` を問わずすべての宣言辺はバージョン照合・マウント解決の対象です。循環を断つ辺（`Via::Seed` / `Via::Artifact` / `Via::Optional`）は順序に参加せず充足方法だけを表します。`--all-targets` はこのグラフを Target ごとに組み、（パッケージ, ターゲット）単位の重複を除いた単一の順序で処理します。非対応の `-t` はエラーです。イメージ参照、シード向け `pacman` 前置き、ネットワーク許可だけを、合成済みビルド環境の有無で切り替えます。`Via::Ordered` 辺だけの部分グラフに循環がある場合は、循環を断つべき辺に `via` の宣言が無いことを意味するためエラーとして処理を中断します。ソースコードが未展開の場合は自動的に `fetch` を実行します。成果物ディレクトリ（`packages/artifacts/`）に既にファイルが存在する場合は、そのターゲットのビルドをスキップします。ビルドに失敗した場合は、不完全な成果物を残さないよう出力ディレクトリを自動的に削除します（最初からビルドを再試行する場合は、該当する成果物ディレクトリを手動で削除します）。`--keep-going` 指定時を除き、最初の失敗でコマンドは終了します。
 
 実コンパイルを開始する直前に「をビルドします」と進捗を出し、`podman` の標準出力と標準エラー出力を端末と `packages/logs/{name}-{version}-{architecture}-{variant}.log` へ同時に書き込みます。失敗してもこの個別ログは削除しません。`pack --with-build` および `compose --with-build` も同じ個別ログを書きます。`curl` および `tar` による取得は進捗行と端末への出力のままです。
 
@@ -121,5 +122,5 @@
 
 - 実装の正本は Rust の `Package` トレイトです。パッケージごとの定義コードは `builder/src/package/definition/{name}.rs` に配置し、仕様文書は [package/definition/](../package/definition/) にまとめます。
 - 共通のビルド環境方針については [package](../package/README.md) を参照してください。
-- パッケージイメージには各パッケージ固有のファイルのみを含め、依存パッケージのファイルは含めません。実行時依存は `dependencies`、ビルド時のみ必要な依存は `build-dependencies` として分離して宣言します。
+- パッケージイメージには各パッケージ固有のファイルのみを含め、依存パッケージのファイルは含めません。実行時依存は `dependencies`、ターゲット向け `-I` / `-L` 入力となるビルド時依存は `build-dependencies`、ビルド中に HOST 側で実行するツールは `host-dependencies` として分離して宣言します。
 - SPDX SBOM は Image Layout 内の `sbom.spdx.json` に出力します。なお、OCI attestation（referrers）としての外部公開は現時点では未実装です。

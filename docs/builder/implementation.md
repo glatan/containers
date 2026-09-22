@@ -6,7 +6,7 @@
 ## 概要
 
 - 実装言語には Rust 1.98.1（edition 2024）を採用します。使用するツールチェーンはリポジトリルートの `rust-toolchain.toml` で固定します。
-- 単一のバイナリ（`containers-builder`）で、フラットなサブコマンド（照会: `ls` / `info` / `tree` / `targets`、作業: `fetch` / `build` / `check` / `pack` / `compose` / `clean`、環境: `env`）を提供します。ソースコードは `builder/` ディレクトリで管理します。
+- 単一のバイナリ（`containers-builder`）で、フラットなサブコマンド（照会: `ls` / `info` / `tree` / `targets` / `docs`、作業: `fetch` / `build` / `check` / `pack` / `compose` / `clean`、環境: `env`）を提供します。ソースコードは `builder/` ディレクトリで管理します。
 - コマンド実行はリポジトリのルートディレクトリで行い、作業ディレクトリ（`packages/` および `oci-layouts/`）を相対パスで参照します。
 
 ## モジュール構成
@@ -14,7 +14,7 @@
 | モジュール | 役割 |
 |-|-|
 | `main.rs` | コマンドライン引数の解析、プロセスの起動、および終了ステータスの管理 |
-| `command/` | サブコマンドの実行ロジック（`mod` = 引数解析と選択、`query` = 照会、`work` = 作業、`env` = ビルド環境） |
+| `command/` | サブコマンドの実行ロジック（`mod` = 引数解析と選択、`query` = 照会、`work` = 作業、`env` = ビルド環境、`docs` = 定義文書の生成ブロック再生成） |
 | `error.rs` / `process.rs` | 型付きエラー定義と外部コマンドプロセスの実行制御 |
 | `package/mod.rs` | `Package` および `Bootstrap` トレイトと共通データ構造の定義 |
 | `package/definition/` | 個別パッケージの定義実装と `PACKAGES` 登録一覧 |
@@ -81,10 +81,11 @@ compose          dependencies の推移閉包を単一の出力イメージへ�
     ↓                 oci-layouts/{name}-{arch}-{date}-{revision}/
 clean            成果物・ビルド作業ツリー・個別ログを削除（再ビルド前の掃除、--images で oci-layouts/ も対象）
 ls / info / tree / targets / env plan  照会系（tree --reverse は逆依存、env plan はシード相の最小集合）
+docs             定義文書（docs/package/definition/）の生成ブロックと索引を PACKAGES から再生成（--check で差分検査）
 ```
 
 ビルドスクリプトへ渡す環境変数と `/dep` へのマウントは [package/README.md](../package/README.md) です。
-`build` は依存パッケージを先にビルドします。ルートが `Bootstrap` を実装している場合、合成済みビルド環境の有無にかかわらずグラフには `Bootstrap` の依存を使います。`own`（合成済みイメージの使用、`pacman` 前置きの有無、ネットワーク遮断）だけを `build_env_ready()` で決めます。成果物ディレクトリが既に存在し空でない場合はそのターゲットのコンパイルをスキップし、ビルド途中で失敗した成果物は不整合を防ぐため自動的に削除します。`podman` の出力は `packages/logs/` の個別ファイルへ tee し、失敗してもログは残します。
+`build` は依存パッケージを先にビルドします。グラフは `Package` の宣言辺のみから構成され、`Via::Ordered` 辺だけがビルド順に参加します（Ordered 部分グラフは常に DAG で、未宣言の循環はエラー）。循環を断つ辺は `Via::Seed` / `Via::Artifact` / `Via::Optional` で明示し、シード相（`is_seed` = `Bootstrap::seed` の BUILD_ENV ビルド）では `Via::Seed` 辺が distro パッケージで担保され、それ以外では成果物を要求します。`own`（合成済みイメージの使用、`pacman` 前置きの有無、ネットワーク遮断）だけを `build_env_ready()` で決めます。成果物ディレクトリが既に存在し空でない場合はそのターゲットのコンパイルをスキップし、ビルド途中で失敗した成果物は不整合を防ぐため自動的に削除します。`podman` の出力は `packages/logs/` の個別ファイルへ tee し、失敗してもログは残します。
 
 コンテナ内で plan を解釈する runner は、ビルドツール自身を `/tmp/runner` にマウントして起動します。マウントするバイナリは `CONTAINERS_BUILDER_RUNNER` 環境変数の明示指定を最優先とし、次に cargo 規約パス `target/x86_64-unknown-linux-musl/<profile>/containers-builder` の musl 静的ビルドを探し、見つからなければ実行中のバイナリを使います。musl 静的ビルドはコンテナ側 libc に依存しないため推奨であり、`rustup target add x86_64-unknown-linux-musl` ののち `cargo build --target x86_64-unknown-linux-musl` で生成します。フォールバック時は、コンテナ側 glibc がホストより古いと runner が起動しない旨の警告を一度だけ出力します。実際にマウントした runner のパスは個別ログの `runner:` 行に記録します。
 
@@ -96,14 +97,14 @@ LTO や PGO の適用方針はパッケージの種別ごとに異なります�
 自前で合成したビルド環境イメージ上では `--network=none` を指定して完全に隔離された状態でビルドします。一方、シード環境では `Package::pacman()` によるパッケージ導入や、カタログのクロス gcc 導入のためにネットワークアクセスを許可します。
 
 新規パッケージを定義する場合は、`builder/src/package/definition/{name}.rs` に `Package` トレイトを実装し、`builder/src/package/definition/mod.rs` の一覧へ登録します。`Bootstrap` を実装するのは x86_64 ツールチェーン、POSIX PATH、cmake、mold、linux-headers です。他の Host tools は `env bootstrap` の対象に依存グラフ経由で入ります。`flags(target)` メソッドの実装は必須であり、フラグを要求しない場合は空の `Flag` を返します。
-文書としては、[`docs/package/definition/{name}.md`](../package/definition/) にビルド設定を記述します。1 パッケージ 1 ファイルです。索引は [definition/README.md](../package/definition/README.md) です。Host tools の共通前処理については [host-tools.md](../package/host-tools.md)、プレフィックス付きツールチェーンのステージ順については [toolchain.md](../package/toolchain.md) を参照してください。モジュール名の `linux_headers.rs` はパッケージ名 `linux-headers` に対応します。プレフィックス付きパッケージも 1 パッケージ 1 ファイルで、`x86_64_linux_gnu_binutils.rs` が `x86_64-linux-gnu-binutils` に対応します。ステージ共通の実装（レシピ・依存表・バージョン）は `definition/` 直下の `binutils.rs` / `gcc.rs` / `gcc_stage1.rs` / `gcc_stage2.rs` / `glibc.rs` / `glibc_headers.rs`（共有部品は `stages.rs`）に置き、各タプルのリーフは `impl Package` / `impl Bootstrap` で共有実装へ委譲します。
+文書としては、[`docs/package/definition/{name}.md`](../package/definition/) にビルド設定を記述します。1 パッケージ 1 ファイルです。各ファイルの先頭部（タイトル・メタデータ・ソース・依存表）と索引表は `<!-- GENERATED -->` マーカーで囲まれた生成ブロックであり、`containers-builder docs` が `PACKAGES` から再生成します（`docs --check` で差分検査）。手書きの補足はマーカーの外側に書きます。索引は [definition/README.md](../package/definition/README.md) です。Host tools の共通前処理については [host-tools.md](../package/host-tools.md)、プレフィックス付きツールチェーンのステージ順については [toolchain.md](../package/toolchain.md) を参照してください。モジュール名の `linux_headers.rs` はパッケージ名 `linux-headers` に対応します。プレフィックス付きパッケージも 1 パッケージ 1 ファイルで、`x86_64_linux_gnu_binutils.rs` が `x86_64-linux-gnu-binutils` に対応します。ステージ共通の実装（レシピ・依存表・バージョン）は `definition/` 直下の `binutils.rs` / `gcc.rs` / `gcc_stage1.rs` / `gcc_stage2.rs` / `glibc.rs` / `glibc_headers.rs`（共有部品は `stages.rs`）に置き、各タプルのリーフは `impl Package` / `impl Bootstrap` で共有実装へ委譲します。
 
 ## クロスビルドの構成
 
 ビルド環境イメージは amd64 / v4 上で動作します。非 amd64 プラットフォーム向けパッケージは、イメージ内に配置した `{triple}-gcc` を用いてクロスコンパイルします。PGO は生成バイナリを実行可能なネイティブビルドにのみ適用するため、クロスビルドではプロファイル実行（QEMU 利用を含む）を行いません。なお、自前イメージ合成前のシード期間に限り、Arch Linux 上で pacman を用いてクロス gcc を導入します。
 
 - カタログパッケージのビルド時は、対象 architecture の GNU triple を `TRIPLE` に渡し、クロス接頭辞 `CROSS` は常に `{TRIPLE}-` とします（amd64 の場合は `x86_64-linux-gnu-`）。ネイティブビルドかクロスビルドかの判定は、`TRIPLE` と `HOST_TRIPLE` の一致によって行います。
-- Host tools のコード生成側 GNU triple はパッケージ Platform の triple です（vendor 名の `pc` は含めません）。他パッケージがビルド時に実行する python / cmake / meson / ninja / perl は HOST 成果物をマウントします。
+- Host tools のコード生成側 GNU triple はパッケージ Platform の triple です（vendor 名の `pc` は含めません）。他パッケージがビルド時に実行する python / cmake / meson / ninja / perl および C ツールチェーンは `host_dependencies` 辺として宣言され、HOST 成果物を `dep:false` でマウントします。依存辺の `Via` が充足方法（Ordered / Seed / Artifact / Optional）を表し、`Via::Ordered` 辺のみがビルド順に参加するため、暗黙の依存は存在せず循環はすべて切断辺で明示されます。
 - クロスビルドした `{triple}-glibc` には、クロス gcc が要求するディレクトリ構造に合わせて `usr/{triple}/{include,lib,lib64}` を置きます。Host tools とカタログの `--sysroot` はこの `usr/{triple}` を優先します。
 - 実行時 libc は `{triple}-glibc` です。
 - `linux-headers` の配置規則については [linux-headers.md](../package/definition/linux-headers.md) を参照してください。

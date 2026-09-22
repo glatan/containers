@@ -37,7 +37,7 @@ flowchart TD
 
 Phase 1 は `env bootstrap` である。シード上で x86_64 の gcc ステージと glibc、最終 gcc、PATH 用 POSIX、cmake、mold を組む。リンクは Arch の mold を使う。自前 mold ができるまで compose しない。
 
-Phase 2 の最初の `env compose` は、x86_64 の gcc / binutils / glibc、POSIX PATH（make、bash、coreutils、sed、grep、gawk、findutils、tar、gzip、xz、diffutils、patch、m4）、および自前 mold だけを載せる。bison、python、cmake、qemu、他 triple は載せない。cmake は mold の build-dep として seed 上で組む。
+Phase 2 の最初の `env compose` は、x86_64 の gcc / binutils / glibc、POSIX PATH（make、bash、coreutils、sed、grep、gawk、findutils、tar、gzip、xz、diffutils、patch、m4）、および自前 mold だけを載せる。bison、python、cmake、qemu、他 triple は載せない。cmake は mold のホスト依存として seed 上で組む。
 
 後続も同じ amd64 / v4 上である。python や bison、qemu、他 GNU triple の `{triple}-glibc`（その arch の基底 variant）を組んでから、HOST 向け `{triple}-binutils` / `{triple}-gcc` を組む。非 HOST の glibc や他パッケージのビルドが実行する python は HOST 成果物をマウントするため、python はこれらより先に組む必要がある。再合成して PATH に載せる。
 
@@ -45,14 +45,14 @@ Phase 4 は、Phase 3 までに揃えた HOST クロスコンパイラで、カ�
 
 最終 `{triple}-gcc` / `{triple}-binutils` もビルドマシンは amd64 / v4 のままである。製品キューは [toolchain.md](./toolchain.md) である。Canadian cross のビルド設定は残すが、製品としては組まない。`{triple}-glibc` はもともと自 arch の variant だけである。
 
-## シードグラフと Package グラフ
+## 依存グラフと切断辺
 
-プレフィックス付き `binutils` の `Package::dependencies(target)` は、その Platform の `{triple}-glibc` を引く。seed の binutils はその glibc より先に組む。`{triple}-binutils` は `Bootstrap::seed_dependencies(target)` でシード相のグラフを上書きする。binutils のシード実行時依存は空なので、glibc との循環が起きない。
+プレフィックス付き `binutils` の `Package::dependencies(target)` は、その Platform の `{triple}-glibc` と `zlib` / `zstd` を引く。これらの辺は `Via::Seed` として宣言され、glibc との循環を断つ切断辺となる（Ordered 部分グラフは常に DAG）。シード相では distro パッケージが担保し、合成済み env 上では成果物が必須となる。
 
 ```mermaid
 flowchart LR
-  seedGraph["Bootstrap graph seed"]
-  pkgGraph["Package graph after glibc"]
+  seedGraph["seed 相（distro 担保）"]
+  pkgGraph["合成 env 相（成果物必須）"]
   binutils["x86_64-linux-gnu-binutils"]
   glibcPrefixed["x86_64-linux-gnu-glibc"]
   hostTool["Host tool"]

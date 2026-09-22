@@ -4,7 +4,7 @@
 
 `PACKAGES` に載るパッケージは [definition/](./definition/) に `{パッケージ名}.md` を 1 ファイル置きます。索引は [definition/README.md](./definition/README.md) です。実装は [`builder/src/package/definition/`](../../builder/src/package/definition/) です。ハイフンはモジュール名ではアンダースコア `_` です。プレフィックス付きツールチェーンも `{パッケージ名}.rs` の 1 ファイル 1 定義で、ステージ共通の実装は `binutils.rs` / `gcc.rs` / `gcc_stage1.rs` / `gcc_stage2.rs` / `glibc.rs` / `glibc_headers.rs` / `stages.rs` に置きます。
 
-パッケージイメージには各パッケージ固有のファイルのみを含めます。実行時に必要となる他のパッケージは `dependencies`、ビルド時のみ必要な依存パッケージは `build-dependencies` として分離して宣言します。`check` コマンドは、この実行時依存の宣言と、パッケージ成果物（`packages/artifacts/`）に含まれる ELF バイナリの動的リンク情報を静的に照合します。
+パッケージイメージには各パッケージ固有のファイルのみを含めます。実行時に必要となる他のパッケージは `dependencies`、ターゲット向け `-I` / `-L` 入力となるビルド時依存は `build-dependencies`、ビルド中に HOST 側で実行するツール（C ツールチェーンを含む）は `host-dependencies` として分離して宣言します。暗黙の依存は許容しません。`check` コマンドは、この実行時依存の宣言と、パッケージ成果物（`packages/artifacts/`）に含まれる ELF バイナリの動的リンク情報を静的に照合します。
 
 ## ビルド環境の構成
 
@@ -97,7 +97,7 @@
 
 種別ごとの例外は、glibc と最終 gcc は [toolchain.md](./toolchain.md)、Host tools は [host-tools.md](./host-tools.md)、カタログと qemu は各 `{パッケージ名}.md` です。
 
-依存パッケージは `/dep/{パッケージ名}` に読み取り専用でマウントされます（`dependencies` と `build-dependencies` の双方が対象です）。リンカ環境変数 `LD` には gcc を入れません。共有ライブラリのリンクは gcc ドライバと `-fuse-ld=mold` に任せます。libtool が `LD` を GNU ld と誤認しないようにするためです。
+依存パッケージは `/dep/{パッケージ名}` に読み取り専用でマウントされます。`dependencies` と `build-dependencies` は `-I` / `-L` の対象（`dep:true`）で、`host-dependencies` は PATH・`LD_LIBRARY_PATH`・`PKG_CONFIG_PATH` に載る `dep:false` マウントです（ターゲット向け `-I` / `-L` の入力にはなりません）。同名パッケージが両種別で必要な場合、HOST 側は `/dep/{パッケージ名}-host` へ退避されます。リンカ環境変数 `LD` には gcc を入れません。共有ライブラリのリンクは gcc ドライバと `-fuse-ld=mold` に任せます。libtool が `LD` を GNU ld と誤認しないようにするためです。
 
 - architecture および variant 単位で CPU プラットフォームを指定します。対象プラットフォームの一覧は [platforms.md](../image/platforms.md) です。
 - LTO および PGO の適用方針はパッケージの種別に応じて分かれます。カタログの共有ライブラリでは各ビルド設定で個別に宣言し、Host tools の共通前処理やプレフィックス付き最終 gcc・qemu の例外設定については各設計文書に記載しています。

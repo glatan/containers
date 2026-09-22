@@ -1,3 +1,4 @@
+<!-- GENERATED -->
 # riscv64-linux-gnu-gcc
 
 | 項目 | 値 |
@@ -5,47 +6,58 @@
 | パッケージ名 | `riscv64-linux-gnu-gcc` |
 | バージョン | 16.2.0 |
 | ライセンス | GPL-3.0-or-later WITH GCC-exception-3.1 |
-| パッケージイメージ | 公開対象（[公開一覧](../../image/packages.md)） |
-| ネットワーク | 不要 |
+| 分類 | パッケージ（Bootstrap） |
 | 定義 | [`builder/src/package/definition/riscv64_linux_gnu_gcc.rs`](../../../builder/src/package/definition/riscv64_linux_gnu_gcc.rs) |
-| 共通方針 | [toolchain.md](../toolchain.md) |
 
 ## ソース
 
-gcc 16.2.0。URL とハッシュは [toolchain.md](../toolchain.md) です。
+| 項目 | 値 |
+|-|-|
+| URL | https://ftp.gnu.org/gnu/gcc/gcc-16.2.0/gcc-16.2.0.tar.xz |
+| sha3-512 | `1995b2fd6c2b19fe8ca47c836fdee8c019909ab8857f81a8045a7726ce724146ab63cd8f836fb460e9b009434ea97eb51b34397760b9ec4bbcac490ca32fa0f6` |
+| blake3 | `c0f53af0bbfd2bf28896ab9bdfd1a534351b851c5a2f0226feb6a4323884c43531cbb207c733e8fd8ac16e2e1b03e6d8f17d043a17cf026857eedf26c31e4e0e` |
+| 展開ディレクトリ | `gcc-16.2.0` |
 
 ## 依存
 
+`amd64/v4`（`Target::BUILD_ENV`）で評価した宣言です。他 Platform では `{triple}-glibc` などがその Platform の triple 名に変わり、ターゲット条件付きの辺（クロス時の自己参照など）はここには現れません。via 列は充足方法です（`seed` = シード相は distro パッケージが担保・合成 env では成果物必須、`artifact` = 常に成果物必須、`optional` = あれば使う）。
+
 ### dependencies
 
-| パッケージ | バージョン | 用途 |
+| パッケージ | バージョン | via |
 |-|-|-|
-| [`riscv64-linux-gnu-glibc`](./riscv64-linux-gnu-glibc.md) | 2.44 | 実行時 libc。成果物には焼き付けない |
-| [gmp](./gmp.md) | 6.3.0 | 多倍長整数 |
-| [mpfr](./mpfr.md) | 4.2.2 | 多倍長浮動小数 |
-| [mpc](./mpc.md) | 1.4.1 | 複素数 |
-| [isl](./isl.md) | 0.26 | 整数集合 |
-| [zlib](./zlib.md) | 1.3.2 | 圧縮 |
-| [zstd](./zstd.md) | 1.5.7 | 圧縮 |
+| [x86_64-linux-gnu-glibc](./x86_64-linux-gnu-glibc.md) | 2.44 | — |
+| [gmp](./gmp.md) | 6.3.0 | — |
+| [mpfr](./mpfr.md) | 4.2.2 | — |
+| [mpc](./mpc.md) | 1.4.1 | — |
+| [isl](./isl.md) | 0.26 | — |
+| [zlib](./zlib.md) | 1.3.2 | — |
+| [zstd](./zstd.md) | 1.5.7 | — |
 
 ### build-dependencies
 
-| パッケージ | バージョン | 用途 |
+| パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | カーネルヘッダ |
-| [`riscv64-linux-gnu-binutils`](./riscv64-linux-gnu-binutils.md) | 2.47 | アセンブラ / リンカ |
-| [`riscv64-linux-gnu-glibc`](./riscv64-linux-gnu-glibc.md) | 2.44 | sysroot |
-| [bison](./bison.md) | 3.8.2 | パーサ生成 |
-| [flex](./flex.md) | 2.6.4 | 字句解析 |
-| [perl](./perl.md) | 5.42.3 | テスト / 生成 |
-| [texinfo](./texinfo.md) | 7.3 | info |
-| [m4](./m4.md) | 1.4.21 | マクロ |
+| [linux-headers](./linux-headers.md) | 6.18.33 | — |
+| [riscv64-linux-gnu-binutils](./riscv64-linux-gnu-binutils.md) | 2.47 | — |
+| [riscv64-linux-gnu-glibc](./riscv64-linux-gnu-glibc.md) | 2.44 | — |
 
-### ビルド環境
+### host-dependencies
 
-| 名前 | 用途 |
-|-|-|
-| 共通の[ビルド環境イメージ](../README.md) | `build` によるコンパイル |
+| パッケージ | バージョン | via |
+|-|-|-|
+| [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | seed |
+| [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | seed |
+| [bison](./bison.md) | 3.8.2 | optional |
+| [flex](./flex.md) | 2.6.4 | optional |
+| [perl](./perl.md) | 5.42.3 | optional |
+| [texinfo](./texinfo.md) | 7.3 | optional |
+| [m4](./m4.md) | 1.4.21 | optional |
+
+host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
+<!-- /GENERATED -->
+
+
 
 ## ビルド設定
 

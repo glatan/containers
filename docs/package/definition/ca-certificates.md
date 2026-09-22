@@ -1,3 +1,4 @@
+<!-- GENERATED -->
 # ca-certificates
 
 | 項目 | 値 |
@@ -5,13 +6,10 @@
 | パッケージ名 | `ca-certificates` |
 | バージョン | 2026.07.22 |
 | ライセンス | MPL-2.0 |
-| パッケージイメージ | 公開対象（[公開一覧](../../image/packages.md)） |
-| ネットワーク | 不要 |
+| 分類 | カタログ |
 | 定義 | [`builder/src/package/definition/ca_certificates.rs`](../../../builder/src/package/definition/ca_certificates.rs) |
 
 ## ソース
-
-Mozilla のルート CA 証明書バンドルとして、[certifi](https://github.com/certifi/python-certifi) のリリースターボールを固定して使用します。Python ランタイムは使用せず、アーカイブから `cacert.pem` のみを抽出してインストールします。
 
 | 項目 | 値 |
 |-|-|
@@ -22,19 +20,25 @@ Mozilla のルート CA 証明書バンドルとして、[certifi](https://githu
 
 ## 依存
 
+`amd64/v4`（`Target::BUILD_ENV`）で評価した宣言です。他 Platform では `{triple}-glibc` などがその Platform の triple 名に変わり、ターゲット条件付きの辺（クロス時の自己参照など）はここには現れません。via 列は充足方法です（`seed` = シード相は distro パッケージが担保・合成 env では成果物必須、`artifact` = 常に成果物必須、`optional` = あれば使う）。
+
 ### dependencies
 
 なし。
 
 ### build-dependencies
 
+なし。
+
+### host-dependencies
+
+なし。
+
+<!-- /GENERATED -->
+
+
+
 なし（openssl からも本パッケージには依存しません）。
-
-### ビルド環境
-
-| 名前 | 用途 |
-|-|-|
-| 共通の[ビルド環境イメージ](../README.md) | `build` によるファイル配置 |
 
 ## ターゲット
 
