@@ -7,6 +7,7 @@
 | バージョン | 2026.07.22 |
 | ライセンス | MPL-2.0 |
 | 分類 | カタログ |
+| 対象 Platform | amd64: v1 v2 v3 v4; arm64: v8 v8.1 v8.2 v8.3 v8.4 v8.5 v8.6 v8.7 v8.8 v8.9 v9 v9.1 v9.2 v9.3 v9.4 v9.5; ppc64le: power8 power9 power10 power11; riscv64: rva20u64 rva22u64 rva23u64; s390x: z900 z990 z9-ec z10 z196 zEC12 z13 z14 z15 z16 z17 |
 | 定義 | [`builder/src/package/definition/ca_certificates.rs`](../../../builder/src/package/definition/ca_certificates.rs) |
 
 ## ソース
@@ -34,6 +35,36 @@
 
 なし。
 
+## ビルド設定
+
+| 項目 | 値 |
+|-|-|
+| env プリリュード | `Env::None`（前処理なし） |
+| sysroot | なし |
+| ビルドディレクトリ | なし |
+
+## ツールチェーンフラグ
+
+`CFLAGS`/`LDFLAGS` は設定しません。
+
+`-march`/`-mcpu` の値は variant 依存です（上記は amd64/v4 で評価）。
+
+## ビルド手順
+
+`recipe()` が生成するスクリプトです（`builder` が runner へ渡す IR のレンダリング）。対象 Platform 間で差分はありません。
+
+<details>
+<summary>常時（ネイティブ・クロス混在・Canadian 混在）</summary>
+
+```bash
+set -euxo pipefail
+install -D -m 644 "$SOURCE"/certifi/cacert.pem "$OUT"/etc/ssl/certs/ca-certificates.crt
+ln -s ca-certificates.crt "$OUT"/etc/ssl/certs/ca-bundle.crt
+ln -s certs/ca-certificates.crt "$OUT"/etc/ssl/cert.pem
+```
+
+</details>
+
 <!-- /GENERATED -->
 
 
@@ -44,12 +75,5 @@
 
 成果物に含まれるファイル集合は architecture / variant に依存しないため、`flags()` は空のフラグを返します。`--all-targets` は `Target::all()` を組みます。
 
-## ビルドフラグ
-
-| フラグ | 設定値 | 条件 |
-|-|-|-|
-| `flags()` | 空 | 静的証明書ファイルのみ |
-| LTO | 適用しない | コンパイルを伴わないため |
-| PGO | 適用しない | コンパイルを伴わないため |
 
 成果物として `/etc/ssl/certs/ca-certificates.crt` を配置し、`/etc/ssl/certs/ca-bundle.crt` および `/etc/ssl/cert.pem` からのシンボリックリンクを作成します。具体的な配置手順は定義ファイルの `recipe` メソッド（`Step::Install` と `Step::Symlink`）に記述しています。

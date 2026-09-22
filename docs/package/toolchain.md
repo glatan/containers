@@ -8,19 +8,30 @@
 
 `build --all-targets` は `supports` が真の Platform を対象にします。運用で組む製品キューはそれより狭いことがあります。ビルド設定（configure の `--build` / `--host` / `--target`、Canadian 経路）は残します。
 
-| パッケージ | `supports` | 製品キュー |
-|-|-|-|
-| `{triple}-gcc` / `{triple}-binutils` | `Target::all()` | HOST（当該 triple）と、パッケージ名の GNU triple が Platform の architecture と一致する variant |
-| `{triple}-glibc` | その architecture の全 variant | `supports` と同じ |
-| `{triple}-gcc-stage1` / `*-glibc-headers` / `*-gcc-stage2` | HOST のみ | `supports` と同じ |
+<!-- GENERATED:supports -->
+
+| パッケージ | `supports` |
+|-|-|
+| `{triple}-binutils` | `Target::all()` |
+| `{triple}-gcc-stage1` | HOST（amd64 / v4）のみ |
+| `{triple}-glibc-headers` | HOST（amd64 / v4）のみ |
+| `{triple}-gcc-stage2` | HOST（amd64 / v4）のみ |
+| `{triple}-glibc` | その architecture の全 variant |
+| `{triple}-gcc` | `Target::all()` |
+
+<!-- /GENERATED:supports -->
+
+製品キューは `supports` より狭いことがあります。`{triple}-gcc` / `{triple}-binutils` は HOST（当該 triple）と、パッケージ名の GNU triple が Platform の architecture と一致する variant を組みます。`{triple}-glibc` と中間ステージは `supports` と同じです。
 
 製品キューの例は amd64 向け `x86_64-linux-gnu-gcc`、arm64 向け `aarch64-linux-gnu-gcc` です。Canadian cross（`x86_64-linux-gnu-gcc` を arm64 / v8 向けに組む、など）は製品キューに入れません。
 
-`PACKAGE_HOST` が HOST triple と異なるときは PGO を掛けず、HOST 上の `{triple}-gcc` を `CC_FOR_TARGET` にしてターゲットライブラリを組みます。
+`{triple}-gcc` では `$PACKAGE_HOST` ≠ HOST triple（Canadian cross、`canadian()` 判定）のとき PGO を掛けず、HOST 上の `{triple}-gcc` を `CC_FOR_TARGET` にしてターゲットライブラリを組みます。
 
 ## 上流ソース
 
 ハッシュは各 `{パッケージ名}.md` の生成ブロックにも現れます（正本は各定義の `Source` で、生成ブロックは `containers-builder docs` が再生成します）。
+
+<!-- GENERATED:upstream -->
 
 | 上流 | バージョン | URL | 展開ディレクトリ |
 |-|-|-|-|
@@ -37,6 +48,8 @@ gcc blake3: `c0f53af0bbfd2bf28896ab9bdfd1a534351b851c5a2f0226feb6a4323884c43531c
 glibc sha3-512: `263dfb5e331b2033368c7455abcd9a9b15ab098ac963d5518ecf4bcb9eeb41298eb9976bf78a64af67d9471a50161bced2fa69d429c69759ea57f76b942ac521`  
 glibc blake3: `6d07bc16d8d066b1c0ae713d762175f261e27df9cab8015ec11e1c980c05e79b0fd5bab6cde6a90bf07651c432ca9039629376b57a96c9f3dcb3765f3745dbf4`
 
+<!-- /GENERATED:upstream -->
+
 ## ビルドステージの構成
 
 ```
@@ -51,6 +64,8 @@ glibc blake3: `6d07bc16d8d066b1c0ae713d762175f261e27df9cab8015ec11e1c980c05e79b0
 
 対象とする `{triple}` は、`x86_64-linux-gnu`、`aarch64-linux-gnu`、`riscv64-linux-gnu`、`powerpc64le-linux-gnu`、および `s390x-linux-gnu` の 5 種類です。段階ごとのコマンドは [build-flow.md](./build-flow.md) です。プレフィックス付きパッケージも他パッケージと同じ `Package` 宣言グラフに載り、ツールチェーンの循環（binutils ↔ glibc、glibc ↔ gcc 等）は `Via::Seed` / `Via::Artifact` の切断辺で明示します。
 
+<!-- GENERATED:stages -->
+
 | パッケージ | バージョン | パッケージイメージ化 |
 |-|-|-|
 | `{triple}-binutils` | 2.47 | 対象 |
@@ -60,22 +75,67 @@ glibc blake3: `6d07bc16d8d066b1c0ae713d762175f261e27df9cab8015ec11e1c980c05e79b0
 | `{triple}-glibc` | 2.44 | 対象 |
 | `{triple}-gcc` | 16.2.0 | 対象 |
 
+<!-- /GENERATED:stages -->
+
 中間コンパイラ（stage1 および stage2）の配置先プレフィックスは `/usr/lib/cross/{triple}/stage{1,2}/` です。最終 gcc は `/usr/bin/{triple}-gcc` として配置し、configure 時に `--with-sysroot=/usr/{triple}` を指定します。また、`x86_64-linux-gnu-glibc` に限り、`/lib64` および `ld-linux-x86-64.so.2` の互換パスにもファイルを配置します。
 
 プレフィックス付きの `{triple}-glibc` が実行時 libc です。最終 gcc は libc を成果物に焼き付けません。リンクは `/dep/{triple}-glibc` です。configure は `--build=$HOST_TRIPLE --host=$HOST_TRIPLE --target=$TRIPLE` です（ツールはビルド機で動くクロスツールのため `--host` は `$HOST_TRIPLE` です。`$PACKAGE_HOST` を渡すと host == target になり誤りです）。info は `--infodir=/usr/share/info/{triple}` に分け、5 本の HOST gcc が衝突しないようにします。
 
 `{triple}-binutils` の configure は `--enable-plugins`、`--with-system-zlib`、`--without-debuginfod`、`--disable-gprofng` を指定します。gold は組みません。`libstdc++.so.6` / `libgcc_s.so.1` への実行時依存（gcc との循環）を避けるためです。リンカは mold に一本化しています。
 
-| 対象 | configure オプション | 効果 |
-|-|-|-|
-| binutils（全 triple） | `--enable-new-dtags` `--enable-relro` `--enable-default-execstack=no` `--enable-default-hash-style=gnu` | RUNPATH 化・RELRO 既定・`-z noexecstack` を ld 既定化・生 `ld` 呼び出しも gnu hash に |
-| binutils（`x86_64-linux-gnu`） | `--enable-cet` | ld を CET 対応に |
-| gcc-stage1（全 triple） | `--enable-default-pie` `--enable-default-ssp` | 生成コンパイラの既定（freestanding でも無害） |
-| gcc-stage2（全 triple） | stage1 と同じ + `--with-linker-hash-style=gnu` `--enable-linker-build-id` `--enable-gnu-indirect-function` `--enable-gnu-unique-object` `--enable-initfini-array` | stage2 が libgcc_s.so をリンクするため hash-style 等が必要 |
-| glibc（全 triple） | `--enable-stack-protector=strong` `--enable-bind-now` `--enable-fortify-source` | libc 自身の SSP / eager binding / fortify（LEVEL はコンパイラ最大 = 3） |
-| glibc（`x86_64-linux-gnu`） | `--enable-cet`（strict） | libc の CET。全 ELF 出力の `readelf -n` CET マーク audit が前提（非マーク DSO の dlopen は strict ではエラー） |
+各ステージの configure 引数は次のとおりです（各パッケージ文書の生成 `## ビルドフラグ` の統合ビュー。`{triple}` ごとの差分のみを示します）。
 
-x86_64 のネイティブ binutils（`$TRIPLE = x86_64-linux-gnu` かつ `$PACKAGE_HOST = $HOST_TRIPLE`）には PGO を適用します。instrumented ツリーで `as` / `ld` / `objdump` を生成アセンブリの assemble・リンク・逆アセンブルで駆動してプロファイルを採取し、別ツリーで `-fprofile-use` の成果物を組みます。クロス binutils には適用しません。
+<!-- GENERATED:stage-args -->
+
+### `{triple}-binutils`
+
+| 対象 | configure 引数 |
+|-|-|
+| `x86_64-linux-gnu` | `--build=${HOST_TRIPLE}` `--host=${HOST_TRIPLE}` `--target=${TRIPLE}` `--program-prefix=${TRIPLE}-` `--prefix=/usr` `--infodir=/usr/share/info/${TRIPLE}` `--disable-nls` `--disable-werror` `--enable-plugins` `--with-system-zlib` `--without-debuginfod` `--disable-gprofng` `--enable-new-dtags` `--enable-relro` `--enable-default-execstack=no` `--enable-default-hash-style=gnu` `--enable-cet` |
+| `aarch64-linux-gnu` `riscv64-linux-gnu` `powerpc64le-linux-gnu` `s390x-linux-gnu` | `--build=${HOST_TRIPLE}` `--host=${HOST_TRIPLE}` `--target=${TRIPLE}` `--program-prefix=${TRIPLE}-` `--prefix=/usr` `--infodir=/usr/share/info/${TRIPLE}` `--disable-nls` `--disable-werror` `--enable-plugins` `--with-system-zlib` `--without-debuginfod` `--disable-gprofng` `--enable-new-dtags` `--enable-relro` `--enable-default-execstack=no` `--enable-default-hash-style=gnu` |
+
+### `{triple}-gcc-stage1`
+
+| 対象 | configure 引数 |
+|-|-|
+| `x86_64-linux-gnu` | `--build=${HOST_TRIPLE}` `--host=${HOST_TRIPLE}` `--target=${TRIPLE}` `--program-prefix=${TRIPLE}-` `--prefix=/usr/lib/cross/${TRIPLE}/stage1` `--with-sysroot=/usr/${TRIPLE}` `--with-build-sysroot=/usr/${TRIPLE}` `--with-native-system-header-dir=/include` `--with-as=/usr/bin/${TRIPLE}-as` `--with-ld=/usr/bin/${TRIPLE}-ld` `--infodir=/usr/share/info/${TRIPLE}` `--with-system-zlib` `${GCC_LIB_FLAGS}` `--with-arch=x86-64` `--without-headers` `--with-newlib` `--disable-shared` `--disable-threads` `--disable-werror` `--disable-libatomic` `--disable-libsanitizer` `--disable-libssp` `--disable-libquadmath` `--disable-libgomp` `--disable-libstdcxx` `--disable-libvtv` `--disable-bootstrap` `--disable-multilib` `--enable-languages=c` `--enable-lto` `--enable-plugin` `--enable-default-pie` `--enable-default-ssp` `--enable-checking=release` |
+| `aarch64-linux-gnu` | `--build=${HOST_TRIPLE}` `--host=${HOST_TRIPLE}` `--target=${TRIPLE}` `--program-prefix=${TRIPLE}-` `--prefix=/usr/lib/cross/${TRIPLE}/stage1` `--with-sysroot=/usr/${TRIPLE}` `--with-build-sysroot=/usr/${TRIPLE}` `--with-native-system-header-dir=/include` `--with-as=/usr/bin/${TRIPLE}-as` `--with-ld=/usr/bin/${TRIPLE}-ld` `--infodir=/usr/share/info/${TRIPLE}` `--with-system-zlib` `${GCC_LIB_FLAGS}` `--with-arch=armv8-a` `--without-headers` `--with-newlib` `--disable-shared` `--disable-threads` `--disable-werror` `--disable-libatomic` `--disable-libsanitizer` `--disable-libssp` `--disable-libquadmath` `--disable-libgomp` `--disable-libstdcxx` `--disable-libvtv` `--disable-bootstrap` `--disable-multilib` `--enable-languages=c` `--enable-lto` `--enable-plugin` `--enable-default-pie` `--enable-default-ssp` `--enable-checking=release` |
+| `riscv64-linux-gnu` | `--build=${HOST_TRIPLE}` `--host=${HOST_TRIPLE}` `--target=${TRIPLE}` `--program-prefix=${TRIPLE}-` `--prefix=/usr/lib/cross/${TRIPLE}/stage1` `--with-sysroot=/usr/${TRIPLE}` `--with-build-sysroot=/usr/${TRIPLE}` `--with-native-system-header-dir=/include` `--with-as=/usr/bin/${TRIPLE}-as` `--with-ld=/usr/bin/${TRIPLE}-ld` `--infodir=/usr/share/info/${TRIPLE}` `--with-system-zlib` `${GCC_LIB_FLAGS}` `--with-arch=rv64gc` `--with-abi=lp64d` `--without-headers` `--with-newlib` `--disable-shared` `--disable-threads` `--disable-werror` `--disable-libatomic` `--disable-libsanitizer` `--disable-libssp` `--disable-libquadmath` `--disable-libgomp` `--disable-libstdcxx` `--disable-libvtv` `--disable-bootstrap` `--disable-multilib` `--enable-languages=c` `--enable-lto` `--enable-plugin` `--enable-default-pie` `--enable-default-ssp` `--enable-checking=release` |
+| `powerpc64le-linux-gnu` | `--build=${HOST_TRIPLE}` `--host=${HOST_TRIPLE}` `--target=${TRIPLE}` `--program-prefix=${TRIPLE}-` `--prefix=/usr/lib/cross/${TRIPLE}/stage1` `--with-sysroot=/usr/${TRIPLE}` `--with-build-sysroot=/usr/${TRIPLE}` `--with-native-system-header-dir=/include` `--with-as=/usr/bin/${TRIPLE}-as` `--with-ld=/usr/bin/${TRIPLE}-ld` `--infodir=/usr/share/info/${TRIPLE}` `--with-system-zlib` `${GCC_LIB_FLAGS}` `--with-cpu=power8` `--without-headers` `--with-newlib` `--disable-shared` `--disable-threads` `--disable-werror` `--disable-libatomic` `--disable-libsanitizer` `--disable-libssp` `--disable-libquadmath` `--disable-libgomp` `--disable-libstdcxx` `--disable-libvtv` `--disable-bootstrap` `--disable-multilib` `--enable-languages=c` `--enable-lto` `--enable-plugin` `--enable-default-pie` `--enable-default-ssp` `--enable-checking=release` |
+| `s390x-linux-gnu` | `--build=${HOST_TRIPLE}` `--host=${HOST_TRIPLE}` `--target=${TRIPLE}` `--program-prefix=${TRIPLE}-` `--prefix=/usr/lib/cross/${TRIPLE}/stage1` `--with-sysroot=/usr/${TRIPLE}` `--with-build-sysroot=/usr/${TRIPLE}` `--with-native-system-header-dir=/include` `--with-as=/usr/bin/${TRIPLE}-as` `--with-ld=/usr/bin/${TRIPLE}-ld` `--infodir=/usr/share/info/${TRIPLE}` `--with-system-zlib` `${GCC_LIB_FLAGS}` `--with-arch=z900` `--without-headers` `--with-newlib` `--disable-shared` `--disable-threads` `--disable-werror` `--disable-libatomic` `--disable-libsanitizer` `--disable-libssp` `--disable-libquadmath` `--disable-libgomp` `--disable-libstdcxx` `--disable-libvtv` `--disable-bootstrap` `--disable-multilib` `--enable-languages=c` `--enable-lto` `--enable-plugin` `--enable-default-pie` `--enable-default-ssp` `--enable-checking=release` |
+
+### `{triple}-glibc-headers`
+
+| 対象 | configure 引数 |
+|-|-|
+| 全 triple | `--prefix=/` `--host=${TRIPLE}` `--build=${HOST_TRIPLE}` `--with-headers=${SYSROOT}/include` `--disable-werror` `libc_cv_forced_unwind=yes` `libc_cv_c_cleanup=yes` |
+
+### `{triple}-gcc-stage2`
+
+| 対象 | configure 引数 |
+|-|-|
+| `x86_64-linux-gnu` | `--build=${HOST_TRIPLE}` `--host=${HOST_TRIPLE}` `--target=${TRIPLE}` `--program-prefix=${TRIPLE}-` `--prefix=/usr/lib/cross/${TRIPLE}/stage2` `--with-sysroot=/usr/${TRIPLE}` `--with-build-sysroot=/usr/${TRIPLE}` `--with-native-system-header-dir=/include` `--with-as=/usr/bin/${TRIPLE}-as` `--with-ld=/usr/bin/${TRIPLE}-ld` `--infodir=/usr/share/info/${TRIPLE}` `--with-system-zlib` `${GCC_LIB_FLAGS}` `--with-arch=x86-64` `--disable-nls` `--disable-multilib` `--disable-werror` `--disable-libatomic` `--disable-libsanitizer` `--disable-libssp` `--disable-libquadmath` `--disable-libgomp` `--disable-libstdcxx` `--disable-libvtv` `--disable-bootstrap` `--enable-shared` `--enable-threads=posix` `--enable-languages=c` `--enable-lto` `--enable-plugin` `--enable-checking=release` `--enable-default-pie` `--enable-default-ssp` `--with-linker-hash-style=gnu` `--enable-linker-build-id` `--enable-gnu-indirect-function` `--enable-gnu-unique-object` `--enable-initfini-array` |
+| `aarch64-linux-gnu` | `--build=${HOST_TRIPLE}` `--host=${HOST_TRIPLE}` `--target=${TRIPLE}` `--program-prefix=${TRIPLE}-` `--prefix=/usr/lib/cross/${TRIPLE}/stage2` `--with-sysroot=/usr/${TRIPLE}` `--with-build-sysroot=/usr/${TRIPLE}` `--with-native-system-header-dir=/include` `--with-as=/usr/bin/${TRIPLE}-as` `--with-ld=/usr/bin/${TRIPLE}-ld` `--infodir=/usr/share/info/${TRIPLE}` `--with-system-zlib` `${GCC_LIB_FLAGS}` `--with-arch=armv8-a` `--disable-nls` `--disable-multilib` `--disable-werror` `--disable-libatomic` `--disable-libsanitizer` `--disable-libssp` `--disable-libquadmath` `--disable-libgomp` `--disable-libstdcxx` `--disable-libvtv` `--disable-bootstrap` `--enable-shared` `--enable-threads=posix` `--enable-languages=c` `--enable-lto` `--enable-plugin` `--enable-checking=release` `--enable-default-pie` `--enable-default-ssp` `--with-linker-hash-style=gnu` `--enable-linker-build-id` `--enable-gnu-indirect-function` `--enable-gnu-unique-object` `--enable-initfini-array` |
+| `riscv64-linux-gnu` | `--build=${HOST_TRIPLE}` `--host=${HOST_TRIPLE}` `--target=${TRIPLE}` `--program-prefix=${TRIPLE}-` `--prefix=/usr/lib/cross/${TRIPLE}/stage2` `--with-sysroot=/usr/${TRIPLE}` `--with-build-sysroot=/usr/${TRIPLE}` `--with-native-system-header-dir=/include` `--with-as=/usr/bin/${TRIPLE}-as` `--with-ld=/usr/bin/${TRIPLE}-ld` `--infodir=/usr/share/info/${TRIPLE}` `--with-system-zlib` `${GCC_LIB_FLAGS}` `--with-arch=rv64gc` `--with-abi=lp64d` `--disable-nls` `--disable-multilib` `--disable-werror` `--disable-libatomic` `--disable-libsanitizer` `--disable-libssp` `--disable-libquadmath` `--disable-libgomp` `--disable-libstdcxx` `--disable-libvtv` `--disable-bootstrap` `--enable-shared` `--enable-threads=posix` `--enable-languages=c` `--enable-lto` `--enable-plugin` `--enable-checking=release` `--enable-default-pie` `--enable-default-ssp` `--with-linker-hash-style=gnu` `--enable-linker-build-id` `--enable-gnu-indirect-function` `--enable-gnu-unique-object` `--enable-initfini-array` |
+| `powerpc64le-linux-gnu` | `--build=${HOST_TRIPLE}` `--host=${HOST_TRIPLE}` `--target=${TRIPLE}` `--program-prefix=${TRIPLE}-` `--prefix=/usr/lib/cross/${TRIPLE}/stage2` `--with-sysroot=/usr/${TRIPLE}` `--with-build-sysroot=/usr/${TRIPLE}` `--with-native-system-header-dir=/include` `--with-as=/usr/bin/${TRIPLE}-as` `--with-ld=/usr/bin/${TRIPLE}-ld` `--infodir=/usr/share/info/${TRIPLE}` `--with-system-zlib` `${GCC_LIB_FLAGS}` `--with-cpu=power8` `--disable-nls` `--disable-multilib` `--disable-werror` `--disable-libatomic` `--disable-libsanitizer` `--disable-libssp` `--disable-libquadmath` `--disable-libgomp` `--disable-libstdcxx` `--disable-libvtv` `--disable-bootstrap` `--enable-shared` `--enable-threads=posix` `--enable-languages=c` `--enable-lto` `--enable-plugin` `--enable-checking=release` `--enable-default-pie` `--enable-default-ssp` `--with-linker-hash-style=gnu` `--enable-linker-build-id` `--enable-gnu-indirect-function` `--enable-gnu-unique-object` `--enable-initfini-array` |
+| `s390x-linux-gnu` | `--build=${HOST_TRIPLE}` `--host=${HOST_TRIPLE}` `--target=${TRIPLE}` `--program-prefix=${TRIPLE}-` `--prefix=/usr/lib/cross/${TRIPLE}/stage2` `--with-sysroot=/usr/${TRIPLE}` `--with-build-sysroot=/usr/${TRIPLE}` `--with-native-system-header-dir=/include` `--with-as=/usr/bin/${TRIPLE}-as` `--with-ld=/usr/bin/${TRIPLE}-ld` `--infodir=/usr/share/info/${TRIPLE}` `--with-system-zlib` `${GCC_LIB_FLAGS}` `--with-arch=z900` `--disable-nls` `--disable-multilib` `--disable-werror` `--disable-libatomic` `--disable-libsanitizer` `--disable-libssp` `--disable-libquadmath` `--disable-libgomp` `--disable-libstdcxx` `--disable-libvtv` `--disable-bootstrap` `--enable-shared` `--enable-threads=posix` `--enable-languages=c` `--enable-lto` `--enable-plugin` `--enable-checking=release` `--enable-default-pie` `--enable-default-ssp` `--with-linker-hash-style=gnu` `--enable-linker-build-id` `--enable-gnu-indirect-function` `--enable-gnu-unique-object` `--enable-initfini-array` |
+
+### `{triple}-glibc`
+
+| 対象 | configure 引数 |
+|-|-|
+| `x86_64-linux-gnu` | `--prefix=/` `--host=${TRIPLE}` `--build=${HOST_TRIPLE}` `--libdir=/lib` `--with-headers=${SYSROOT}/include` `--disable-werror` `--disable-nscd` `--disable-profile` `--enable-stack-protector=strong` `--enable-bind-now` `--enable-fortify-source` `--enable-cet` `libc_cv_forced_unwind=yes` `libc_cv_c_cleanup=yes` |
+| `aarch64-linux-gnu` `riscv64-linux-gnu` `powerpc64le-linux-gnu` `s390x-linux-gnu` | `--prefix=/` `--host=${TRIPLE}` `--build=${HOST_TRIPLE}` `--libdir=/lib` `--with-headers=${SYSROOT}/include` `--disable-werror` `--disable-nscd` `--disable-profile` `--enable-stack-protector=strong` `--enable-bind-now` `--enable-fortify-source` `libc_cv_forced_unwind=yes` `libc_cv_c_cleanup=yes` |
+
+<!-- /GENERATED:stage-args -->
+
+オプションの効果:
+
+- binutils の `--enable-new-dtags` `--enable-relro` `--enable-default-execstack=no` `--enable-default-hash-style=gnu`: RUNPATH 化・RELRO 既定・`-z noexecstack` を ld 既定化・生 `ld` 呼び出しも gnu hash にします。`--enable-cet`（`x86_64-linux-gnu` のみ）は ld を CET 対応にします。
+- gcc-stage1 / stage2 の `--enable-default-pie` `--enable-default-ssp`: 生成コンパイラの既定です（freestanding でも無害）。stage2 は libgcc_s.so をリンクするため `--with-linker-hash-style=gnu` `--enable-linker-build-id` `--enable-gnu-indirect-function` `--enable-gnu-unique-object` `--enable-initfini-array` を追加します。
+- glibc の `--enable-stack-protector=strong` `--enable-bind-now` `--enable-fortify-source`: libc 自身の SSP / eager binding / fortify です（LEVEL はコンパイラ最大 = 3）。`--enable-cet`（`x86_64-linux-gnu` のみ、strict）は全 ELF 出力の `readelf -n` CET マーク audit が前提です（非マーク DSO の dlopen は strict ではエラー）。
+
+binutils の PGO は `cet && !ctx.cross()` でゲートされます（`cet` は `$TRIPLE` = `x86_64-linux-gnu` のときのみ真）。instrumented な `as` / `ld` / `objdump` をビルドホスト上で実行してプロファイルを採取するため、生成コードが HOST で動かせる triple に限ります。`x86_64-linux-gnu-binutils` は `$TRIPLE` が常に `$HOST_TRIPLE` と一致するため全対象 Platform で適用され、他 triple の `{triple}-binutils` では `cet` が偽のため適用されません。instrumented ツリーで `as` / `ld` / `objdump` を生成アセンブリの assemble・リンク・逆アセンブルで駆動してプロファイルを採取し、別ツリーで `-fprofile-use` の成果物を組みます。クロス binutils には適用しません。
 
 ## linux-headers の取り込み
 
@@ -87,12 +147,21 @@ stage1、glibc-headers、stage2、glibc、および最終 gcc の各ステージ
 
 最終 gcc の configure では、instrumented（プロファイル採取用）および final（最終成果物）の双方において、`--disable-bootstrap`、`--disable-multilib`、`--enable-languages=c,c++`、`--enable-lto`、および `--enable-plugin` を指定します。なお、stage1 および stage2 ではすべての triple において `--disable-libsanitizer` を指定します。
 
-| 対象 | configure オプション | 効果 |
-|-|-|-|
-| 最終 gcc（全 triple） | `--enable-default-pie` `--enable-default-ssp` `--with-linker-hash-style=gnu` `--enable-linker-build-id` `--enable-gnu-indirect-function` `--enable-gnu-unique-object` `--enable-initfini-array` `--enable-libstdcxx-backtrace` `--enable-host-pie` `--enable-host-bind-now` | 既定 PIE/SSP + リンカー挙動 + cc1/xgcc 等コンパイラ自身のバイナリも PIE/BIND_NOW 化 |
-| 最終 gcc（amd64） | `--enable-cet` | CET（`-fcf-protection` と対） |
-| 最終 gcc（s390x） | `--enable-decimal-float` | libgcc の DFP ランタイム |
-| 最終 gcc（全 triple） | `--with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'` | CFLAGS を無視するビルド系へのベースライン適用。`-fno-hardened` で傘フラグのみ解除可能（`NoHardened` トークン）。target ランタイム lib（libgcc/libstdc++ 等）も `-fhardened` でビルドされる（intended） |
+<!-- GENERATED:gcc-args -->
+
+### `{triple}-gcc`
+
+| 対象 | configure 引数 |
+|-|-|
+| `x86_64-linux-gnu` | `--build=${HOST_TRIPLE}` `--host=${HOST_TRIPLE}` `--target=${TRIPLE}` `--program-prefix=${TRIPLE}-` `--prefix=/usr` `--with-sysroot=${SYSROOT}` `--with-build-sysroot=${BUILD_SYSROOT}` `--with-native-system-header-dir=/include` `--with-as=/usr/bin/${TRIPLE}-as` `--with-ld=/usr/bin/${TRIPLE}-ld` `--infodir=/usr/share/info/${TRIPLE}` `--with-system-zlib` `${GCC_LIB_FLAGS}` `--with-arch=${MARCH}` `--enable-cet` `--disable-nls` `--disable-werror` `--disable-libssp` `--disable-libstdcxx-pch` `--disable-bootstrap` `--disable-multilib` `--enable-plugin` `--enable-languages=c,c++` `--enable-lto` `--enable-checking=release` `--enable-__cxa_atexit` `--enable-threads=posix` `--enable-shared` `--enable-default-pie` `--enable-default-ssp` `--with-linker-hash-style=gnu` `--enable-linker-build-id` `--enable-gnu-indirect-function` `--enable-gnu-unique-object` `--enable-initfini-array` `--enable-libstdcxx-backtrace` `--enable-host-pie` `--enable-host-bind-now` `--with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'` |
+| `aarch64-linux-gnu` | `--build=${HOST_TRIPLE}` `--host=${HOST_TRIPLE}` `--target=${TRIPLE}` `--program-prefix=${TRIPLE}-` `--prefix=/usr` `--with-sysroot=${SYSROOT}` `--with-build-sysroot=${BUILD_SYSROOT}` `--with-native-system-header-dir=/include` `--with-as=/usr/bin/${TRIPLE}-as` `--with-ld=/usr/bin/${TRIPLE}-ld` `--infodir=/usr/share/info/${TRIPLE}` `--with-system-zlib` `${GCC_LIB_FLAGS}` `--with-arch=${MARCH}` `--disable-nls` `--disable-werror` `--disable-libssp` `--disable-libstdcxx-pch` `--disable-bootstrap` `--disable-multilib` `--disable-libsanitizer` `--enable-plugin` `--enable-languages=c,c++` `--enable-lto` `--enable-checking=release` `--enable-__cxa_atexit` `--enable-threads=posix` `--enable-shared` `--enable-default-pie` `--enable-default-ssp` `--with-linker-hash-style=gnu` `--enable-linker-build-id` `--enable-gnu-indirect-function` `--enable-gnu-unique-object` `--enable-initfini-array` `--enable-libstdcxx-backtrace` `--enable-host-pie` `--enable-host-bind-now` `--with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'` |
+| `riscv64-linux-gnu` | `--build=${HOST_TRIPLE}` `--host=${HOST_TRIPLE}` `--target=${TRIPLE}` `--program-prefix=${TRIPLE}-` `--prefix=/usr` `--with-sysroot=${SYSROOT}` `--with-build-sysroot=${BUILD_SYSROOT}` `--with-native-system-header-dir=/include` `--with-as=/usr/bin/${TRIPLE}-as` `--with-ld=/usr/bin/${TRIPLE}-ld` `--infodir=/usr/share/info/${TRIPLE}` `--with-system-zlib` `${GCC_LIB_FLAGS}` `--with-arch=${MARCH}` `--with-abi=lp64d` `--disable-nls` `--disable-werror` `--disable-libssp` `--disable-libstdcxx-pch` `--disable-bootstrap` `--disable-multilib` `--disable-libsanitizer` `--enable-plugin` `--enable-languages=c,c++` `--enable-lto` `--enable-checking=release` `--enable-__cxa_atexit` `--enable-threads=posix` `--enable-shared` `--enable-default-pie` `--enable-default-ssp` `--with-linker-hash-style=gnu` `--enable-linker-build-id` `--enable-gnu-indirect-function` `--enable-gnu-unique-object` `--enable-initfini-array` `--enable-libstdcxx-backtrace` `--enable-host-pie` `--enable-host-bind-now` `--with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'` |
+| `powerpc64le-linux-gnu` | `--build=${HOST_TRIPLE}` `--host=${HOST_TRIPLE}` `--target=${TRIPLE}` `--program-prefix=${TRIPLE}-` `--prefix=/usr` `--with-sysroot=${SYSROOT}` `--with-build-sysroot=${BUILD_SYSROOT}` `--with-native-system-header-dir=/include` `--with-as=/usr/bin/${TRIPLE}-as` `--with-ld=/usr/bin/${TRIPLE}-ld` `--infodir=/usr/share/info/${TRIPLE}` `--with-system-zlib` `${GCC_LIB_FLAGS}` `--with-cpu=${MARCH}` `--disable-nls` `--disable-werror` `--disable-libssp` `--disable-libstdcxx-pch` `--disable-bootstrap` `--disable-multilib` `--disable-libsanitizer` `--enable-plugin` `--enable-languages=c,c++` `--enable-lto` `--enable-checking=release` `--enable-__cxa_atexit` `--enable-threads=posix` `--enable-shared` `--enable-default-pie` `--enable-default-ssp` `--with-linker-hash-style=gnu` `--enable-linker-build-id` `--enable-gnu-indirect-function` `--enable-gnu-unique-object` `--enable-initfini-array` `--enable-libstdcxx-backtrace` `--enable-host-pie` `--enable-host-bind-now` `--with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'` |
+| `s390x-linux-gnu` | `--build=${HOST_TRIPLE}` `--host=${HOST_TRIPLE}` `--target=${TRIPLE}` `--program-prefix=${TRIPLE}-` `--prefix=/usr` `--with-sysroot=${SYSROOT}` `--with-build-sysroot=${BUILD_SYSROOT}` `--with-native-system-header-dir=/include` `--with-as=/usr/bin/${TRIPLE}-as` `--with-ld=/usr/bin/${TRIPLE}-ld` `--infodir=/usr/share/info/${TRIPLE}` `--with-system-zlib` `${GCC_LIB_FLAGS}` `--with-arch=${MARCH}` `--enable-decimal-float` `--disable-nls` `--disable-werror` `--disable-libssp` `--disable-libstdcxx-pch` `--disable-bootstrap` `--disable-multilib` `--disable-libsanitizer` `--enable-plugin` `--enable-languages=c,c++` `--enable-lto` `--enable-checking=release` `--enable-__cxa_atexit` `--enable-threads=posix` `--enable-shared` `--enable-default-pie` `--enable-default-ssp` `--with-linker-hash-style=gnu` `--enable-linker-build-id` `--enable-gnu-indirect-function` `--enable-gnu-unique-object` `--enable-initfini-array` `--enable-libstdcxx-backtrace` `--enable-host-pie` `--enable-host-bind-now` `--with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'` |
+
+<!-- /GENERATED:gcc-args -->
+
+オプションの効果: `--enable-default-pie` / `--enable-default-ssp` とリンカー挙動の既定に加え、`--enable-host-pie` / `--enable-host-bind-now` で cc1/xgcc 等コンパイラ自身のバイナリも PIE/BIND_NOW 化します。`--enable-cet`（amd64）は `-fcf-protection` と対です。`--enable-decimal-float`（s390x）は libgcc の DFP ランタイムです。`--with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'` は CFLAGS を無視するビルド系へのベースライン適用で、`-fno-hardened` で傘フラグのみ解除可能です（`NoHardened` トークン）。target ランタイム lib（libgcc/libstdc++ 等）も `-fhardened` でビルドされます（intended）。
 
 `GCC_ARCH_FLAGS`（`--with-arch` / `--with-cpu`）は最終 gcc のみ per-variant にします。libgcc / libstdc++ / libatomic 等のランタイムを variant の ISA で組み、フラグを落としたパッケージの既定も底上げします。stage1 / stage2 / glibc-headers は BUILD_ENV（amd64 / v4）でしか組まないため triple ベースライン（`x86-64` / `armv8-a` / `rv64gc` / `power8` / `z900`）のままです。
 

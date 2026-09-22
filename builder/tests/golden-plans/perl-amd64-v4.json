@@ -335,246 +335,236 @@
           },
           "else_": [
             {
-              "Exec": {
-                "env": [],
-                "pipe": {
-                  "stages": [
-                    [
+              "ConfigureScript": {
+                "args": [
+                  {
+                    "Lit": "-des"
+                  },
+                  {
+                    "Lit": "-Dprefix=/usr"
+                  },
+                  {
+                    "Lit": "-Dvendorprefix=/usr"
+                  },
+                  {
+                    "Lit": "-Duse64bitall"
+                  },
+                  {
+                    "Lit": "-Dusethreads"
+                  },
+                  {
+                    "Lit": "-Duseshrplib"
+                  },
+                  {
+                    "Concat": [
                       {
-                        "Lit": "./Configure"
+                        "Lit": "-Dcc="
                       },
                       {
-                        "Lit": "-des"
-                      },
-                      {
-                        "Lit": "-Dprefix=/usr"
-                      },
-                      {
-                        "Lit": "-Dvendorprefix=/usr"
-                      },
-                      {
-                        "Lit": "-Duse64bitall"
-                      },
-                      {
-                        "Lit": "-Dusethreads"
-                      },
-                      {
-                        "Lit": "-Duseshrplib"
-                      },
-                      {
-                        "Concat": [
-                          {
-                            "Lit": "-Dcc="
-                          },
-                          {
-                            "Quoted": {
-                              "Var": "CC"
-                            }
-                          }
-                        ]
-                      },
-                      {
-                        "Concat": [
-                          {
-                            "Lit": "-Dld="
-                          },
-                          {
-                            "Quoted": {
-                              "Var": "CC"
-                            }
-                          }
-                        ]
-                      },
-                      {
-                        "Concat": [
-                          {
-                            "Lit": "-Accflags="
-                          },
-                          {
-                            "Quoted": {
-                              "Var": "CFLAGS"
-                            }
-                          }
-                        ]
-                      },
-                      {
-                        "Concat": [
-                          {
-                            "Lit": "-Aldflags="
-                          },
-                          {
-                            "Quoted": {
-                              "Var": "LDFLAGS"
-                            }
-                          }
-                        ]
+                        "Quoted": {
+                          "Var": "CC"
+                        }
                       }
                     ]
-                  ],
-                  "stderr": null,
-                  "stdin": null,
-                  "stdout": null
-                }
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "-Dld="
+                      },
+                      {
+                        "Quoted": {
+                          "Var": "CC"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "-Accflags="
+                      },
+                      {
+                        "Quoted": {
+                          "Var": "CFLAGS"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "-Aldflags="
+                      },
+                      {
+                        "Quoted": {
+                          "Var": "LDFLAGS"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "env": [],
+                "program": [
+                  {
+                    "Lit": "./Configure"
+                  }
+                ]
               }
             }
           ],
           "then": [
             {
-              "Exec": {
-                "env": [],
-                "pipe": {
-                  "stages": [
-                    [
+              "ConfigureScript": {
+                "args": [
+                  {
+                    "Lit": "-des"
+                  },
+                  {
+                    "Lit": "-Dprefix=/usr"
+                  },
+                  {
+                    "Lit": "-Dvendorprefix=/usr"
+                  },
+                  {
+                    "Lit": "-Duse64bitall"
+                  },
+                  {
+                    "Lit": "-Dusethreads"
+                  },
+                  {
+                    "Lit": "-Duseshrplib"
+                  },
+                  {
+                    "Concat": [
                       {
-                        "Lit": "./Configure"
+                        "Lit": "-Dcc="
                       },
                       {
-                        "Lit": "-des"
-                      },
-                      {
-                        "Lit": "-Dprefix=/usr"
-                      },
-                      {
-                        "Lit": "-Dvendorprefix=/usr"
-                      },
-                      {
-                        "Lit": "-Duse64bitall"
-                      },
-                      {
-                        "Lit": "-Dusethreads"
-                      },
-                      {
-                        "Lit": "-Duseshrplib"
-                      },
-                      {
-                        "Concat": [
-                          {
-                            "Lit": "-Dcc="
-                          },
-                          {
-                            "Quoted": {
-                              "Var": "CC"
-                            }
-                          }
-                        ]
-                      },
-                      {
-                        "Concat": [
-                          {
-                            "Lit": "-Dld="
-                          },
-                          {
-                            "Quoted": {
-                              "Var": "CC"
-                            }
-                          }
-                        ]
-                      },
-                      {
-                        "Concat": [
-                          {
-                            "Lit": "-Accflags="
-                          },
-                          {
-                            "Quoted": {
-                              "Var": "CFLAGS"
-                            }
-                          }
-                        ]
-                      },
-                      {
-                        "Concat": [
-                          {
-                            "Lit": "-Aldflags="
-                          },
-                          {
-                            "Quoted": {
-                              "Var": "LDFLAGS"
-                            }
-                          }
-                        ]
-                      },
-                      {
-                        "Concat": [
-                          {
-                            "Lit": "-Dsysroot="
-                          },
-                          {
-                            "Quoted": {
-                              "Var": "SYSROOT"
-                            }
-                          }
-                        ]
-                      },
-                      {
-                        "Concat": [
-                          {
-                            "Lit": "-Dusrinc="
-                          },
-                          {
-                            "Quoted": {
-                              "Concat": [
-                                {
-                                  "Var": "_sysroot"
-                                },
-                                {
-                                  "Lit": "/include"
-                                }
-                              ]
-                            }
-                          }
-                        ]
-                      },
-                      {
-                        "Concat": [
-                          {
-                            "Lit": "-Dincpth="
-                          },
-                          {
-                            "Quoted": {
-                              "Concat": [
-                                {
-                                  "Var": "_sysroot"
-                                },
-                                {
-                                  "Lit": "/include"
-                                }
-                              ]
-                            }
-                          }
-                        ]
-                      },
-                      {
-                        "Concat": [
-                          {
-                            "Lit": "-Dlibpth="
-                          },
-                          {
-                            "Quoted": {
-                              "Concat": [
-                                {
-                                  "Var": "_sysroot"
-                                },
-                                {
-                                  "Lit": "/lib /dep/libxcrypt/usr/lib /dep/libxcrypt/usr/lib64 "
-                                },
-                                {
-                                  "Var": "_sysroot"
-                                },
-                                {
-                                  "Lit": "/lib64"
-                                }
-                              ]
-                            }
-                          }
-                        ]
+                        "Quoted": {
+                          "Var": "CC"
+                        }
                       }
                     ]
-                  ],
-                  "stderr": null,
-                  "stdin": null,
-                  "stdout": null
-                }
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "-Dld="
+                      },
+                      {
+                        "Quoted": {
+                          "Var": "CC"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "-Accflags="
+                      },
+                      {
+                        "Quoted": {
+                          "Var": "CFLAGS"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "-Aldflags="
+                      },
+                      {
+                        "Quoted": {
+                          "Var": "LDFLAGS"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "-Dsysroot="
+                      },
+                      {
+                        "Quoted": {
+                          "Var": "SYSROOT"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "-Dusrinc="
+                      },
+                      {
+                        "Quoted": {
+                          "Concat": [
+                            {
+                              "Var": "_sysroot"
+                            },
+                            {
+                              "Lit": "/include"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "-Dincpth="
+                      },
+                      {
+                        "Quoted": {
+                          "Concat": [
+                            {
+                              "Var": "_sysroot"
+                            },
+                            {
+                              "Lit": "/include"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "-Dlibpth="
+                      },
+                      {
+                        "Quoted": {
+                          "Concat": [
+                            {
+                              "Var": "_sysroot"
+                            },
+                            {
+                              "Lit": "/lib /dep/libxcrypt/usr/lib /dep/libxcrypt/usr/lib64 "
+                            },
+                            {
+                              "Var": "_sysroot"
+                            },
+                            {
+                              "Lit": "/lib64"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "env": [],
+                "program": [
+                  {
+                    "Lit": "./Configure"
+                  }
+                ]
               }
             }
           ]

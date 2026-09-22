@@ -121,7 +121,94 @@
         }
       },
       {
-        "Exec": {
+        "ConfigureScript": {
+          "args": [
+            {
+              "Opt": [
+                "build",
+                {
+                  "Var": "HOST_TRIPLE"
+                }
+              ]
+            },
+            {
+              "Opt": [
+                "host",
+                {
+                  "Var": "HOST_TRIPLE"
+                }
+              ]
+            },
+            {
+              "Opt": [
+                "target",
+                {
+                  "Var": "TRIPLE"
+                }
+              ]
+            },
+            {
+              "Opt": [
+                "program-prefix",
+                {
+                  "Concat": [
+                    {
+                      "Var": "TRIPLE"
+                    },
+                    {
+                      "Lit": "-"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Lit": "--prefix=/usr"
+            },
+            {
+              "Concat": [
+                {
+                  "Lit": "--infodir=/usr/share/info/"
+                },
+                {
+                  "Var": "TRIPLE"
+                }
+              ]
+            },
+            {
+              "Lit": "--disable-nls"
+            },
+            {
+              "Lit": "--disable-werror"
+            },
+            {
+              "Lit": "--enable-plugins"
+            },
+            {
+              "Lit": "--with-system-zlib"
+            },
+            {
+              "Lit": "--without-debuginfod"
+            },
+            {
+              "Lit": "--disable-gprofng"
+            },
+            {
+              "Lit": "--enable-new-dtags"
+            },
+            {
+              "Lit": "--enable-relro"
+            },
+            {
+              "Lit": "--enable-default-execstack=no"
+            },
+            {
+              "Lit": "--enable-default-hash-style=gnu"
+            },
+            {
+              "Lit": "--enable-cet"
+            }
+          ],
           "env": [
             [
               "CFLAGS",
@@ -169,110 +256,18 @@
               }
             ]
           ],
-          "pipe": {
-            "stages": [
-              [
+          "program": [
+            {
+              "Concat": [
                 {
-                  "Concat": [
-                    {
-                      "Var": "SOURCE"
-                    },
-                    {
-                      "Lit": "/configure"
-                    }
-                  ]
+                  "Var": "SOURCE"
                 },
                 {
-                  "Opt": [
-                    "build",
-                    {
-                      "Var": "HOST_TRIPLE"
-                    }
-                  ]
-                },
-                {
-                  "Opt": [
-                    "host",
-                    {
-                      "Var": "HOST_TRIPLE"
-                    }
-                  ]
-                },
-                {
-                  "Opt": [
-                    "target",
-                    {
-                      "Var": "TRIPLE"
-                    }
-                  ]
-                },
-                {
-                  "Opt": [
-                    "program-prefix",
-                    {
-                      "Concat": [
-                        {
-                          "Var": "TRIPLE"
-                        },
-                        {
-                          "Lit": "-"
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "Lit": "--prefix=/usr"
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "--infodir=/usr/share/info/"
-                    },
-                    {
-                      "Var": "TRIPLE"
-                    }
-                  ]
-                },
-                {
-                  "Lit": "--disable-nls"
-                },
-                {
-                  "Lit": "--disable-werror"
-                },
-                {
-                  "Lit": "--enable-plugins"
-                },
-                {
-                  "Lit": "--with-system-zlib"
-                },
-                {
-                  "Lit": "--without-debuginfod"
-                },
-                {
-                  "Lit": "--disable-gprofng"
-                },
-                {
-                  "Lit": "--enable-new-dtags"
-                },
-                {
-                  "Lit": "--enable-relro"
-                },
-                {
-                  "Lit": "--enable-default-execstack=no"
-                },
-                {
-                  "Lit": "--enable-default-hash-style=gnu"
-                },
-                {
-                  "Lit": "--enable-cet"
+                  "Lit": "/configure"
                 }
               ]
-            ],
-            "stderr": null,
-            "stdin": null,
-            "stdout": null
-          }
+            }
+          ]
         }
       },
       {
@@ -603,7 +598,94 @@
         }
       },
       {
-        "Exec": {
+        "ConfigureScript": {
+          "args": [
+            {
+              "Opt": [
+                "build",
+                {
+                  "Var": "HOST_TRIPLE"
+                }
+              ]
+            },
+            {
+              "Opt": [
+                "host",
+                {
+                  "Var": "HOST_TRIPLE"
+                }
+              ]
+            },
+            {
+              "Opt": [
+                "target",
+                {
+                  "Var": "TRIPLE"
+                }
+              ]
+            },
+            {
+              "Opt": [
+                "program-prefix",
+                {
+                  "Concat": [
+                    {
+                      "Var": "TRIPLE"
+                    },
+                    {
+                      "Lit": "-"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Lit": "--prefix=/usr"
+            },
+            {
+              "Concat": [
+                {
+                  "Lit": "--infodir=/usr/share/info/"
+                },
+                {
+                  "Var": "TRIPLE"
+                }
+              ]
+            },
+            {
+              "Lit": "--disable-nls"
+            },
+            {
+              "Lit": "--disable-werror"
+            },
+            {
+              "Lit": "--enable-plugins"
+            },
+            {
+              "Lit": "--with-system-zlib"
+            },
+            {
+              "Lit": "--without-debuginfod"
+            },
+            {
+              "Lit": "--disable-gprofng"
+            },
+            {
+              "Lit": "--enable-new-dtags"
+            },
+            {
+              "Lit": "--enable-relro"
+            },
+            {
+              "Lit": "--enable-default-execstack=no"
+            },
+            {
+              "Lit": "--enable-default-hash-style=gnu"
+            },
+            {
+              "Lit": "--enable-cet"
+            }
+          ],
           "env": [
             [
               "CFLAGS",
@@ -651,110 +733,18 @@
               }
             ]
           ],
-          "pipe": {
-            "stages": [
-              [
+          "program": [
+            {
+              "Concat": [
                 {
-                  "Concat": [
-                    {
-                      "Var": "SOURCE"
-                    },
-                    {
-                      "Lit": "/configure"
-                    }
-                  ]
+                  "Var": "SOURCE"
                 },
                 {
-                  "Opt": [
-                    "build",
-                    {
-                      "Var": "HOST_TRIPLE"
-                    }
-                  ]
-                },
-                {
-                  "Opt": [
-                    "host",
-                    {
-                      "Var": "HOST_TRIPLE"
-                    }
-                  ]
-                },
-                {
-                  "Opt": [
-                    "target",
-                    {
-                      "Var": "TRIPLE"
-                    }
-                  ]
-                },
-                {
-                  "Opt": [
-                    "program-prefix",
-                    {
-                      "Concat": [
-                        {
-                          "Var": "TRIPLE"
-                        },
-                        {
-                          "Lit": "-"
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "Lit": "--prefix=/usr"
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "--infodir=/usr/share/info/"
-                    },
-                    {
-                      "Var": "TRIPLE"
-                    }
-                  ]
-                },
-                {
-                  "Lit": "--disable-nls"
-                },
-                {
-                  "Lit": "--disable-werror"
-                },
-                {
-                  "Lit": "--enable-plugins"
-                },
-                {
-                  "Lit": "--with-system-zlib"
-                },
-                {
-                  "Lit": "--without-debuginfod"
-                },
-                {
-                  "Lit": "--disable-gprofng"
-                },
-                {
-                  "Lit": "--enable-new-dtags"
-                },
-                {
-                  "Lit": "--enable-relro"
-                },
-                {
-                  "Lit": "--enable-default-execstack=no"
-                },
-                {
-                  "Lit": "--enable-default-hash-style=gnu"
-                },
-                {
-                  "Lit": "--enable-cet"
+                  "Lit": "/configure"
                 }
               ]
-            ],
-            "stderr": null,
-            "stdin": null,
-            "stdout": null
-          }
+            }
+          ]
         }
       },
       {

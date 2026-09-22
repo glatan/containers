@@ -75,47 +75,45 @@ impl Package for ZlibNg {
         }
         let configure_cmake =
             |dir: Arg, testing: &'static str, cflags: Vec<Arg>, ldflags: Vec<Arg>| -> Step {
-                let mut cmd = argv(&["cmake", "-S"]);
-                cmd.push(Arg::quoted(Arg::Var("SOURCE")));
-                cmd.push(Arg::lit("-B"));
-                cmd.push(dir);
-                cmd.extend(cross_args.iter().cloned());
-                cmd.extend(argv(&[
+                let mut args = cross_args.clone();
+                args.extend(argv(&[
                     "-DCMAKE_BUILD_TYPE=Release",
                     "-DCMAKE_INSTALL_PREFIX=/usr",
                     "-DCMAKE_INSTALL_LIBDIR=lib64",
                     "-DZLIB_COMPAT=OFF",
                     "-DWITH_GTEST=OFF",
                 ]));
-                cmd.push(Arg::Concat(vec![
+                args.push(Arg::Concat(vec![
                     Arg::lit("-DBUILD_TESTING="),
                     Arg::lit(testing),
                 ]));
-                cmd.push(Arg::lit("-DBUILD_SHARED_LIBS=ON"));
+                args.push(Arg::lit("-DBUILD_SHARED_LIBS=ON"));
                 for (flag, var) in [
                     ("-DCMAKE_C_COMPILER=", "CC"),
                     ("-DCMAKE_AR=", "AR"),
                     ("-DCMAKE_NM=", "NM"),
                     ("-DCMAKE_RANLIB=", "RANLIB"),
                 ] {
-                    cmd.push(Arg::Concat(vec![
+                    args.push(Arg::Concat(vec![
                         Arg::lit(flag),
                         Arg::quoted(Arg::Var(var)),
                     ]));
                 }
-                cmd.push(Arg::Concat(vec![
+                args.push(Arg::Concat(vec![
                     Arg::lit("-DCMAKE_C_FLAGS="),
                     Arg::quoted(Arg::Concat(cflags)),
                 ]));
                 for flag in ["-DCMAKE_EXE_LINKER_FLAGS=", "-DCMAKE_SHARED_LINKER_FLAGS="] {
-                    cmd.push(Arg::Concat(vec![
+                    args.push(Arg::Concat(vec![
                         Arg::lit(flag),
                         Arg::quoted(Arg::Concat(ldflags.clone())),
                     ]));
                 }
-                Step::Exec {
+                Step::Cmake {
+                    source_dir: Arg::quoted(Arg::Var("SOURCE")),
+                    build_dir: dir,
+                    args,
                     env: vec![],
-                    pipe: Pipe::cmd(cmd),
                 }
             };
         let build_dir = || Arg::quoted(Arg::Var("BUILD"));

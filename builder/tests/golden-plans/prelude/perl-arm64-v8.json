@@ -930,71 +930,66 @@
               }
             },
             {
-              "Exec": {
-                "env": [],
-                "pipe": {
-                  "stages": [
-                    [
+              "ConfigureScript": {
+                "args": [
+                  {
+                    "Lit": "-des"
+                  },
+                  {
+                    "Lit": "-Dusedevel"
+                  },
+                  {
+                    "Lit": "-Dmksymlinks"
+                  },
+                  {
+                    "Concat": [
                       {
-                        "Concat": [
-                          {
-                            "Quoted": {
-                              "Var": "SOURCE"
-                            }
-                          },
-                          {
-                            "Lit": "/Configure"
-                          }
-                        ]
+                        "Lit": "-Dcc="
                       },
                       {
-                        "Lit": "-des"
-                      },
-                      {
-                        "Lit": "-Dusedevel"
-                      },
-                      {
-                        "Lit": "-Dmksymlinks"
-                      },
-                      {
-                        "Concat": [
-                          {
-                            "Lit": "-Dcc="
-                          },
-                          {
-                            "Quoted": {
-                              "Var": "CC"
-                            }
-                          }
-                        ]
-                      },
-                      {
-                        "Concat": [
-                          {
-                            "Lit": "-Dld="
-                          },
-                          {
-                            "Quoted": {
-                              "Var": "CC"
-                            }
-                          }
-                        ]
-                      },
-                      {
-                        "Lit": "-Dprefix=/usr"
-                      },
-                      {
-                        "Lit": "-Uusethreads"
-                      },
-                      {
-                        "Lit": "-Dlibs='-lpthread -ldl -lm -lutil -lc'"
+                        "Quoted": {
+                          "Var": "CC"
+                        }
                       }
                     ]
-                  ],
-                  "stderr": null,
-                  "stdin": null,
-                  "stdout": null
-                }
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "-Dld="
+                      },
+                      {
+                        "Quoted": {
+                          "Var": "CC"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "Lit": "-Dprefix=/usr"
+                  },
+                  {
+                    "Lit": "-Uusethreads"
+                  },
+                  {
+                    "Lit": "-Dlibs='-lpthread -ldl -lm -lutil -lc'"
+                  }
+                ],
+                "env": [],
+                "program": [
+                  {
+                    "Concat": [
+                      {
+                        "Quoted": {
+                          "Var": "SOURCE"
+                        }
+                      },
+                      {
+                        "Lit": "/Configure"
+                      }
+                    ]
+                  }
+                ]
               }
             },
             {
@@ -1256,371 +1251,366 @@
           }
         },
         {
-          "Exec": {
-            "env": [],
-            "pipe": {
-              "stages": [
-                [
-                  {
-                    "Lit": "./Configure"
-                  },
-                  {
-                    "Lit": "-des"
-                  },
-                  {
-                    "Lit": "-Dprefix=/usr"
-                  },
-                  {
-                    "Lit": "-Dvendorprefix=/usr"
-                  },
-                  {
-                    "Lit": "-Duse64bitall"
-                  },
-                  {
-                    "Lit": "-Dusethreads"
-                  },
-                  {
-                    "Lit": "-Duseshrplib"
-                  },
-                  {
-                    "Concat": [
-                      {
-                        "Lit": "-Dcc="
-                      },
-                      {
-                        "Quoted": {
-                          "Var": "CC"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "Concat": [
-                      {
-                        "Lit": "-Dld="
-                      },
-                      {
-                        "Quoted": {
-                          "Var": "CC"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "Concat": [
-                      {
-                        "Lit": "-Accflags="
-                      },
-                      {
-                        "Quoted": {
-                          "Var": "CFLAGS"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "Concat": [
-                      {
-                        "Lit": "-Aldflags="
-                      },
-                      {
-                        "Quoted": {
-                          "Var": "LDFLAGS"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "Lit": "-Dusecrosscompile"
-                  },
-                  {
-                    "Lit": "-Dhostperl=/tmp/perl-host/miniperl"
-                  },
-                  {
-                    "Lit": "-Dhostgenerate=/tmp/generate_uudmap"
-                  },
-                  {
-                    "Lit": "-Dcharsize=1"
-                  },
-                  {
-                    "Lit": "-Dshortsize=2"
-                  },
-                  {
-                    "Lit": "-Dintsize=4"
-                  },
-                  {
-                    "Lit": "-Dlongsize=8"
-                  },
-                  {
-                    "Lit": "-Dlonglongsize=8"
-                  },
-                  {
-                    "Lit": "-Dptrsize=8"
-                  },
-                  {
-                    "Lit": "-Ddoublesize=8"
-                  },
-                  {
-                    "Lit": "-Dnvsize=8"
-                  },
-                  {
-                    "Lit": "-Duvsize=8"
-                  },
-                  {
-                    "Lit": "-Divsize=8"
-                  },
-                  {
-                    "Lit": "-Dcharbits=8"
-                  },
-                  {
-                    "Lit": "-Dalignbytes=8"
-                  },
-                  {
-                    "Lit": "-Dssizetype=ssize_t"
-                  },
-                  {
-                    "Lit": "-Dsizetype=size_t"
-                  },
-                  {
-                    "Lit": "-Dlseektype=off_t"
-                  },
-                  {
-                    "Lit": "-Dlseeksize=8"
-                  },
-                  {
-                    "Lit": "-Dtimetype=time_t"
-                  },
-                  {
-                    "Lit": "-Dfpostype=fpos_t"
-                  },
-                  {
-                    "Lit": "-Dfpossize=16"
-                  },
-                  {
-                    "Lit": "-Dlongdblsize=16"
-                  },
-                  {
-                    "Lit": "-Ddoublekind=3"
-                  },
-                  {
-                    "Lit": "-Duseithreads"
-                  },
-                  {
-                    "Lit": "-Dusemultiplicity"
-                  },
-                  {
-                    "Lit": "-Duseperlio"
-                  },
-                  {
-                    "Lit": "-Uebcdic"
-                  },
-                  {
-                    "Lit": "-Dd_PRId64=define"
-                  },
-                  {
-                    "Lit": "-Dd_PRIi64=define"
-                  },
-                  {
-                    "Lit": "-Divdformat='\"ld\"'"
-                  },
-                  {
-                    "Lit": "-Duvuformat='\"lu\"'"
-                  },
-                  {
-                    "Lit": "-Duvxformat='\"lx\"'"
-                  },
-                  {
-                    "Lit": "-DsPRId64='\"ld\"'"
-                  },
-                  {
-                    "Lit": "-DsPRIi64='\"li\"'"
-                  },
-                  {
-                    "Lit": "-DsPRIo64='\"lo\"'"
-                  },
-                  {
-                    "Lit": "-DsPRIu64='\"lu\"'"
-                  },
-                  {
-                    "Lit": "-DsPRIx64='\"lx\"'"
-                  },
-                  {
-                    "Lit": "-DsPRIXU64='\"lX\"'"
-                  },
-                  {
-                    "Lit": "-Dnveformat='\"e\"'"
-                  },
-                  {
-                    "Lit": "-Dnvgformat='\"g\"'"
-                  },
-                  {
-                    "Lit": "-DnvEUformat='\"E\"'"
-                  },
-                  {
-                    "Lit": "-DnvGUformat='\"G\"'"
-                  },
-                  {
-                    "Lit": "-Dd_PRIfldbl=define"
-                  },
-                  {
-                    "Lit": "-Dd_PRIgldbl=define"
-                  },
-                  {
-                    "Lit": "-Dd_PRIeldbl=define"
-                  },
-                  {
-                    "Lit": "-Dd_PRIFUldbl=define"
-                  },
-                  {
-                    "Lit": "-Dd_PRIGUldbl=define"
-                  },
-                  {
-                    "Lit": "-Dd_PRIEUldbl=define"
-                  },
-                  {
-                    "Lit": "-Dd_SCNfldbl=define"
-                  },
-                  {
-                    "Lit": "-Dd_ldbl_dig=define"
-                  },
-                  {
-                    "Lit": "-DsPRIfldbl='\"Lf\"'"
-                  },
-                  {
-                    "Lit": "-DsPRIgldbl='\"Lg\"'"
-                  },
-                  {
-                    "Lit": "-DsPRIeldbl='\"Le\"'"
-                  },
-                  {
-                    "Lit": "-DsPRIFUldbl='\"LF\"'"
-                  },
-                  {
-                    "Lit": "-DsPRIGUldbl='\"LG\"'"
-                  },
-                  {
-                    "Lit": "-DsPRIEUldbl='\"LE\"'"
-                  },
-                  {
-                    "Lit": "-DsSCNfldbl='\"Lf\"'"
-                  },
-                  {
-                    "Concat": [
-                      {
-                        "Lit": "-Dtargetarch="
-                      },
-                      {
-                        "Quoted": {
-                          "Var": "TRIPLE"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "Concat": [
-                      {
-                        "Lit": "-Dsysroot="
-                      },
-                      {
-                        "Quoted": {
-                          "Var": "_sysroot"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "Concat": [
-                      {
-                        "Lit": "-Dusrinc="
-                      },
-                      {
-                        "Quoted": {
-                          "Concat": [
-                            {
-                              "Var": "_sysroot"
-                            },
-                            {
-                              "Lit": "/include"
-                            }
-                          ]
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "Concat": [
-                      {
-                        "Lit": "-Dincpth="
-                      },
-                      {
-                        "Quoted": {
-                          "Concat": [
-                            {
-                              "Var": "_sysroot"
-                            },
-                            {
-                              "Lit": "/include"
-                            }
-                          ]
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "Concat": [
-                      {
-                        "Lit": "-Dlibpth="
-                      },
-                      {
-                        "Quoted": {
-                          "Concat": [
-                            {
-                              "Var": "_sysroot"
-                            },
-                            {
-                              "Lit": "/lib /dep/libxcrypt/usr/lib /dep/libxcrypt/usr/lib64 "
-                            },
-                            {
-                              "Var": "_sysroot"
-                            },
-                            {
-                              "Lit": "/lib64"
-                            }
-                          ]
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "Concat": [
-                      {
-                        "Lit": "-Darchname="
-                      },
-                      {
-                        "Quoted": {
-                          "Var": "TRIPLE"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "Concat": [
-                      {
-                        "Lit": "-Dbyteorder="
-                      },
-                      {
-                        "Quoted": {
-                          "Lit": "12345678"
-                        }
-                      }
-                    ]
+          "ConfigureScript": {
+            "args": [
+              {
+                "Lit": "-des"
+              },
+              {
+                "Lit": "-Dprefix=/usr"
+              },
+              {
+                "Lit": "-Dvendorprefix=/usr"
+              },
+              {
+                "Lit": "-Duse64bitall"
+              },
+              {
+                "Lit": "-Dusethreads"
+              },
+              {
+                "Lit": "-Duseshrplib"
+              },
+              {
+                "Concat": [
+                  {
+                    "Lit": "-Dcc="
+                  },
+                  {
+                    "Quoted": {
+                      "Var": "CC"
+                    }
                   }
                 ]
-              ],
-              "stderr": null,
-              "stdin": null,
-              "stdout": null
-            }
+              },
+              {
+                "Concat": [
+                  {
+                    "Lit": "-Dld="
+                  },
+                  {
+                    "Quoted": {
+                      "Var": "CC"
+                    }
+                  }
+                ]
+              },
+              {
+                "Concat": [
+                  {
+                    "Lit": "-Accflags="
+                  },
+                  {
+                    "Quoted": {
+                      "Var": "CFLAGS"
+                    }
+                  }
+                ]
+              },
+              {
+                "Concat": [
+                  {
+                    "Lit": "-Aldflags="
+                  },
+                  {
+                    "Quoted": {
+                      "Var": "LDFLAGS"
+                    }
+                  }
+                ]
+              },
+              {
+                "Lit": "-Dusecrosscompile"
+              },
+              {
+                "Lit": "-Dhostperl=/tmp/perl-host/miniperl"
+              },
+              {
+                "Lit": "-Dhostgenerate=/tmp/generate_uudmap"
+              },
+              {
+                "Lit": "-Dcharsize=1"
+              },
+              {
+                "Lit": "-Dshortsize=2"
+              },
+              {
+                "Lit": "-Dintsize=4"
+              },
+              {
+                "Lit": "-Dlongsize=8"
+              },
+              {
+                "Lit": "-Dlonglongsize=8"
+              },
+              {
+                "Lit": "-Dptrsize=8"
+              },
+              {
+                "Lit": "-Ddoublesize=8"
+              },
+              {
+                "Lit": "-Dnvsize=8"
+              },
+              {
+                "Lit": "-Duvsize=8"
+              },
+              {
+                "Lit": "-Divsize=8"
+              },
+              {
+                "Lit": "-Dcharbits=8"
+              },
+              {
+                "Lit": "-Dalignbytes=8"
+              },
+              {
+                "Lit": "-Dssizetype=ssize_t"
+              },
+              {
+                "Lit": "-Dsizetype=size_t"
+              },
+              {
+                "Lit": "-Dlseektype=off_t"
+              },
+              {
+                "Lit": "-Dlseeksize=8"
+              },
+              {
+                "Lit": "-Dtimetype=time_t"
+              },
+              {
+                "Lit": "-Dfpostype=fpos_t"
+              },
+              {
+                "Lit": "-Dfpossize=16"
+              },
+              {
+                "Lit": "-Dlongdblsize=16"
+              },
+              {
+                "Lit": "-Ddoublekind=3"
+              },
+              {
+                "Lit": "-Duseithreads"
+              },
+              {
+                "Lit": "-Dusemultiplicity"
+              },
+              {
+                "Lit": "-Duseperlio"
+              },
+              {
+                "Lit": "-Uebcdic"
+              },
+              {
+                "Lit": "-Dd_PRId64=define"
+              },
+              {
+                "Lit": "-Dd_PRIi64=define"
+              },
+              {
+                "Lit": "-Divdformat='\"ld\"'"
+              },
+              {
+                "Lit": "-Duvuformat='\"lu\"'"
+              },
+              {
+                "Lit": "-Duvxformat='\"lx\"'"
+              },
+              {
+                "Lit": "-DsPRId64='\"ld\"'"
+              },
+              {
+                "Lit": "-DsPRIi64='\"li\"'"
+              },
+              {
+                "Lit": "-DsPRIo64='\"lo\"'"
+              },
+              {
+                "Lit": "-DsPRIu64='\"lu\"'"
+              },
+              {
+                "Lit": "-DsPRIx64='\"lx\"'"
+              },
+              {
+                "Lit": "-DsPRIXU64='\"lX\"'"
+              },
+              {
+                "Lit": "-Dnveformat='\"e\"'"
+              },
+              {
+                "Lit": "-Dnvgformat='\"g\"'"
+              },
+              {
+                "Lit": "-DnvEUformat='\"E\"'"
+              },
+              {
+                "Lit": "-DnvGUformat='\"G\"'"
+              },
+              {
+                "Lit": "-Dd_PRIfldbl=define"
+              },
+              {
+                "Lit": "-Dd_PRIgldbl=define"
+              },
+              {
+                "Lit": "-Dd_PRIeldbl=define"
+              },
+              {
+                "Lit": "-Dd_PRIFUldbl=define"
+              },
+              {
+                "Lit": "-Dd_PRIGUldbl=define"
+              },
+              {
+                "Lit": "-Dd_PRIEUldbl=define"
+              },
+              {
+                "Lit": "-Dd_SCNfldbl=define"
+              },
+              {
+                "Lit": "-Dd_ldbl_dig=define"
+              },
+              {
+                "Lit": "-DsPRIfldbl='\"Lf\"'"
+              },
+              {
+                "Lit": "-DsPRIgldbl='\"Lg\"'"
+              },
+              {
+                "Lit": "-DsPRIeldbl='\"Le\"'"
+              },
+              {
+                "Lit": "-DsPRIFUldbl='\"LF\"'"
+              },
+              {
+                "Lit": "-DsPRIGUldbl='\"LG\"'"
+              },
+              {
+                "Lit": "-DsPRIEUldbl='\"LE\"'"
+              },
+              {
+                "Lit": "-DsSCNfldbl='\"Lf\"'"
+              },
+              {
+                "Concat": [
+                  {
+                    "Lit": "-Dtargetarch="
+                  },
+                  {
+                    "Quoted": {
+                      "Var": "TRIPLE"
+                    }
+                  }
+                ]
+              },
+              {
+                "Concat": [
+                  {
+                    "Lit": "-Dsysroot="
+                  },
+                  {
+                    "Quoted": {
+                      "Var": "_sysroot"
+                    }
+                  }
+                ]
+              },
+              {
+                "Concat": [
+                  {
+                    "Lit": "-Dusrinc="
+                  },
+                  {
+                    "Quoted": {
+                      "Concat": [
+                        {
+                          "Var": "_sysroot"
+                        },
+                        {
+                          "Lit": "/include"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "Concat": [
+                  {
+                    "Lit": "-Dincpth="
+                  },
+                  {
+                    "Quoted": {
+                      "Concat": [
+                        {
+                          "Var": "_sysroot"
+                        },
+                        {
+                          "Lit": "/include"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "Concat": [
+                  {
+                    "Lit": "-Dlibpth="
+                  },
+                  {
+                    "Quoted": {
+                      "Concat": [
+                        {
+                          "Var": "_sysroot"
+                        },
+                        {
+                          "Lit": "/lib /dep/libxcrypt/usr/lib /dep/libxcrypt/usr/lib64 "
+                        },
+                        {
+                          "Var": "_sysroot"
+                        },
+                        {
+                          "Lit": "/lib64"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "Concat": [
+                  {
+                    "Lit": "-Darchname="
+                  },
+                  {
+                    "Quoted": {
+                      "Var": "TRIPLE"
+                    }
+                  }
+                ]
+              },
+              {
+                "Concat": [
+                  {
+                    "Lit": "-Dbyteorder="
+                  },
+                  {
+                    "Quoted": {
+                      "Lit": "12345678"
+                    }
+                  }
+                ]
+              }
+            ],
+            "env": [],
+            "program": [
+              {
+                "Lit": "./Configure"
+              }
+            ]
           }
         },
         {
@@ -3523,23 +3513,18 @@
                 }
               },
               {
-                "Exec": {
+                "ConfigureScript": {
+                  "args": [
+                    {
+                      "Lit": "-S"
+                    }
+                  ],
                   "env": [],
-                  "pipe": {
-                    "stages": [
-                      [
-                        {
-                          "Lit": "./Configure"
-                        },
-                        {
-                          "Lit": "-S"
-                        }
-                      ]
-                    ],
-                    "stderr": null,
-                    "stdin": null,
-                    "stdout": null
-                  }
+                  "program": [
+                    {
+                      "Lit": "./Configure"
+                    }
+                  ]
                 }
               },
               {

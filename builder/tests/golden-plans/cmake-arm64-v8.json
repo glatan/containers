@@ -5,83 +5,67 @@
     "std": "Gnu17",
     "steps": [
       {
-        "Exec": {
-          "env": [],
-          "pipe": {
-            "stages": [
-              [
+        "Cmake": {
+          "args": [
+            {
+              "Lit": "-DCMAKE_SYSTEM_NAME=Linux"
+            },
+            {
+              "Lit": "-DCMAKE_SYSTEM_PROCESSOR=aarch64"
+            },
+            {
+              "Lit": "-DCMAKE_SYSROOT=/tmp/sysroot"
+            },
+            {
+              "Lit": "-DCMAKE_BUILD_TYPE=Release"
+            },
+            {
+              "Lit": "-DCMAKE_INSTALL_PREFIX=/usr"
+            },
+            {
+              "Lit": "-DCMAKE_USE_OPENSSL=OFF"
+            },
+            {
+              "Lit": "-DCMAKE_DISABLE_FIND_PACKAGE_Libidn2=ON"
+            },
+            {
+              "Lit": "-DBUILD_TESTING=OFF"
+            },
+            {
+              "Concat": [
                 {
-                  "Lit": "cmake"
-                },
-                {
-                  "Lit": "-S"
+                  "Lit": "-DCMAKE_C_COMPILER="
                 },
                 {
                   "Quoted": {
-                    "Var": "SOURCE"
+                    "Var": "CC"
                   }
-                },
-                {
-                  "Lit": "-B"
-                },
-                {
-                  "Quoted": {
-                    "Var": "BUILD"
-                  }
-                },
-                {
-                  "Lit": "-DCMAKE_SYSTEM_NAME=Linux"
-                },
-                {
-                  "Lit": "-DCMAKE_SYSTEM_PROCESSOR=aarch64"
-                },
-                {
-                  "Lit": "-DCMAKE_SYSROOT=/tmp/sysroot"
-                },
-                {
-                  "Lit": "-DCMAKE_BUILD_TYPE=Release"
-                },
-                {
-                  "Lit": "-DCMAKE_INSTALL_PREFIX=/usr"
-                },
-                {
-                  "Lit": "-DCMAKE_USE_OPENSSL=OFF"
-                },
-                {
-                  "Lit": "-DCMAKE_DISABLE_FIND_PACKAGE_Libidn2=ON"
-                },
-                {
-                  "Lit": "-DBUILD_TESTING=OFF"
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-DCMAKE_C_COMPILER="
-                    },
-                    {
-                      "Quoted": {
-                        "Var": "CC"
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-DCMAKE_CXX_COMPILER="
-                    },
-                    {
-                      "Quoted": {
-                        "Var": "CXX"
-                      }
-                    }
-                  ]
                 }
               ]
-            ],
-            "stderr": null,
-            "stdin": null,
-            "stdout": null
+            },
+            {
+              "Concat": [
+                {
+                  "Lit": "-DCMAKE_CXX_COMPILER="
+                },
+                {
+                  "Quoted": {
+                    "Var": "CXX"
+                  }
+                }
+              ]
+            }
+          ],
+          "build_dir": {
+            "Quoted": {
+              "Var": "BUILD"
+            }
+          },
+          "env": [],
+          "source_dir": {
+            "Quoted": {
+              "Var": "SOURCE"
+            }
           }
         }
       },

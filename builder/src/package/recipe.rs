@@ -227,6 +227,32 @@ pub enum Step {
         link: Cow<'static, str>,
         force: bool,
     },
+    /// `cmake -S {source_dir} -B {build_dir} {args…}` — configure 相当の
+    /// cmake 呼出（`cmake --build`/`--install` は `Step::Exec` のまま）。
+    /// docs のフラグ表が `args` を抽出できるよう型付きで保持する。
+    Cmake {
+        source_dir: Arg,
+        build_dir: Arg,
+        args: Vec<Arg>,
+        env: Vec<(&'static str, Arg)>,
+    },
+    /// `meson setup "$SOURCE" {args…}` — configure 相当の meson 呼出
+    /// （`meson compile`/`install` は `Step::Exec` のまま）。
+    Meson {
+        args: Vec<Arg>,
+        env: Vec<(&'static str, Arg)>,
+    },
+    /// autotools プリリュードを伴わない configure 系スクリプトの直接実行
+    /// （`"$SOURCE"/configure`・`./Configure`・`python3 configure.py` 等）。
+    /// `program` は呼出前置部の argv（`["$SOURCE"/configure]` や
+    /// `["python3", "configure.py"]` の複数語も可）。`Step::Configure`
+    /// （`autotools_configure` 必須）とは別セマンティクスのため
+    /// `PgoTemplate::Autotools` とは共存しない。
+    ConfigureScript {
+        program: Vec<Arg>,
+        args: Vec<Arg>,
+        env: Vec<(&'static str, Arg)>,
+    },
     /// `{env} {argv} [| {argv}]` — 汎用コマンド/パイプラインの実行。
     Exec {
         env: Vec<(&'static str, Arg)>,
@@ -324,7 +350,7 @@ impl Arg {
         Self::Quoted(Box::new(arg))
     }
 
-    fn render(&self) -> String {
+    pub(crate) fn render(&self) -> String {
         match self {
             Self::Lit(text) => text.to_string(),
             Self::Var(name) => format!("${{{name}}}"),
@@ -473,7 +499,7 @@ pub enum Cond {
 }
 
 impl Cond {
-    fn render(&self) -> String {
+    pub(crate) fn render(&self) -> String {
         match self {
             Self::DirExists(path) => format!("[ -d {} ]", path.render()),
             Self::FileExists(path) => format!("[ -f {} ]", path.render()),
@@ -704,6 +730,41 @@ fn validate_pipe(pipe: &Pipe, sysroot_defined: bool, errors: &mut Vec<String>, w
     }
 }
 
+/// `Step::Exec` の argv0 が既知の configure 系ツールなら違反。
+/// configure 呼出は `Step::ConfigureScript`/`Cmake`/`Meson` で表し、
+/// docs のフラグ表が抽出できる構造に保つ（Exec への再流出防止）。
+fn check_untyped_configure(pipe: &Pipe, errors: &mut Vec<String>) {
+    let Some(argv) = pipe.stages.first() else {
+        return;
+    };
+    let Some(first) = argv.first() else {
+        return;
+    };
+    let program = first.render().trim_matches('"').to_string();
+    let basename = program.rsplit('/').next().unwrap_or_default();
+    if matches!(basename, "configure" | "Configure" | "bootstrap") {
+        errors.push(format!(
+            "`{program}` は configure 系スクリプトのため `Step::ConfigureScript` で表す\
+             （フラグ表生成のため Exec 不可）"
+        ));
+        return;
+    }
+    let second = argv.get(1).map(Arg::render);
+    let second = second.as_deref().map(|s| s.trim_matches('"'));
+    match (program.as_str(), second) {
+        ("cmake", Some("-S")) => {
+            errors.push("`cmake -S` は `Step::Cmake` で表す".to_string());
+        }
+        ("meson", Some("setup")) => {
+            errors.push("`meson setup` は `Step::Meson` で表す".to_string());
+        }
+        ("python3" | "python" | "perl", Some(script)) if script.ends_with("configure.py") => {
+            errors.push(format!("`{script}` は `Step::ConfigureScript` で表す"));
+        }
+        _ => {}
+    }
+}
+
 fn validate_cond(cond: &Cond, sysroot_defined: bool, errors: &mut Vec<String>) {
     match cond {
         Cond::DirExists(arg)
@@ -788,6 +849,23 @@ pub(crate) fn validate_steps(
                     validate_arg(value, *sysroot_defined, errors, "Exec", false);
                 }
                 validate_pipe(pipe, *sysroot_defined, errors, "Exec");
+                check_untyped_configure(pipe, errors);
+            }
+            Step::Cmake { .. } | Step::Meson { .. } | Step::ConfigureScript { .. } => {
+                let (vars, pipe) = step.configure_pipe().unwrap();
+                for (name, value) in &vars {
+                    if name.is_empty() {
+                        errors.push("configure 系ステップの env 名が空".to_string());
+                    }
+                    validate_arg(
+                        value,
+                        *sysroot_defined,
+                        errors,
+                        "configure 系ステップ",
+                        false,
+                    );
+                }
+                validate_pipe(&pipe, *sysroot_defined, errors, "configure 系ステップ");
             }
             Step::Cd(dir) => {
                 validate_arg(dir, *sysroot_defined, errors, "Cd", false);
@@ -909,6 +987,33 @@ impl Steps {
             let mut inner = self.sysroot;
             validate_steps(workload, self.env, &mut inner, &mut errors);
         }
+        // PgoTemplate::Autotools は先頭の `Step::Configure` を位置検出して
+        // gen/use 両相へ複製する。Configure が無ければ render/runner が
+        // フォールバックして PGO 相を黙って落とすため必須とする。
+        // 順序チェックは Configure/Make/MakeInstall が揃う Steps に限る
+        // （texinfo はクロス時に意図的に `Step::Make` を使わないが、PGO は
+        // `!cross()` でしか発火しないため合法）。
+        if let Some(PgoTemplate::Autotools(_)) = &self.pgo {
+            let pos = |pred: fn(&Step) -> bool| self.steps.iter().position(pred);
+            match pos(|step| matches!(step, Step::Configure(_))) {
+                None => errors.push(
+                    "PgoTemplate::Autotools にはトップレベルの `Step::Configure` が必要"
+                        .to_string(),
+                ),
+                Some(c) => {
+                    let make = pos(|step| matches!(step, Step::Make { .. }));
+                    let install = pos(|step| matches!(step, Step::MakeInstall { .. }));
+                    if let (Some(m), Some(i)) = (make, install)
+                        && !(c + 1 <= m && m <= i)
+                    {
+                        errors.push(
+                            "PgoTemplate::Autotools は Configure → Make → MakeInstall の順序を要求"
+                                .to_string(),
+                        );
+                    }
+                }
+            }
+        }
         errors
     }
 }
@@ -940,6 +1045,47 @@ fn render_nested(out: &mut String, env: Env, steps: &[Step]) {
 }
 
 impl Step {
+    /// `Cmake`/`Meson`/`ConfigureScript` を等価な env + `Pipe` へ展開する。
+    /// runner の `exec_step`・`Step::render`・docs の呼出抽出が共有する
+    /// 単一ソースで、展開後は `Exec` と同一の出力・実行意味論になる。
+    /// それ以外の variant では `None`。
+    pub(crate) fn configure_pipe(&self) -> Option<(Vec<(&'static str, Arg)>, Pipe)> {
+        match self {
+            Self::Cmake {
+                source_dir,
+                build_dir,
+                args,
+                env,
+            } => Some((
+                env.clone(),
+                Pipe::cmd(
+                    [
+                        argv(&["cmake", "-S"]),
+                        vec![source_dir.clone(), Arg::lit("-B"), build_dir.clone()],
+                        args.clone(),
+                    ]
+                    .concat(),
+                ),
+            )),
+            Self::Meson { args, env } => Some((
+                env.clone(),
+                Pipe::cmd(
+                    [
+                        argv(&["meson", "setup"]),
+                        vec![Arg::quoted(Arg::Var("SOURCE"))],
+                        args.clone(),
+                    ]
+                    .concat(),
+                ),
+            )),
+            Self::ConfigureScript { program, args, env } => Some((
+                env.clone(),
+                Pipe::cmd([program.clone(), args.clone()].concat()),
+            )),
+            _ => None,
+        }
+    }
+
     pub fn configure(arguments: &[&'static str]) -> Self {
         Self::Configure(args(arguments))
     }
@@ -1342,6 +1488,10 @@ impl Step {
                 }
                 let _ = writeln!(out, "{}", pipe.render());
             }
+            Step::Cmake { .. } | Step::Meson { .. } | Step::ConfigureScript { .. } => {
+                let (vars, pipe) = self.configure_pipe().unwrap();
+                Step::Exec { env: vars, pipe }.render(out, env);
+            }
             Step::Cd(dir) => {
                 let _ = writeln!(out, "cd {}", dir.render());
             }
@@ -1596,6 +1746,46 @@ mod tests {
             script.contains("(\n  ./zstd -b3 input\n) || true"),
             "{script}"
         );
+    }
+
+    #[test]
+    fn validate_requires_configure_for_autotools_pgo() {
+        // PgoTemplate::Autotools なのに Step::Configure が無い → 違反。
+        // ConfigureScript 等の typed step は位置検出対象外なので同様に違反。
+        let bad = Steps::new(Env::Autotools)
+            .pgo(PgoTemplate::Autotools(vec![]))
+            .step(Step::make(&[]))
+            .step(Step::make_install(&[]));
+        let errors = Recipe::Steps(bad).validate();
+        assert!(
+            errors.iter().any(|e| e.contains("Step::Configure")),
+            "{errors:?}"
+        );
+
+        // Configure → Make → MakeInstall が揃えば合法。
+        let ok = Steps::new(Env::Autotools)
+            .pgo(PgoTemplate::Autotools(vec![]))
+            .step(Step::Configure(vec![]))
+            .step(Step::make(&[]))
+            .step(Step::make_install(&[]));
+        assert!(Recipe::Steps(ok).validate().is_empty());
+
+        // 3 種が揃うが順序が逆転している → 違反。
+        let inverted = Steps::new(Env::Autotools)
+            .pgo(PgoTemplate::Autotools(vec![]))
+            .step(Step::make(&[]))
+            .step(Step::make_install(&[]))
+            .step(Step::Configure(vec![]));
+        let errors = Recipe::Steps(inverted).validate();
+        assert!(errors.iter().any(|e| e.contains("順序")), "{errors:?}");
+
+        // texinfo 型: MakeInstall のみ（Make なし）は PGO が cross では
+        // 発火しないため合法。
+        let texinfo_like = Steps::new(Env::Autotools)
+            .pgo(PgoTemplate::Autotools(vec![]))
+            .step(Step::Configure(vec![]))
+            .step(Step::make_install(&[]));
+        assert!(Recipe::Steps(texinfo_like).validate().is_empty());
     }
 
     #[test]

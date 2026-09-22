@@ -82,18 +82,18 @@ impl Package for Openssl {
                 }],
                 else_: vec![],
             })
-            .step(Step::Exec {
+            .step(Step::ConfigureScript {
                 env: vec![],
-                pipe: Pipe::cmd(vec![
-                    Arg::quoted(Arg::Concat(vec![
-                        Arg::Var("SOURCE"),
-                        Arg::lit("/Configure"),
-                    ])),
+                program: vec![Arg::quoted(Arg::Concat(vec![
+                    Arg::Var("SOURCE"),
+                    Arg::lit("/Configure"),
+                ]))],
+                args: vec![
                     Arg::lit(tgt),
                     Arg::lit("--prefix=/usr"),
                     Arg::lit("--openssldir=/etc/ssl"),
                     Arg::lit("--libdir=lib64"),
-                ]),
+                ],
             });
         if ctx.cross() {
             steps = steps.step(Step::make(&[]));

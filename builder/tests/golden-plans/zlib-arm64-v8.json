@@ -89,7 +89,18 @@
         }
       },
       {
-        "Exec": {
+        "ConfigureScript": {
+          "args": [
+            {
+              "Lit": "--prefix=/usr"
+            },
+            {
+              "Lit": "--libdir=/usr/lib64"
+            },
+            {
+              "Lit": "--shared"
+            }
+          ],
           "env": [
             [
               "CHOST",
@@ -100,27 +111,11 @@
               }
             ]
           ],
-          "pipe": {
-            "stages": [
-              [
-                {
-                  "Lit": "./configure"
-                },
-                {
-                  "Lit": "--prefix=/usr"
-                },
-                {
-                  "Lit": "--libdir=/usr/lib64"
-                },
-                {
-                  "Lit": "--shared"
-                }
-              ]
-            ],
-            "stderr": null,
-            "stdin": null,
-            "stdout": null
-          }
+          "program": [
+            {
+              "Lit": "./configure"
+            }
+          ]
         }
       },
       {

@@ -32,46 +32,67 @@
 
 ## 既定フラグセット（`tool_flags`）
 
+<!-- GENERATED:tool-flags -->
+
 | トークン | 展開 | 種別 | 対象 |
 |-|-|-|-|
-| `O2` | `-O2` | Perf | 全 |
-| `Pipe` | `-pipe` | Perf | 全 |
-| `March(target)` | `-march=<variant>`（ppc64le は `-mcpu=`） | Perf | 全 |
-| `TreeVectorize` | `-ftree-vectorize` | Perf | 全 |
-| `NoSemanticInterposition` | `-fno-semantic-interposition` | Perf | 全 |
-| `NoPlt` | `-fno-plt` | Perf | amd64 / arm64 |
-| `TlsDialectGnu2` | `-mtls-dialect=gnu2` | Perf | amd64 |
-| `Hardened` | `-fhardened` | Harden | 全（`NoHardened` で傘のみ解除可） |
-| `NoWhardened` | `-Wno-hardened` | Harden | 全 |
-| `StackProtectorStrong` | `-fstack-protector-strong` | Harden | 全 |
-| `FormatSecurityError` | `-Wformat -Werror=format-security` | Harden | 全（sanitize でも保持） |
-| `StrictFlexArrays3` | `-fstrict-flex-arrays=3` | Harden | 全 |
-| `ZeroInitPaddingBits` | `-fzero-init-padding-bits=all` | Harden | 全 |
-| `NoDeleteNullPointer` | `-fno-delete-null-pointer-checks` | Harden | 全 |
-| `NoStrictOverflow` | `-fno-strict-overflow` | Harden | 全 |
-| `NoStrictAliasing` | `-fno-strict-aliasing` | Harden | 全 |
-| `Exceptions` | `-fexceptions` | Harden | 全 |
-| `Wtrampolines` | `-Wtrampolines` | Harden | 全 |
+| `O2` | `-O2` | Perf | 常時 |
+| `Pipe` | `-pipe` | Perf | 常時 |
+| `March(target)` | `-march=<variant>`（ppc64le は `-mcpu=`） | Perf | 常時 |
+| `TreeVectorize` | `-ftree-vectorize` | Perf | 常時 |
+| `NoSemanticInterposition` | `-fno-semantic-interposition` | Perf | 常時 |
+| `Hardened` | `-fhardened` | Harden | 常時 |
+| `NoWhardened` | `-Wno-hardened` | Harden | 常時 |
+| `StackProtectorStrong` | `-fstack-protector-strong` | Harden | 常時 |
+| `FormatSecurityError` | `-Wformat` `-Werror=format-security` | Harden | 常時 |
+| `StrictFlexArrays3` | `-fstrict-flex-arrays=3` | Harden | 常時 |
+| `ZeroInitPaddingBits` | `-fzero-init-padding-bits=all` | Harden | 常時 |
+| `NoDeleteNullPointer` | `-fno-delete-null-pointer-checks` | Harden | 常時 |
+| `NoStrictOverflow` | `-fno-strict-overflow` | Harden | 常時 |
+| `NoStrictAliasing` | `-fno-strict-aliasing` | Harden | 常時 |
+| `Exceptions` | `-fexceptions` | Harden | 常時 |
+| `Wtrampolines` | `-Wtrampolines` | Harden | 常時 |
+| `Lto` | `-flto=auto` | Perf | 常時 |
+| `WerrorOdr` | `-Werror=odr` | Perf | 常時 |
+| `WerrorLtoTypeMismatch` | `-Werror=lto-type-mismatch` | Perf | 常時 |
+| `WerrorStrictAliasing` | `-Werror=strict-aliasing` | Perf | 常時 |
+| `NoPlt` | `-fno-plt` | Perf | amd64, arm64 |
 | `BranchProtection` | `-mbranch-protection=standard` | Harden | arm64 |
-| `ZeroCallUsedRegs` | `-fzero-call-used-regs=used-gpr` | Harden | amd64 / arm64 |
-| `Lto` | `-flto=auto` | Perf | 全（configure では除去） |
-| `WerrorOdr` / `WerrorLtoTypeMismatch` / `WerrorStrictAliasing` | `-Werror={odr,lto-type-mismatch,strict-aliasing}` | Perf | 全（configure では除去） |
+| `ZeroCallUsedRegs` | `-fzero-call-used-regs=used-gpr` | Harden | amd64, arm64 |
+| `TlsDialectGnu2` | `-mtls-dialect=gnu2` | Perf | amd64 |
 
 | トークン（Ldflag） | 展開 | 対象 |
 |-|-|-|
-| `FuseLdMold` | `-fuse-ld=mold` | 全（mold 成果物が無い時は host 側で除去。mold 自身には付けない） |
-| `O1` | `-Wl,-O1` | 全 |
-| `AsNeeded` | `-Wl,--as-needed` | 全 |
-| `NoCopyDtNeeded` | `-Wl,--no-copy-dt-needed-entries` | 全 |
-| `Relro` / `Now` / `NoExecStack` | `-Wl,-z,{relro,now,noexecstack}` | 全 |
-| `PackRelativeRelocs` | `-Wl,-z,pack-relative-relocs` | amd64 / arm64 / ppc64le（s390x・riscv64 は除外） |
-| `Lto` | `-flto=auto` | 全 |
-| `WerrorOdr` / `WerrorLtoTypeMismatch` / `WerrorStrictAliasing` | `-Werror=*` 同上 | 全 |
-| `CetReportError` | `-Wl,-z,cet-report=error` | opt-in（amd64。strict CET のビルド時診断） |
-| `NoDlopen` | `-Wl,-z,nodlopen` | opt-in |
-| `Zdefs` | `-Wl,-z,defs` | opt-in |
-| `BsymbolicFunctions` | `-Wl,-Bsymbolic-functions` | opt-in |
-| `NoHardened` | `-fno-hardened` | opt-in（CFLAGS / LDFLAGS 双方で指定可能） |
+| `FuseLdMold` | `-fuse-ld=mold` | 常時 |
+| `O1` | `-Wl,-O1` | 常時 |
+| `AsNeeded` | `-Wl,--as-needed` | 常時 |
+| `NoCopyDtNeeded` | `-Wl,--no-copy-dt-needed-entries` | 常時 |
+| `Relro` | `-Wl,-z,relro` | 常時 |
+| `Now` | `-Wl,-z,now` | 常時 |
+| `NoExecStack` | `-Wl,-z,noexecstack` | 常時 |
+| `Lto` | `-flto=auto` | 常時 |
+| `WerrorOdr` | `-Werror=odr` | 常時 |
+| `WerrorLtoTypeMismatch` | `-Werror=lto-type-mismatch` | 常時 |
+| `WerrorStrictAliasing` | `-Werror=strict-aliasing` | 常時 |
+| `PackRelativeRelocs` | `-Wl,-z,pack-relative-relocs` | amd64, arm64, ppc64le |
+
+既定セットに含まれない opt-in トークン:
+
+| トークン | 変数 | 展開 |
+|-|-|-|
+| `NoHardened` | CFLAGS | `-fno-hardened` |
+| `FortifySource` | CFLAGS | `-U_FORTIFY_SOURCE` `-D_FORTIFY_SOURCE=3` |
+| `StackClashProtection` | CFLAGS | `-fstack-clash-protection` |
+| `CfProtection` | CFLAGS | `-fcf-protection=full` |
+| `TrivialAutoVarInit` | CFLAGS | `-ftrivial-auto-var-init=zero` |
+| `GlibcxxAssertions` | CFLAGS | `-D_GLIBCXX_ASSERTIONS` |
+| `CetReportError` | LDFLAGS | `-Wl,-z,cet-report=error` |
+| `NoHardened` | LDFLAGS | `-fno-hardened` |
+| `NoDlopen` | LDFLAGS | `-Wl,-z,nodlopen` |
+| `Zdefs` | LDFLAGS | `-Wl,-z,defs` |
+| `BsymbolicFunctions` | LDFLAGS | `-Wl,-Bsymbolic-functions` |
+
+<!-- /GENERATED:tool-flags -->
 
 `FortifySource`（`-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3`）は `-fhardened` と二重定義警告になるため既定セットには含めず、`NoHardened` を選ぶパッケージの明示トークンとして残します。
 
@@ -88,12 +109,16 @@
 
 ## PGO 対象パッケージ
 
-| `Pgo` | パッケージ | ワークロード概要 |
-|-|-|-|
-| `Profiled`（template A） | xz / gzip / pcre2 / sqlite / grep / sed / gawk / diffutils / findutils / tar / patch / m4 / bison / make / pkgconf / coreutils / texinfo / expat / readline / flex / bash / libffi | ビルドしたバイナリで `$SOURCE` または同梱データを処理（`make check` は mpfr / mpc / isl / libxcrypt / gmp、libffi は FFI スモークテスト、bash は組み込み機能の実行）。詳細は各 `{パッケージ名}.md` |
-| `Profiled`（template B） | zstd / bzip2 | `zstd -b` ベンチ（複数レベル・`-T0`）、bzip2 `-1`/`-6`/`-9` roundtrip + `bzip2recover` |
-| `Custom` | openssl / zlib / zlib-ng / mold / ninja / python / `{triple}-binutils` / `{triple}-gcc` | openssl は `speed` + `speed -evp`（generate/use 間に `make clean`）。zlib / zlib-ng は複数 MB 実データ × `-1`/`-6`/`-9`。ninja は bootstrap で自身を rebuild。mold は自身でリンクを実行。python は `--enable-optimizations` の自己完結 PGO |
-| `None` | ncurses / qemu / meson / glib / cmake / perl / glibc / linux-headers / ca-certificates / build-env / 中間 gcc ステージ | `tic` は libncurses を駆動しない、qemu は独自フラグ管理、meson は C コードなし、残りは非現実・個別判断 |
+<!-- GENERATED:pgo -->
+
+| `Pgo` | パッケージ |
+|-|-|
+| `Profiled（A（autotools））` | gmp / mpfr / mpc / isl / libffi / pcre2 / readline / expat / sqlite / libxcrypt / bash / coreutils / xz / flex / pkgconf / make / m4 / bison / findutils / sed / grep / gawk / diffutils / patch / tar / gzip / texinfo |
+| `Profiled（B（in-source make））` | zstd / bzip2 |
+| `Custom` | openssl / zlib / zlib-ng / mold / ninja / python / {triple}-binutils / {triple}-gcc |
+| `None` | ca-certificates / linux-headers / ncurses / glib / perl / meson / cmake / qemu / build-env / {triple}-gcc-stage1 / {triple}-glibc-headers / {triple}-gcc-stage2 / {triple}-glibc |
+
+<!-- /GENERATED:pgo -->
 
 種別ごとの例外は、glibc と最終 gcc は [toolchain.md](./toolchain.md)、Host tools は [host-tools.md](./host-tools.md)、カタログと qemu は各 `{パッケージ名}.md` です。
 

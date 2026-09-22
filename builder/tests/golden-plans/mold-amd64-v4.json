@@ -185,157 +185,141 @@
         }
       },
       {
-        "Exec": {
-          "env": [],
-          "pipe": {
-            "stages": [
-              [
+        "Cmake": {
+          "args": [
+            {
+              "Lit": "-DCMAKE_BUILD_TYPE=Release"
+            },
+            {
+              "Lit": "-DCMAKE_INSTALL_PREFIX=/usr"
+            },
+            {
+              "Concat": [
                 {
-                  "Lit": "cmake"
-                },
-                {
-                  "Lit": "-S"
+                  "Lit": "-DCMAKE_C_COMPILER="
                 },
                 {
                   "Quoted": {
-                    "Var": "SOURCE"
+                    "Var": "CC"
                   }
+                }
+              ]
+            },
+            {
+              "Concat": [
+                {
+                  "Lit": "-DCMAKE_CXX_COMPILER="
                 },
                 {
-                  "Lit": "-B"
+                  "Quoted": {
+                    "Var": "CXX"
+                  }
+                }
+              ]
+            },
+            {
+              "Concat": [
+                {
+                  "Lit": "-DCMAKE_C_FLAGS="
                 },
                 {
                   "Quoted": {
                     "Concat": [
                       {
-                        "Var": "BUILD"
+                        "Lit": "${CFLAGS:-} -fprofile-generate="
                       },
                       {
-                        "Lit": "/gen"
+                        "Var": "PGODIR"
+                      },
+                      {
+                        "Lit": " -fprofile-update=atomic"
                       }
                     ]
                   }
-                },
-                {
-                  "Lit": "-DCMAKE_BUILD_TYPE=Release"
-                },
-                {
-                  "Lit": "-DCMAKE_INSTALL_PREFIX=/usr"
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-DCMAKE_C_COMPILER="
-                    },
-                    {
-                      "Quoted": {
-                        "Var": "CC"
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-DCMAKE_CXX_COMPILER="
-                    },
-                    {
-                      "Quoted": {
-                        "Var": "CXX"
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-DCMAKE_C_FLAGS="
-                    },
-                    {
-                      "Quoted": {
-                        "Concat": [
-                          {
-                            "Lit": "${CFLAGS:-} -fprofile-generate="
-                          },
-                          {
-                            "Var": "PGODIR"
-                          },
-                          {
-                            "Lit": " -fprofile-update=atomic"
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-DCMAKE_CXX_FLAGS="
-                    },
-                    {
-                      "Quoted": {
-                        "Concat": [
-                          {
-                            "Lit": "${CXXFLAGS:-} -fprofile-generate="
-                          },
-                          {
-                            "Var": "PGODIR"
-                          },
-                          {
-                            "Lit": " -fprofile-update=atomic"
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-DCMAKE_EXE_LINKER_FLAGS="
-                    },
-                    {
-                      "Quoted": {
-                        "Concat": [
-                          {
-                            "Lit": "${LDFLAGS:-} -fprofile-generate"
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-DCMAKE_SHARED_LINKER_FLAGS="
-                    },
-                    {
-                      "Quoted": {
-                        "Concat": [
-                          {
-                            "Lit": "${LDFLAGS:-} -fprofile-generate"
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Lit": "-DMOLD_USE_MIMALLOC=ON"
-                },
-                {
-                  "Lit": "-DMOLD_USE_SYSTEM_MIMALLOC=OFF"
-                },
-                {
-                  "Lit": "-DMOLD_USE_SYSTEM_TBB=OFF"
                 }
               ]
-            ],
-            "stderr": null,
-            "stdin": null,
-            "stdout": null
+            },
+            {
+              "Concat": [
+                {
+                  "Lit": "-DCMAKE_CXX_FLAGS="
+                },
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": "${CXXFLAGS:-} -fprofile-generate="
+                      },
+                      {
+                        "Var": "PGODIR"
+                      },
+                      {
+                        "Lit": " -fprofile-update=atomic"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "Concat": [
+                {
+                  "Lit": "-DCMAKE_EXE_LINKER_FLAGS="
+                },
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": "${LDFLAGS:-} -fprofile-generate"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "Concat": [
+                {
+                  "Lit": "-DCMAKE_SHARED_LINKER_FLAGS="
+                },
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": "${LDFLAGS:-} -fprofile-generate"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "Lit": "-DMOLD_USE_MIMALLOC=ON"
+            },
+            {
+              "Lit": "-DMOLD_USE_SYSTEM_MIMALLOC=OFF"
+            },
+            {
+              "Lit": "-DMOLD_USE_SYSTEM_TBB=OFF"
+            }
+          ],
+          "build_dir": {
+            "Quoted": {
+              "Concat": [
+                {
+                  "Var": "BUILD"
+                },
+                {
+                  "Lit": "/gen"
+                }
+              ]
+            }
+          },
+          "env": [],
+          "source_dir": {
+            "Quoted": {
+              "Var": "SOURCE"
+            }
           }
         }
       },
@@ -817,157 +801,141 @@
         }
       },
       {
-        "Exec": {
-          "env": [],
-          "pipe": {
-            "stages": [
-              [
+        "Cmake": {
+          "args": [
+            {
+              "Lit": "-DCMAKE_BUILD_TYPE=Release"
+            },
+            {
+              "Lit": "-DCMAKE_INSTALL_PREFIX=/usr"
+            },
+            {
+              "Concat": [
                 {
-                  "Lit": "cmake"
-                },
-                {
-                  "Lit": "-S"
+                  "Lit": "-DCMAKE_C_COMPILER="
                 },
                 {
                   "Quoted": {
-                    "Var": "SOURCE"
+                    "Var": "CC"
                   }
+                }
+              ]
+            },
+            {
+              "Concat": [
+                {
+                  "Lit": "-DCMAKE_CXX_COMPILER="
                 },
                 {
-                  "Lit": "-B"
+                  "Quoted": {
+                    "Var": "CXX"
+                  }
+                }
+              ]
+            },
+            {
+              "Concat": [
+                {
+                  "Lit": "-DCMAKE_C_FLAGS="
                 },
                 {
                   "Quoted": {
                     "Concat": [
                       {
-                        "Var": "BUILD"
+                        "Lit": "${CFLAGS:-} -fprofile-use="
                       },
                       {
-                        "Lit": "/use"
+                        "Var": "PGODIR"
+                      },
+                      {
+                        "Lit": " -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"
                       }
                     ]
                   }
-                },
-                {
-                  "Lit": "-DCMAKE_BUILD_TYPE=Release"
-                },
-                {
-                  "Lit": "-DCMAKE_INSTALL_PREFIX=/usr"
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-DCMAKE_C_COMPILER="
-                    },
-                    {
-                      "Quoted": {
-                        "Var": "CC"
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-DCMAKE_CXX_COMPILER="
-                    },
-                    {
-                      "Quoted": {
-                        "Var": "CXX"
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-DCMAKE_C_FLAGS="
-                    },
-                    {
-                      "Quoted": {
-                        "Concat": [
-                          {
-                            "Lit": "${CFLAGS:-} -fprofile-use="
-                          },
-                          {
-                            "Var": "PGODIR"
-                          },
-                          {
-                            "Lit": " -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-DCMAKE_CXX_FLAGS="
-                    },
-                    {
-                      "Quoted": {
-                        "Concat": [
-                          {
-                            "Lit": "${CXXFLAGS:-} -fprofile-use="
-                          },
-                          {
-                            "Var": "PGODIR"
-                          },
-                          {
-                            "Lit": " -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-DCMAKE_EXE_LINKER_FLAGS="
-                    },
-                    {
-                      "Quoted": {
-                        "Concat": [
-                          {
-                            "Lit": "${LDFLAGS:-} -fprofile-use"
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-DCMAKE_SHARED_LINKER_FLAGS="
-                    },
-                    {
-                      "Quoted": {
-                        "Concat": [
-                          {
-                            "Lit": "${LDFLAGS:-} -fprofile-use"
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Lit": "-DMOLD_USE_MIMALLOC=ON"
-                },
-                {
-                  "Lit": "-DMOLD_USE_SYSTEM_MIMALLOC=OFF"
-                },
-                {
-                  "Lit": "-DMOLD_USE_SYSTEM_TBB=OFF"
                 }
               ]
-            ],
-            "stderr": null,
-            "stdin": null,
-            "stdout": null
+            },
+            {
+              "Concat": [
+                {
+                  "Lit": "-DCMAKE_CXX_FLAGS="
+                },
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": "${CXXFLAGS:-} -fprofile-use="
+                      },
+                      {
+                        "Var": "PGODIR"
+                      },
+                      {
+                        "Lit": " -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "Concat": [
+                {
+                  "Lit": "-DCMAKE_EXE_LINKER_FLAGS="
+                },
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": "${LDFLAGS:-} -fprofile-use"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "Concat": [
+                {
+                  "Lit": "-DCMAKE_SHARED_LINKER_FLAGS="
+                },
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": "${LDFLAGS:-} -fprofile-use"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "Lit": "-DMOLD_USE_MIMALLOC=ON"
+            },
+            {
+              "Lit": "-DMOLD_USE_SYSTEM_MIMALLOC=OFF"
+            },
+            {
+              "Lit": "-DMOLD_USE_SYSTEM_TBB=OFF"
+            }
+          ],
+          "build_dir": {
+            "Quoted": {
+              "Concat": [
+                {
+                  "Var": "BUILD"
+                },
+                {
+                  "Lit": "/use"
+                }
+              ]
+            }
+          },
+          "env": [],
+          "source_dir": {
+            "Quoted": {
+              "Var": "SOURCE"
+            }
           }
         }
       },

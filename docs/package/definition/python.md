@@ -7,6 +7,9 @@
 | バージョン | 3.14.7 |
 | ライセンス | Python-2.0 |
 | 分類 | パッケージ |
+| 対象 Platform | amd64: v1 v2 v3 v4; arm64: v8 v8.1 v8.2 v8.3 v8.4 v8.5 v8.6 v8.7 v8.8 v8.9 v9 v9.1 v9.2 v9.3 v9.4 v9.5; ppc64le: power8 power9 power10 power11; riscv64: rva20u64 rva22u64 rva23u64; s390x: z900 z990 z9-ec z10 z196 zEC12 z13 z14 z15 z16 z17 |
+| PGO | 現行条件では適用対象なし（`Pgo::Custom`、レシピ内の個別手順） |
+| host 実行 | 依存として常に BUILD_ENV 側で実行 |
 | 定義 | [`builder/src/package/definition/python.rs`](../../../builder/src/package/definition/python.rs) |
 
 ## ソース
@@ -55,19 +58,180 @@
 | [mold](./mold.md) | 2.42.1 | optional |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
+## ビルド設定
+
+| 項目 | 値 |
+|-|-|
+| env プリリュード | `Env::Autotools`（configure のみ `-flto*`・LTO 系 `-Werror=*`・`-f{,no-}hardened` を `sanitize_flags` で除去。`make`/`make install` に `CFLAGS`/`CXXFLAGS`/`LDFLAGS` の変数上書きを自動付与） |
+| `-std` 付与 | `-std=gnu17`（CFLAGS 末尾） |
+| sysroot | あり（`--sysroot`/`-idirafter` は `wrap_script` が注入） |
+| ビルドディレクトリ | `$BUILD`（`$SOURCE` をコピーして in-source） |
+
+configure には `autotools_configure` が `--build="$HOST_TRIPLE" --host="${PACKAGE_HOST:-$TRIPLE}"` を自動付与します。
+
+`make install` には `DESTDIR="$OUT"` を自動付与します。
+
+## ツールチェーンフラグ
+
+`tool_flags` の既定セットと同一です（[README.md](../README.md) の既定フラグ表）。
+
+`-march`/`-mcpu` の値は variant 依存です（上記は amd64/v4 で評価）。
+
+## ビルドフラグ
+
+対象 Platform 全件で `recipe()` を評価した configure 系呼出の引数です。条件列は引数が出現するターゲット集合です。
+
+| フラグ | 設定値 | 条件 |
+|-|-|-|
+| `--prefix` | `/usr` | 常時 |
+| `--enable-shared` |  | 常時 |
+| `--without-ensurepip` |  | 常時 |
+| `--with-build-python` | `/dep/python/usr/bin/python3` | arm64, ppc64le, riscv64, s390x |
+| `--enable-optimizations` |  | amd64 |
+
+## ビルド手順
+
+`recipe()` が生成するスクリプトです（`builder` が runner へ渡す IR のレンダリング）。対象 Platform 間で 2 系統に分かれます。
+
+<details>
+<summary>amd64</summary>
+
+```bash
+set -euxo pipefail
+export FORCE_UNSAFE_CONFIGURE=1
+export CFLAGS="${CFLAGS:-} -std=gnu17"
+sanitize_flags() {
+  printf '%s' "$1" | sed -E 's/-flto(=[^[:space:]]*)?//g; s/-Werror=(odr|lto-type-mismatch|strict-aliasing)//g; s/-f(no-)?hardened//g'
+}
+autotools_configure() {
+  if ! CFLAGS="$(sanitize_flags "${CFLAGS:-}")" \
+       CXXFLAGS="$(sanitize_flags "${CXXFLAGS:-}")" \
+       LDFLAGS="$(sanitize_flags "${LDFLAGS:-}")" \
+       ./configure --build="$HOST_TRIPLE" --host="${PACKAGE_HOST:-$TRIPLE}" "$@"; then
+    if [ -f config.log ]; then
+      echo "===== config.log (last 80 lines) ====="
+      tail -n 80 config.log
+    fi
+    return 1
+  fi
+}
+mkdir -p "$BUILD"
+cp -a "$SOURCE"/. "$BUILD"/
+cd "$BUILD"
+for _dep in libffi zlib openssl expat sqlite ncurses readline xz bzip2 zstd; do
+  if [ -d /dep/${_dep}/usr/include ]; then
+    export CPPFLAGS="${CPPFLAGS:-} -I/dep/${_dep}/usr/include"
+    export CFLAGS="${CFLAGS} -I/dep/${_dep}/usr/include"
+  fi
+  if [ -d /dep/${_dep}/usr/lib64 ]; then
+    export LDFLAGS="${LDFLAGS} -L/dep/${_dep}/usr/lib64"
+    export PKG_CONFIG_PATH="/dep/${_dep}/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+    export LD_LIBRARY_PATH="/dep/${_dep}/usr/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  else
+    if [ -d /dep/${_dep}/usr/lib ]; then
+      export LDFLAGS="${LDFLAGS} -L/dep/${_dep}/usr/lib"
+      export PKG_CONFIG_PATH="/dep/${_dep}/usr/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+      export LD_LIBRARY_PATH="/dep/${_dep}/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    fi
+  fi
+done
+export CFLAGS="${CFLAGS} -DOPENSSL_NO_SSL3 -DOPENSSL_NO_SSL3_METHOD -DOPENSSL_NO_TLS1_METHOD -DOPENSSL_NO_TLS1_1_METHOD -DOPENSSL_NO_TLS1_2_METHOD"
+autotools_configure --prefix=/usr --enable-shared --enable-optimizations --without-ensurepip
+make -j"$(nproc)" CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}"
+make install CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}" DESTDIR="$OUT"
+ln -sf python3 "$OUT"/usr/bin/python
+```
+
+</details>
+
+<details>
+<summary>arm64, ppc64le, riscv64, s390x（クロス・Canadian）</summary>
+
+```bash
+set -euxo pipefail
+export FORCE_UNSAFE_CONFIGURE=1
+export CFLAGS="${CFLAGS:-} -std=gnu17"
+export CC_FOR_BUILD="${HOST_TRIPLE}-gcc"
+export CXX_FOR_BUILD="${HOST_TRIPLE}-g++"
+export BUILD_CC="$CC_FOR_BUILD"
+export gl_cv_func_strcasecmp_works=yes
+export gl_cv_func_strncasecmp_works=yes
+export gl_cv_func_memchr_works=yes
+export gl_cv_func_working_mktime=yes
+export gl_cv_func_working_utimes=yes
+export gl_cv_func_getcwd_null=yes
+export gl_cv_func_getcwd_path_max=yes
+export gl_cv_func_getcwd_abort_bug=no
+export gl_cv_func_chown_follows_symlink=yes
+export gl_cv_func_fchownat_nofollow_works=yes
+export gl_cv_func_lstat_dereferences_slashed_symlink=yes
+export gl_cv_func_stat_file_slash=yes
+export gl_cv_func_strerror_r_works=yes
+export gl_cv_func_strerror_0_works=yes
+export gl_cv_func_strtod_works=yes
+export gl_cv_func_nanosleep=yes
+export gl_cv_func_printf_positions=yes
+export gl_cv_func_printf_infinite=yes
+export gl_cv_func_printf_enomem=yes
+export gl_cv_func_malloc_0_nonnull=yes
+export gl_cv_func_malloc_posix=yes
+export ac_cv_func_malloc_0_nonnull=yes
+export ac_cv_func_realloc_0_nonnull=yes
+export ac_cv_func_memcmp_working=yes
+sanitize_flags() {
+  printf '%s' "$1" | sed -E 's/-flto(=[^[:space:]]*)?//g; s/-Werror=(odr|lto-type-mismatch|strict-aliasing)//g; s/-f(no-)?hardened//g'
+}
+autotools_configure() {
+  if ! CFLAGS="$(sanitize_flags "${CFLAGS:-}")" \
+       CXXFLAGS="$(sanitize_flags "${CXXFLAGS:-}")" \
+       LDFLAGS="$(sanitize_flags "${LDFLAGS:-}")" \
+       ./configure --build="$HOST_TRIPLE" --host="${PACKAGE_HOST:-$TRIPLE}" "$@"; then
+    if [ -f config.log ]; then
+      echo "===== config.log (last 80 lines) ====="
+      tail -n 80 config.log
+    fi
+    return 1
+  fi
+}
+mkdir -p "$BUILD"
+cp -a "$SOURCE"/. "$BUILD"/
+cd "$BUILD"
+for _dep in libffi zlib openssl expat sqlite ncurses readline xz bzip2 zstd; do
+  if [ -d /dep/${_dep}/usr/include ]; then
+    export CPPFLAGS="${CPPFLAGS:-} -I/dep/${_dep}/usr/include"
+    export CFLAGS="${CFLAGS} -I/dep/${_dep}/usr/include"
+  fi
+  if [ -d /dep/${_dep}/usr/lib64 ]; then
+    export LDFLAGS="${LDFLAGS} -L/dep/${_dep}/usr/lib64"
+    export PKG_CONFIG_PATH="/dep/${_dep}/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+    export LD_LIBRARY_PATH="/dep/${_dep}/usr/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  else
+    if [ -d /dep/${_dep}/usr/lib ]; then
+      export LDFLAGS="${LDFLAGS} -L/dep/${_dep}/usr/lib"
+      export PKG_CONFIG_PATH="/dep/${_dep}/usr/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+      export LD_LIBRARY_PATH="/dep/${_dep}/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    fi
+  fi
+done
+export CFLAGS="${CFLAGS} -DOPENSSL_NO_SSL3 -DOPENSSL_NO_SSL3_METHOD -DOPENSSL_NO_TLS1_METHOD -DOPENSSL_NO_TLS1_1_METHOD -DOPENSSL_NO_TLS1_2_METHOD"
+export ac_cv_buggy_getaddrinfo=no
+export ac_cv_file__dev_ptmx=yes
+export ac_cv_file__dev_ptc=no
+autotools_configure --prefix=/usr --enable-shared --without-ensurepip --with-build-python=/dep/python/usr/bin/python3
+make -j"$(nproc)" CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}"
+make install CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}" DESTDIR="$OUT"
+ln -sf python3 "$OUT"/usr/bin/python
+```
+
+</details>
+
 <!-- /GENERATED -->
 
 
 
 実行時はパッケージ Platform の `{triple}-glibc` に加え、libffi、zlib、openssl、expat、sqlite、ncurses、readline、xz、bzip2、zstd です。ビルド専用は linux-headers です。対象 Platform と共通前処理は [host-tools.md](../host-tools.md) です。python は `Bootstrap` を実装せず、`build-env` 合成後に自前環境で組みます。openssl などの実行時依存は python のグラフが引きます。他パッケージがビルド時に実行する python は HOST 成果物をマウントします。
 
-## ビルド設定
 
-実行時依存の `/dep/{name}/usr/include`・`lib{,64}` を `CFLAGS` / `LDFLAGS` / `PKG_CONFIG_PATH` に足してから configure します。`$OUT/usr/bin/python` から `python3` へのシンボリックリンクを作成します。
+## 補足
 
-| フラグ | 設定値 | 条件 |
-|-|-|-|
-| `--prefix` | `/usr` | 常時 |
-| `--enable-shared` | | 常時 |
-| `--enable-optimizations` | | ネイティブビルドのみ（`Pgo::Custom`。PROFILE_TASK で生成バイナリを実行する自己完結 PGO のため、クロスでは付けない） |
-| `--without-ensurepip` | | 常時 |
+実行時依存の `/dep/{name}/usr/include`・`lib{,64}` を `CFLAGS` / `LDFLAGS` / `PKG_CONFIG_PATH` に足してから configure します。`$OUT/usr/bin/python` から `python3` へのシンボリックリンクを作成します。`--enable-optimizations` はネイティブビルドのみです（PROFILE_TASK で生成バイナリを実行する自己完結 PGO のため、クロスでは付けません）。

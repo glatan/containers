@@ -70,8 +70,7 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
         pipe: Pipe::cmd(argv),
     };
 
-    let mut argv = vec![
-        Arg::Concat(vec![Arg::Var("SOURCE"), Arg::lit("/configure")]),
+    let mut args = vec![
         Arg::Opt("build", Box::new(Arg::Var("HOST_TRIPLE"))),
         // ツールはビルド機で動くクロスツール。--host=HOST_TRIPLE が正しい
         //（=PACKAGE_HOST は host==target になる誤り）。prefixed 名は
@@ -103,8 +102,8 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
         Arg::lit("--with-system-zlib"),
         Arg::Var("GCC_LIB_FLAGS"),
     ];
-    argv.extend(arch_flags.iter().map(|f| Arg::lit(f)));
-    argv.extend(
+    args.extend(arch_flags.iter().map(|f| Arg::lit(f)));
+    args.extend(
         [
             "--disable-nls",
             "--disable-multilib",
@@ -236,9 +235,13 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
     steps.steps.extend(super::gcc::lib_flag_steps());
     steps
         .step(Step::Cd(Arg::Var("BUILD")))
-        .step(Step::Exec {
+        .step(Step::ConfigureScript {
             env: vec![],
-            pipe: Pipe::cmd(argv),
+            program: vec![Arg::Concat(vec![
+                Arg::Var("SOURCE"),
+                Arg::lit("/configure"),
+            ])],
+            args,
         })
         .step(Step::Make {
             jobs: true,

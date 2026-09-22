@@ -432,65 +432,60 @@
       "std": "Gnu17",
       "steps": [
         {
-          "Exec": {
-            "env": [],
-            "pipe": {
-              "stages": [
-                [
+          "ConfigureScript": {
+            "args": [
+              {
+                "Lit": "--prefix=/usr"
+              },
+              {
+                "Concat": [
                   {
-                    "Concat": [
-                      {
-                        "Quoted": {
-                          "Var": "SOURCE"
-                        }
-                      },
-                      {
-                        "Lit": "/bootstrap"
-                      }
-                    ]
+                    "Lit": "--parallel="
                   },
                   {
-                    "Lit": "--prefix=/usr"
-                  },
-                  {
-                    "Concat": [
-                      {
-                        "Lit": "--parallel="
-                      },
-                      {
-                        "Subst": {
-                          "stages": [
-                            [
-                              {
-                                "Lit": "nproc"
-                              }
-                            ]
-                          ],
-                          "stderr": null,
-                          "stdin": null,
-                          "stdout": null
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "Lit": "--"
-                  },
-                  {
-                    "Lit": "-DCMAKE_SYSROOT=/tmp/sysroot"
-                  },
-                  {
-                    "Lit": "-DCMAKE_USE_OPENSSL=OFF"
-                  },
-                  {
-                    "Lit": "-DCMAKE_DISABLE_FIND_PACKAGE_Libidn2=ON"
+                    "Subst": {
+                      "stages": [
+                        [
+                          {
+                            "Lit": "nproc"
+                          }
+                        ]
+                      ],
+                      "stderr": null,
+                      "stdin": null,
+                      "stdout": null
+                    }
                   }
                 ]
-              ],
-              "stderr": null,
-              "stdin": null,
-              "stdout": null
-            }
+              },
+              {
+                "Lit": "--"
+              },
+              {
+                "Lit": "-DCMAKE_SYSROOT=/tmp/sysroot"
+              },
+              {
+                "Lit": "-DCMAKE_USE_OPENSSL=OFF"
+              },
+              {
+                "Lit": "-DCMAKE_DISABLE_FIND_PACKAGE_Libidn2=ON"
+              }
+            ],
+            "env": [],
+            "program": [
+              {
+                "Concat": [
+                  {
+                    "Quoted": {
+                      "Var": "SOURCE"
+                    }
+                  },
+                  {
+                    "Lit": "/bootstrap"
+                  }
+                ]
+              }
+            ]
           }
         },
         {

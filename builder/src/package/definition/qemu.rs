@@ -200,10 +200,10 @@ impl Package for Qemu {
                         "pythondeps.toml",
                     ])),
                 })
-                .step(Step::Exec {
+                .step(Step::ConfigureScript {
                     env: vec![],
-                    pipe: Pipe::cmd(argv(&[
-                        "./configure",
+                    program: argv(&["./configure"]),
+                    args: argv(&[
                         "--prefix=/usr",
                         "--target-list=x86_64-linux-user,aarch64-linux-user,riscv64-linux-user,ppc64le-linux-user,s390x-linux-user",
                         "--enable-tcg",
@@ -225,7 +225,7 @@ impl Package for Qemu {
                         "--disable-gnutls",
                         "--disable-gcrypt",
                         "--disable-auth-pam",
-                    ])),
+                    ]),
                 })
                 .step(Step::make(&[]))
                 .step(Step::make_install(&[]))

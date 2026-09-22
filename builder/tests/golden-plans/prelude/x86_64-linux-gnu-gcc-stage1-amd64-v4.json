@@ -730,232 +730,227 @@
           }
         },
         {
-          "Exec": {
-            "env": [],
-            "pipe": {
-              "stages": [
-                [
+          "ConfigureScript": {
+            "args": [
+              {
+                "Opt": [
+                  "build",
                   {
-                    "Concat": [
-                      {
-                        "Var": "SOURCE"
-                      },
-                      {
-                        "Lit": "/configure"
-                      }
-                    ]
-                  },
-                  {
-                    "Opt": [
-                      "build",
-                      {
-                        "Var": "HOST_TRIPLE"
-                      }
-                    ]
-                  },
-                  {
-                    "Opt": [
-                      "host",
-                      {
-                        "Var": "HOST_TRIPLE"
-                      }
-                    ]
-                  },
-                  {
-                    "Opt": [
-                      "target",
-                      {
-                        "Var": "TRIPLE"
-                      }
-                    ]
-                  },
-                  {
-                    "Opt": [
-                      "program-prefix",
-                      {
-                        "Concat": [
-                          {
-                            "Var": "TRIPLE"
-                          },
-                          {
-                            "Lit": "-"
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "Opt": [
-                      "prefix",
-                      {
-                        "Concat": [
-                          {
-                            "Lit": "/usr/lib/cross/"
-                          },
-                          {
-                            "Var": "TRIPLE"
-                          },
-                          {
-                            "Lit": "/stage1"
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "Opt": [
-                      "with-sysroot",
-                      {
-                        "Concat": [
-                          {
-                            "Lit": "/usr/"
-                          },
-                          {
-                            "Var": "TRIPLE"
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "Opt": [
-                      "with-build-sysroot",
-                      {
-                        "Concat": [
-                          {
-                            "Lit": "/usr/"
-                          },
-                          {
-                            "Var": "TRIPLE"
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "Lit": "--with-native-system-header-dir=/include"
-                  },
-                  {
-                    "Opt": [
-                      "with-as",
-                      {
-                        "Concat": [
-                          {
-                            "Lit": "/usr/bin/"
-                          },
-                          {
-                            "Var": "TRIPLE"
-                          },
-                          {
-                            "Lit": "-as"
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "Opt": [
-                      "with-ld",
-                      {
-                        "Concat": [
-                          {
-                            "Lit": "/usr/bin/"
-                          },
-                          {
-                            "Var": "TRIPLE"
-                          },
-                          {
-                            "Lit": "-ld"
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "Concat": [
-                      {
-                        "Lit": "--infodir=/usr/share/info/"
-                      },
-                      {
-                        "Var": "TRIPLE"
-                      }
-                    ]
-                  },
-                  {
-                    "Lit": "--with-system-zlib"
-                  },
-                  {
-                    "Var": "GCC_LIB_FLAGS"
-                  },
-                  {
-                    "Lit": "--with-arch=x86-64"
-                  },
-                  {
-                    "Lit": "--without-headers"
-                  },
-                  {
-                    "Lit": "--with-newlib"
-                  },
-                  {
-                    "Lit": "--disable-shared"
-                  },
-                  {
-                    "Lit": "--disable-threads"
-                  },
-                  {
-                    "Lit": "--disable-werror"
-                  },
-                  {
-                    "Lit": "--disable-libatomic"
-                  },
-                  {
-                    "Lit": "--disable-libsanitizer"
-                  },
-                  {
-                    "Lit": "--disable-libssp"
-                  },
-                  {
-                    "Lit": "--disable-libquadmath"
-                  },
-                  {
-                    "Lit": "--disable-libgomp"
-                  },
-                  {
-                    "Lit": "--disable-libstdcxx"
-                  },
-                  {
-                    "Lit": "--disable-libvtv"
-                  },
-                  {
-                    "Lit": "--disable-bootstrap"
-                  },
-                  {
-                    "Lit": "--disable-multilib"
-                  },
-                  {
-                    "Lit": "--enable-languages=c"
-                  },
-                  {
-                    "Lit": "--enable-lto"
-                  },
-                  {
-                    "Lit": "--enable-plugin"
-                  },
-                  {
-                    "Lit": "--enable-default-pie"
-                  },
-                  {
-                    "Lit": "--enable-default-ssp"
-                  },
-                  {
-                    "Lit": "--enable-checking=release"
+                    "Var": "HOST_TRIPLE"
                   }
                 ]
-              ],
-              "stderr": null,
-              "stdin": null,
-              "stdout": null
-            }
+              },
+              {
+                "Opt": [
+                  "host",
+                  {
+                    "Var": "HOST_TRIPLE"
+                  }
+                ]
+              },
+              {
+                "Opt": [
+                  "target",
+                  {
+                    "Var": "TRIPLE"
+                  }
+                ]
+              },
+              {
+                "Opt": [
+                  "program-prefix",
+                  {
+                    "Concat": [
+                      {
+                        "Var": "TRIPLE"
+                      },
+                      {
+                        "Lit": "-"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "Opt": [
+                  "prefix",
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "/usr/lib/cross/"
+                      },
+                      {
+                        "Var": "TRIPLE"
+                      },
+                      {
+                        "Lit": "/stage1"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "Opt": [
+                  "with-sysroot",
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "/usr/"
+                      },
+                      {
+                        "Var": "TRIPLE"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "Opt": [
+                  "with-build-sysroot",
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "/usr/"
+                      },
+                      {
+                        "Var": "TRIPLE"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "Lit": "--with-native-system-header-dir=/include"
+              },
+              {
+                "Opt": [
+                  "with-as",
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "/usr/bin/"
+                      },
+                      {
+                        "Var": "TRIPLE"
+                      },
+                      {
+                        "Lit": "-as"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "Opt": [
+                  "with-ld",
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "/usr/bin/"
+                      },
+                      {
+                        "Var": "TRIPLE"
+                      },
+                      {
+                        "Lit": "-ld"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "Concat": [
+                  {
+                    "Lit": "--infodir=/usr/share/info/"
+                  },
+                  {
+                    "Var": "TRIPLE"
+                  }
+                ]
+              },
+              {
+                "Lit": "--with-system-zlib"
+              },
+              {
+                "Var": "GCC_LIB_FLAGS"
+              },
+              {
+                "Lit": "--with-arch=x86-64"
+              },
+              {
+                "Lit": "--without-headers"
+              },
+              {
+                "Lit": "--with-newlib"
+              },
+              {
+                "Lit": "--disable-shared"
+              },
+              {
+                "Lit": "--disable-threads"
+              },
+              {
+                "Lit": "--disable-werror"
+              },
+              {
+                "Lit": "--disable-libatomic"
+              },
+              {
+                "Lit": "--disable-libsanitizer"
+              },
+              {
+                "Lit": "--disable-libssp"
+              },
+              {
+                "Lit": "--disable-libquadmath"
+              },
+              {
+                "Lit": "--disable-libgomp"
+              },
+              {
+                "Lit": "--disable-libstdcxx"
+              },
+              {
+                "Lit": "--disable-libvtv"
+              },
+              {
+                "Lit": "--disable-bootstrap"
+              },
+              {
+                "Lit": "--disable-multilib"
+              },
+              {
+                "Lit": "--enable-languages=c"
+              },
+              {
+                "Lit": "--enable-lto"
+              },
+              {
+                "Lit": "--enable-plugin"
+              },
+              {
+                "Lit": "--enable-default-pie"
+              },
+              {
+                "Lit": "--enable-default-ssp"
+              },
+              {
+                "Lit": "--enable-checking=release"
+              }
+            ],
+            "env": [],
+            "program": [
+              {
+                "Concat": [
+                  {
+                    "Var": "SOURCE"
+                  },
+                  {
+                    "Lit": "/configure"
+                  }
+                ]
+              }
+            ]
           }
         },
         {

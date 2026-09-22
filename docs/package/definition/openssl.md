@@ -7,6 +7,8 @@
 | バージョン | 4.0.2 |
 | ライセンス | Apache-2.0 |
 | 分類 | カタログ |
+| 対象 Platform | amd64: v1 v2 v3 v4; arm64: v8 v8.1 v8.2 v8.3 v8.4 v8.5 v8.6 v8.7 v8.8 v8.9 v9 v9.1 v9.2 v9.3 v9.4 v9.5; ppc64le: power8 power9 power10 power11; riscv64: rva20u64 rva22u64 rva23u64; s390x: z900 z990 z9-ec z10 z196 zEC12 z13 z14 z15 z16 z17 |
+| PGO | amd64 で適用（`Pgo::Custom`、レシピ内の個別手順） |
 | 定義 | [`builder/src/package/definition/openssl.rs`](../../../builder/src/package/definition/openssl.rs) |
 
 ## ソース
@@ -44,6 +46,137 @@
 | [mold](./mold.md) | 2.42.1 | optional |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
+## ビルド設定
+
+| 項目 | 値 |
+|-|-|
+| env プリリュード | `Env::None`（前処理なし） |
+| sysroot | あり（`--sysroot`/`-idirafter` は `wrap_script` が注入） |
+| ビルドディレクトリ | `$BUILD`（out-of-tree） |
+
+## ツールチェーンフラグ
+
+`tool_flags` の既定セットと同一です（[README.md](../README.md) の既定フラグ表）。
+
+`-march`/`-mcpu` の値は variant 依存です（上記は amd64/v4 で評価）。
+
+## ビルドフラグ
+
+対象 Platform 全件で `recipe()` を評価した configure 系呼出の引数です。条件列は引数が出現するターゲット集合です。
+
+| フラグ | 設定値 | 条件 |
+|-|-|-|
+| `linux-aarch64` |  | arm64 |
+| `--prefix` | `/usr` | 常時 |
+| `--openssldir` | `/etc/ssl` | 常時 |
+| `--libdir` | `lib64` | 常時 |
+| `linux-ppc64le` |  | ppc64le |
+| `linux64-riscv64` |  | riscv64 |
+| `linux-x86_64` |  | amd64 |
+| `linux64-s390x` |  | s390x |
+
+## ビルド手順
+
+`recipe()` が生成するスクリプトです（`builder` が runner へ渡す IR のレンダリング）。対象 Platform 間で 5 系統に分かれます。
+
+<details>
+<summary>amd64</summary>
+
+```bash
+set -euxo pipefail
+mkdir -p "$BUILD"
+cd "$BUILD"
+if [ -n "${SYSROOT:-}" ]; then
+  export CC="${CC} --sysroot=${SYSROOT}"
+fi
+"${SOURCE}/Configure" linux-x86_64 --prefix=/usr --openssldir=/etc/ssl --libdir=lib64
+export PGODIR=/tmp/pgo
+rm -rf "${PGODIR}"
+mkdir -p "${PGODIR}"
+make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-generate=$PGODIR -fprofile-update=atomic" LDFLAGS="$LDFLAGS -fprofile-generate"
+export LD_LIBRARY_PATH="${PWD}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export OPENSSL_MODULES="${PWD}/providers"
+export OPENSSL_CONF=/dev/null
+(
+  ./apps/openssl speed -seconds 1 rsa2048 ecdsap256 ed25519
+  ./apps/openssl speed -seconds 1 -evp aes-128-gcm -evp aes-256-gcm -evp chacha20-poly1305 -evp sha256 -evp sha512
+  ./apps/openssl speed -seconds 1 aes-128-cbc aes-256-cbc sha256 sha512
+) || true
+make clean
+make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-use=$PGODIR -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch" LDFLAGS="$LDFLAGS -fprofile-use"
+make install_sw DESTDIR="${OUT}"
+```
+
+</details>
+
+<details>
+<summary>arm64（クロス・Canadian）</summary>
+
+```bash
+set -euxo pipefail
+mkdir -p "$BUILD"
+cd "$BUILD"
+if [ -n "${SYSROOT:-}" ]; then
+  export CC="${CC} --sysroot=${SYSROOT}"
+fi
+"${SOURCE}/Configure" linux-aarch64 --prefix=/usr --openssldir=/etc/ssl --libdir=lib64
+make -j"$(nproc)"
+make install_sw DESTDIR="${OUT}"
+```
+
+</details>
+
+<details>
+<summary>ppc64le（クロス・Canadian）</summary>
+
+```bash
+set -euxo pipefail
+mkdir -p "$BUILD"
+cd "$BUILD"
+if [ -n "${SYSROOT:-}" ]; then
+  export CC="${CC} --sysroot=${SYSROOT}"
+fi
+"${SOURCE}/Configure" linux-ppc64le --prefix=/usr --openssldir=/etc/ssl --libdir=lib64
+make -j"$(nproc)"
+make install_sw DESTDIR="${OUT}"
+```
+
+</details>
+
+<details>
+<summary>riscv64（クロス・Canadian）</summary>
+
+```bash
+set -euxo pipefail
+mkdir -p "$BUILD"
+cd "$BUILD"
+if [ -n "${SYSROOT:-}" ]; then
+  export CC="${CC} --sysroot=${SYSROOT}"
+fi
+"${SOURCE}/Configure" linux64-riscv64 --prefix=/usr --openssldir=/etc/ssl --libdir=lib64
+make -j"$(nproc)"
+make install_sw DESTDIR="${OUT}"
+```
+
+</details>
+
+<details>
+<summary>s390x（クロス・Canadian）</summary>
+
+```bash
+set -euxo pipefail
+mkdir -p "$BUILD"
+cd "$BUILD"
+if [ -n "${SYSROOT:-}" ]; then
+  export CC="${CC} --sysroot=${SYSROOT}"
+fi
+"${SOURCE}/Configure" linux64-s390x --prefix=/usr --openssldir=/etc/ssl --libdir=lib64
+make -j"$(nproc)"
+make install_sw DESTDIR="${OUT}"
+```
+
+</details>
+
 <!-- /GENERATED -->
 
 
@@ -52,26 +185,7 @@ host-dependencies は `dep:false` でマウントされ、PATH には載りま�
 
 `Configure` スクリプトの第 1 引数は architecture から決めます。CPU 指定フラグは builder が variant から決めます（ppc64le は `-mcpu=`、それ以外は `-march=`）。対象 Platform は `Target::all()` です。variant ごとの CPU 名は [platforms.md](../../image/platforms.md) と `Target::march()` です。
 
-| architecture | Configure |
-|-|-|
-| amd64 | `linux-x86_64` |
-| arm64 | `linux-aarch64` |
-| riscv64 | `linux64-riscv64` |
-| ppc64le | `linux-ppc64le` |
-| s390x | `linux64-s390x` |
-
-## ビルドフラグ
-
-| フラグ | 設定値 | 条件 |
-|-|-|-|
-| `--prefix` | `/usr` | 常時 |
-| `--openssldir` | `/etc/ssl` | 常時 |
-| `--libdir` | `lib64` | 常時 |
-| LTO | 適用する | builder の `Cflag::Lto` / `Ldflag::Lto` で指定（Configure の `enable-lto` は 3.6 系で未提供） |
-| PGO | ネイティブビルドのみ適用（`Pgo::Custom`） | `make` の `CFLAGS` / `LDFLAGS` に `-fprofile-generate` / `-fprofile-use` を付与 |
-| `make` ターゲット | `install_sw` | 常時（マニュアルファイルはインストールしない） |
-| `flags()` | `tool_flags(target)`（既定セット。[README.md](../README.md) の既定フラグ表） | 個別追加・除外はなし |
-| `AR` / `RANLIB` / `NM` | ネイティブは `gcc-ar` 等、クロスは `${CROSS}gcc-ar` 等 | LTO 最適化オブジェクトの処理に必要 |
+## LTO / PGO 方針
 
 LTO は常時有効とします。一方、PGO は生成バイナリを実行可能なネイティブビルド時のみ適用します。クロスビルド環境（生成コードの triple がホスト triple と異なる場合）ではプロファイル採取を実行できないため、LTO のみ適用します。分岐は `Pgo::Custom` ポリシーとして `recipe(ctx)` が `ctx.cross()` で静的に解決します。
 

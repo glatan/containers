@@ -6,6 +6,7 @@ use crate::workspace;
 
 pub(crate) mod build;
 pub mod definition;
+pub(crate) mod describe;
 pub(crate) mod env;
 pub(crate) mod fetch;
 pub mod recipe;

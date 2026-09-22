@@ -35,41 +35,36 @@
         }
       },
       {
-        "Exec": {
+        "ConfigureScript": {
+          "args": [
+            {
+              "Lit": "linux-aarch64"
+            },
+            {
+              "Lit": "--prefix=/usr"
+            },
+            {
+              "Lit": "--openssldir=/etc/ssl"
+            },
+            {
+              "Lit": "--libdir=lib64"
+            }
+          ],
           "env": [],
-          "pipe": {
-            "stages": [
-              [
-                {
-                  "Quoted": {
-                    "Concat": [
-                      {
-                        "Var": "SOURCE"
-                      },
-                      {
-                        "Lit": "/Configure"
-                      }
-                    ]
+          "program": [
+            {
+              "Quoted": {
+                "Concat": [
+                  {
+                    "Var": "SOURCE"
+                  },
+                  {
+                    "Lit": "/Configure"
                   }
-                },
-                {
-                  "Lit": "linux-aarch64"
-                },
-                {
-                  "Lit": "--prefix=/usr"
-                },
-                {
-                  "Lit": "--openssldir=/etc/ssl"
-                },
-                {
-                  "Lit": "--libdir=lib64"
-                }
-              ]
-            ],
-            "stderr": null,
-            "stdin": null,
-            "stdout": null
-          }
+                ]
+              }
+            }
+          ]
         }
       },
       {

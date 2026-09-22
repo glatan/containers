@@ -432,49 +432,31 @@
       "std": "Gnu17",
       "steps": [
         {
-          "Exec": {
-            "env": [],
-            "pipe": {
-              "stages": [
-                [
-                  {
-                    "Lit": "meson"
-                  },
-                  {
-                    "Lit": "setup"
-                  },
-                  {
-                    "Quoted": {
-                      "Var": "SOURCE"
-                    }
-                  },
-                  {
-                    "Lit": "--prefix=/usr"
-                  },
-                  {
-                    "Lit": "--wrap-mode=nofallback"
-                  },
-                  {
-                    "Lit": "-Dlibmount=disabled"
-                  },
-                  {
-                    "Lit": "-Dnls=disabled"
-                  },
-                  {
-                    "Lit": "-Dtests=false"
-                  },
-                  {
-                    "Lit": "-Dsysprof=disabled"
-                  },
-                  {
-                    "Lit": "-Dintrospection=disabled"
-                  }
-                ]
-              ],
-              "stderr": null,
-              "stdin": null,
-              "stdout": null
-            }
+          "Meson": {
+            "args": [
+              {
+                "Lit": "--prefix=/usr"
+              },
+              {
+                "Lit": "--wrap-mode=nofallback"
+              },
+              {
+                "Lit": "-Dlibmount=disabled"
+              },
+              {
+                "Lit": "-Dnls=disabled"
+              },
+              {
+                "Lit": "-Dtests=false"
+              },
+              {
+                "Lit": "-Dsysprof=disabled"
+              },
+              {
+                "Lit": "-Dintrospection=disabled"
+              }
+            ],
+            "env": []
           }
         },
         {

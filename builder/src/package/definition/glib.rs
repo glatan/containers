@@ -98,14 +98,11 @@ impl Package for Glib {
                 Arg::lit("/meson-cross.ini"),
             ])));
         }
-        let mut setup = argv(&["meson", "setup"]);
-        setup.push(Arg::quoted(Arg::Var("SOURCE")));
-        setup.extend(meson_args);
         Recipe::Steps(
             steps
-                .step(Step::Exec {
+                .step(Step::Meson {
+                    args: meson_args,
                     env: vec![],
-                    pipe: Pipe::cmd(setup),
                 })
                 .step(Step::Exec {
                     env: vec![],

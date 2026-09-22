@@ -1,4 +1,4 @@
-use crate::package::recipe::{Arg, BuildContext, Env, Pipe, Recipe, Step, Steps, Workdir};
+use crate::package::recipe::{Arg, BuildContext, Env, Pipe, Recipe, Step, Steps, Workdir, argv};
 use crate::package::{Package, Source};
 
 pub struct Ninja;
@@ -69,28 +69,28 @@ impl Package for Ninja {
             // BUILD_ENV 側の cmake で configure する。
             let arch = ctx.triple.split('-').next().unwrap_or(&ctx.triple);
             steps.steps.extend([
-                cmd(vec![
-                    Arg::lit("cmake"),
-                    Arg::lit("-S"),
-                    Arg::lit("."),
-                    Arg::lit("-B"),
-                    Arg::lit("build-cmake"),
-                    Arg::lit("-DCMAKE_SYSTEM_NAME=Linux"),
-                    Arg::owned(format!("-DCMAKE_SYSTEM_PROCESSOR={arch}")),
-                    Arg::lit("-DCMAKE_SYSROOT=/tmp/sysroot"),
-                    Arg::lit("-DCMAKE_BUILD_TYPE=Release"),
-                    Arg::lit("-DCMAKE_INSTALL_PREFIX=/usr"),
-                    // googletest の FetchContent は --network=none で失敗
-                    Arg::lit("-DBUILD_TESTING=OFF"),
-                    Arg::Concat(vec![
-                        Arg::lit("-DCMAKE_C_COMPILER="),
-                        Arg::quoted(Arg::Var("CC")),
-                    ]),
-                    Arg::Concat(vec![
-                        Arg::lit("-DCMAKE_CXX_COMPILER="),
-                        Arg::quoted(Arg::Var("CXX")),
-                    ]),
-                ]),
+                Step::Cmake {
+                    source_dir: Arg::lit("."),
+                    build_dir: Arg::lit("build-cmake"),
+                    env: vec![],
+                    args: vec![
+                        Arg::lit("-DCMAKE_SYSTEM_NAME=Linux"),
+                        Arg::owned(format!("-DCMAKE_SYSTEM_PROCESSOR={arch}")),
+                        Arg::lit("-DCMAKE_SYSROOT=/tmp/sysroot"),
+                        Arg::lit("-DCMAKE_BUILD_TYPE=Release"),
+                        Arg::lit("-DCMAKE_INSTALL_PREFIX=/usr"),
+                        // googletest の FetchContent は --network=none で失敗
+                        Arg::lit("-DBUILD_TESTING=OFF"),
+                        Arg::Concat(vec![
+                            Arg::lit("-DCMAKE_C_COMPILER="),
+                            Arg::quoted(Arg::Var("CC")),
+                        ]),
+                        Arg::Concat(vec![
+                            Arg::lit("-DCMAKE_CXX_COMPILER="),
+                            Arg::quoted(Arg::Var("CXX")),
+                        ]),
+                    ],
+                },
                 cmd(vec![
                     Arg::lit("cmake"),
                     Arg::lit("--build"),
@@ -143,11 +143,11 @@ impl Package for Ninja {
                         Arg::lit(" -fprofile-generate"),
                     ])),
                 },
-                cmd(vec![
-                    Arg::lit("python3"),
-                    Arg::lit("configure.py"),
-                    Arg::lit("--bootstrap"),
-                ]),
+                Step::ConfigureScript {
+                    program: argv(&["python3", "configure.py"]),
+                    args: argv(&["--bootstrap"]),
+                    env: vec![],
+                },
                 Step::Or {
                     lhs: vec![
                         cmd(vec![Arg::lit("./ninja"), Arg::lit("--version")]),
@@ -182,11 +182,11 @@ impl Package for Ninja {
                         Arg::lit(" -fprofile-use"),
                     ])),
                 },
-                cmd(vec![
-                    Arg::lit("python3"),
-                    Arg::lit("configure.py"),
-                    Arg::lit("--bootstrap"),
-                ]),
+                Step::ConfigureScript {
+                    program: argv(&["python3", "configure.py"]),
+                    args: argv(&["--bootstrap"]),
+                    env: vec![],
+                },
             ]);
         }
         steps.steps.push(Step::Install {

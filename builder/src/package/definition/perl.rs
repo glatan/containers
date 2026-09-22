@@ -319,20 +319,23 @@ impl Package for Perl {
                         Arg::lit("-binutils/usr/bin:/usr/bin:/bin"),
                     ])),
                 },
-                cmd(vec![
-                    Arg::Concat(vec![
+                Step::ConfigureScript {
+                    program: vec![Arg::Concat(vec![
                         Arg::quoted(Arg::Var("SOURCE")),
                         Arg::lit("/Configure"),
-                    ]),
-                    Arg::lit("-des"),
-                    Arg::lit("-Dusedevel"),
-                    Arg::lit("-Dmksymlinks"),
-                    Arg::Concat(vec![Arg::lit("-Dcc="), Arg::quoted(Arg::Var("CC"))]),
-                    Arg::Concat(vec![Arg::lit("-Dld="), Arg::quoted(Arg::Var("CC"))]),
-                    Arg::lit("-Dprefix=/usr"),
-                    Arg::lit("-Uusethreads"),
-                    Arg::lit("-Dlibs='-lpthread -ldl -lm -lutil -lc'"),
-                ]),
+                    ])],
+                    args: vec![
+                        Arg::lit("-des"),
+                        Arg::lit("-Dusedevel"),
+                        Arg::lit("-Dmksymlinks"),
+                        Arg::Concat(vec![Arg::lit("-Dcc="), Arg::quoted(Arg::Var("CC"))]),
+                        Arg::Concat(vec![Arg::lit("-Dld="), Arg::quoted(Arg::Var("CC"))]),
+                        Arg::lit("-Dprefix=/usr"),
+                        Arg::lit("-Uusethreads"),
+                        Arg::lit("-Dlibs='-lpthread -ldl -lm -lutil -lc'"),
+                    ],
+                    env: vec![],
+                },
                 cmd(vec![
                     Arg::lit("make"),
                     Arg::nproc_jobs("-j"),
@@ -405,7 +408,6 @@ impl Package for Perl {
         });
 
         let mut configure = vec![
-            Arg::lit("./Configure"),
             Arg::lit("-des"),
             Arg::lit("-Dprefix=/usr"),
             Arg::lit("-Dvendorprefix=/usr"),
@@ -541,7 +543,11 @@ impl Package for Perl {
             ]);
         }
         if cross {
-            steps.steps.push(exec(Pipe::cmd(configure)));
+            steps.steps.push(Step::ConfigureScript {
+                program: vec![Arg::lit("./Configure")],
+                args: configure,
+                env: vec![],
+            });
         } else {
             // ネイティブでも dep glibc sysroot があるならヘッダ/ライブラリ
             // プローブを sysroot に限定する。incpth 既定値の /usr/include は
@@ -595,8 +601,16 @@ impl Package for Perl {
                     Arg::Var("_sysroot"),
                     Arg::lit("/include"),
                 ]))),
-                then: vec![exec(Pipe::cmd(sysroot_configure))],
-                else_: vec![exec(Pipe::cmd(configure))],
+                then: vec![Step::ConfigureScript {
+                    program: vec![Arg::lit("./Configure")],
+                    args: sysroot_configure,
+                    env: vec![],
+                }],
+                else_: vec![Step::ConfigureScript {
+                    program: vec![Arg::lit("./Configure")],
+                    args: configure,
+                    env: vec![],
+                }],
             });
         }
 
@@ -664,7 +678,11 @@ impl Package for Perl {
                     ],
                     else_: vec![],
                 },
-                cmd(vec![Arg::lit("./Configure"), Arg::lit("-S")]),
+                Step::ConfigureScript {
+                    program: vec![Arg::lit("./Configure")],
+                    args: vec![Arg::lit("-S")],
+                    env: vec![],
+                },
                 Step::Or {
                     lhs: vec![exec(
                         Pipe::cmd(vec![

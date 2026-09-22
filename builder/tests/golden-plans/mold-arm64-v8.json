@@ -127,150 +127,134 @@
         }
       },
       {
-        "Exec": {
-          "env": [],
-          "pipe": {
-            "stages": [
-              [
+        "Cmake": {
+          "args": [
+            {
+              "Lit": "-DCMAKE_SYSTEM_NAME=Linux"
+            },
+            {
+              "Lit": "-DCMAKE_SYSTEM_PROCESSOR=aarch64"
+            },
+            {
+              "Lit": "-DCMAKE_C_COMPILER_TARGET=aarch64-linux-gnu"
+            },
+            {
+              "Lit": "-DCMAKE_CXX_COMPILER_TARGET=aarch64-linux-gnu"
+            },
+            {
+              "Lit": "-DCMAKE_BUILD_TYPE=Release"
+            },
+            {
+              "Lit": "-DCMAKE_INSTALL_PREFIX=/usr"
+            },
+            {
+              "Concat": [
                 {
-                  "Lit": "cmake"
-                },
-                {
-                  "Lit": "-S"
+                  "Lit": "-DCMAKE_C_COMPILER="
                 },
                 {
                   "Quoted": {
-                    "Var": "SOURCE"
+                    "Var": "CC"
                   }
-                },
-                {
-                  "Lit": "-B"
-                },
-                {
-                  "Quoted": {
-                    "Var": "BUILD"
-                  }
-                },
-                {
-                  "Lit": "-DCMAKE_SYSTEM_NAME=Linux"
-                },
-                {
-                  "Lit": "-DCMAKE_SYSTEM_PROCESSOR=aarch64"
-                },
-                {
-                  "Lit": "-DCMAKE_C_COMPILER_TARGET=aarch64-linux-gnu"
-                },
-                {
-                  "Lit": "-DCMAKE_CXX_COMPILER_TARGET=aarch64-linux-gnu"
-                },
-                {
-                  "Lit": "-DCMAKE_BUILD_TYPE=Release"
-                },
-                {
-                  "Lit": "-DCMAKE_INSTALL_PREFIX=/usr"
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-DCMAKE_C_COMPILER="
-                    },
-                    {
-                      "Quoted": {
-                        "Var": "CC"
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-DCMAKE_CXX_COMPILER="
-                    },
-                    {
-                      "Quoted": {
-                        "Var": "CXX"
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-DCMAKE_C_FLAGS="
-                    },
-                    {
-                      "Quoted": {
-                        "Concat": [
-                          {
-                            "Lit": "${CFLAGS:-}"
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-DCMAKE_CXX_FLAGS="
-                    },
-                    {
-                      "Quoted": {
-                        "Concat": [
-                          {
-                            "Lit": "${CXXFLAGS:-}"
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-DCMAKE_EXE_LINKER_FLAGS="
-                    },
-                    {
-                      "Quoted": {
-                        "Concat": [
-                          {
-                            "Lit": "${LDFLAGS:-}"
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-DCMAKE_SHARED_LINKER_FLAGS="
-                    },
-                    {
-                      "Quoted": {
-                        "Concat": [
-                          {
-                            "Lit": "${LDFLAGS:-}"
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Lit": "-DMOLD_USE_MIMALLOC=ON"
-                },
-                {
-                  "Lit": "-DMOLD_USE_SYSTEM_MIMALLOC=OFF"
-                },
-                {
-                  "Lit": "-DMOLD_USE_SYSTEM_TBB=OFF"
                 }
               ]
-            ],
-            "stderr": null,
-            "stdin": null,
-            "stdout": null
+            },
+            {
+              "Concat": [
+                {
+                  "Lit": "-DCMAKE_CXX_COMPILER="
+                },
+                {
+                  "Quoted": {
+                    "Var": "CXX"
+                  }
+                }
+              ]
+            },
+            {
+              "Concat": [
+                {
+                  "Lit": "-DCMAKE_C_FLAGS="
+                },
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": "${CFLAGS:-}"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "Concat": [
+                {
+                  "Lit": "-DCMAKE_CXX_FLAGS="
+                },
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": "${CXXFLAGS:-}"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "Concat": [
+                {
+                  "Lit": "-DCMAKE_EXE_LINKER_FLAGS="
+                },
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": "${LDFLAGS:-}"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "Concat": [
+                {
+                  "Lit": "-DCMAKE_SHARED_LINKER_FLAGS="
+                },
+                {
+                  "Quoted": {
+                    "Concat": [
+                      {
+                        "Lit": "${LDFLAGS:-}"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "Lit": "-DMOLD_USE_MIMALLOC=ON"
+            },
+            {
+              "Lit": "-DMOLD_USE_SYSTEM_MIMALLOC=OFF"
+            },
+            {
+              "Lit": "-DMOLD_USE_SYSTEM_TBB=OFF"
+            }
+          ],
+          "build_dir": {
+            "Quoted": {
+              "Var": "BUILD"
+            }
+          },
+          "env": [],
+          "source_dir": {
+            "Quoted": {
+              "Var": "SOURCE"
+            }
           }
         }
       },

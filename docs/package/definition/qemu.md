@@ -7,6 +7,8 @@
 | バージョン | 11.1.1 |
 | ライセンス | GPL-2.0-only |
 | 分類 | パッケージ |
+| 対象 Platform | amd64: v4 |
+| host 実行 | 依存として常に BUILD_ENV 側で実行 |
 | 定義 | [`builder/src/package/definition/qemu.rs`](../../../builder/src/package/definition/qemu.rs) |
 
 ## ソース
@@ -51,6 +53,99 @@
 | [pkgconf](./pkgconf.md) | 2.5.1 | — |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
+## ビルド設定
+
+| 項目 | 値 |
+|-|-|
+| env プリリュード | `Env::None`（前処理なし） |
+| sysroot | なし |
+| ビルドディレクトリ | `$BUILD`（`$SOURCE` をコピーして in-source） |
+
+`make install` には `DESTDIR="$OUT"` を自動付与します。
+
+## ツールチェーンフラグ
+
+`CFLAGS`/`LDFLAGS` は設定しません。
+
+`-march`/`-mcpu` の値は variant 依存です（上記は amd64/v4 で評価）。
+
+## ビルドフラグ
+
+対象 Platform 全件で `recipe()` を評価した configure 系呼出の引数です。条件列は引数が出現するターゲット集合です。
+
+| フラグ | 設定値 | 条件 |
+|-|-|-|
+| `--prefix` | `/usr` | 常時 |
+| `--target-list` | `x86_64-linux-user,aarch64-linux-user,riscv64-linux-user,ppc64le-linux-user,s390x-linux-user` | 常時 |
+| `--enable-tcg` |  | 常時 |
+| `--disable-system` |  | 常時 |
+| `--disable-tools` |  | 常時 |
+| `--disable-docs` |  | 常時 |
+| `--disable-guest-agent` |  | 常時 |
+| `--disable-slirp` |  | 常時 |
+| `--disable-vnc` |  | 常時 |
+| `--disable-sdl` |  | 常時 |
+| `--disable-gtk` |  | 常時 |
+| `--disable-curses` |  | 常時 |
+| `--disable-brlapi` |  | 常時 |
+| `--disable-spice` |  | 常時 |
+| `--disable-libnfs` |  | 常時 |
+| `--disable-libusb` |  | 常時 |
+| `--disable-vde` |  | 常時 |
+| `--disable-nettle` |  | 常時 |
+| `--disable-gnutls` |  | 常時 |
+| `--disable-gcrypt` |  | 常時 |
+| `--disable-auth-pam` |  | 常時 |
+
+## ビルド手順
+
+`recipe()` が生成するスクリプトです（`builder` が runner へ渡す IR のレンダリング）。対象 Platform 間で差分はありません。
+
+<details>
+<summary>常時</summary>
+
+```bash
+set -euxo pipefail
+mkdir -p "$BUILD"
+cp -a "$SOURCE"/. "$BUILD"/
+cd "$BUILD"
+export CFLAGS="$(printf '%s' "${CFLAGS:-}" | sed -E 's/--sysroot=[^ ]+//g') -flto=auto"
+export CXXFLAGS="$(printf '%s' "${CXXFLAGS:-}" | sed -E 's/--sysroot=[^ ]+//g') -flto=auto"
+export LDFLAGS="$(printf '%s' "${LDFLAGS:-}" | sed -E 's/--sysroot=[^ ]+//g') -flto=auto"
+if [ -d /dep/${TRIPLE}-glibc ]; then
+  _glibc=/dep/${TRIPLE}-glibc
+  export LDFLAGS="${LDFLAGS} -B${_glibc}/usr/lib64 -L${_glibc}/usr/lib64 -L${_glibc}/lib64"
+fi
+if [ -d /dep/linux-headers/usr/include ]; then
+  export CFLAGS="${CFLAGS} -idirafter /dep/linux-headers/usr/include"
+  export CXXFLAGS="${CXXFLAGS} -idirafter /dep/linux-headers/usr/include"
+fi
+PKG_CONFIG_LIBDIR=
+for _dep in glib pcre2 zlib libffi; do
+  for _pc in /dep/"${_dep}"/usr/lib/pkgconfig /dep/"${_dep}"/usr/lib64/pkgconfig; do
+    if [ -d "${_pc}" ]; then
+      PKG_CONFIG_LIBDIR="${PKG_CONFIG_LIBDIR:+$PKG_CONFIG_LIBDIR:}${_pc}"
+    fi
+  done
+done
+if [ -n "${PKG_CONFIG_LIBDIR:-}" ]; then
+  export PKG_CONFIG_LIBDIR
+  export PKG_CONFIG_PATH=
+fi
+if [ -d /dep/glib ]; then
+  export PKG_CONFIG_SYSROOT_DIR=/dep/glib
+fi
+sed -i '/^\[tooling\]/,/^\[/ { /^"qemu" =/d; /^"setuptools"/d; /^"wheel"/d; /^"pip"/d }' pythondeps.toml
+./configure --prefix=/usr --target-list=x86_64-linux-user,aarch64-linux-user,riscv64-linux-user,ppc64le-linux-user,s390x-linux-user --enable-tcg --disable-system --disable-tools --disable-docs --disable-guest-agent --disable-slirp --disable-vnc --disable-sdl --disable-gtk --disable-curses --disable-brlapi --disable-spice --disable-libnfs --disable-libusb --disable-vde --disable-nettle --disable-gnutls --disable-gcrypt --disable-auth-pam
+make -j"$(nproc)"
+make install DESTDIR="$OUT"
+if command -v qemu-s390x >/dev/null; then
+  qemu-s390x -cpu help | grep -E 'z900|z990|z9EC' || true
+fi
+```
+
+</details>
+
 <!-- /GENERATED -->
 
 
@@ -71,21 +166,6 @@ configure の `--target-list` オプションには、ホストの CPU プラッ
 | `qemu-ppc64le` | `ppc64le-linux-user` |
 | `qemu-s390x` | `s390x-linux-user` |
 
-## ビルドフラグ
-
-| フラグ | 設定値 | 条件 |
-|-|-|-|
-| `--prefix` | `/usr` | 常時 |
-| `--target-list` | 上表の 5 ターゲット | 常時 |
-| `--enable-tcg` | | 常時（linux-user 用のアクセラレータ） |
-| `--disable-system` | | 常時（システムエミュレータを無効化） |
-| `--disable-tools` `--disable-docs` `--disable-guest-agent` | | 常時 |
-| `--disable-slirp` `--disable-vnc` `--disable-sdl` `--disable-gtk` `--disable-curses` `--disable-brlapi` `--disable-spice` | | 常時 |
-| `--disable-libnfs` `--disable-libusb` `--disable-vde` `--disable-nettle` `--disable-gnutls` `--disable-gcrypt` `--disable-auth-pam` | | 常時 |
-| カタログ用の Cflag / Ldflag | 付与しない | meson にカタログ用 LTO 品質保証フラグを渡さない |
-| CFLAGS / CXXFLAGS / LDFLAGS | `-flto=auto`（`--sysroot` は除去） | 下記参照 |
-| LDFLAGS のライブラリ探索 | `-B` / `-L`（`/dep/x86_64-linux-gnu-glibc`） | ホスト用 glibc へリンク |
-| LTO | 適用する | スクリプト内で `-flto=auto` を指定 |
-| PGO | 適用しない | linux-user ビルド用のプロファイル手順を置いていないため |
+## `--sysroot` 非適用の理由
 
 コンパイラ引数に `--sysroot` を付与した場合、meson がポインタ長（`sizeof(void *)`）をリンクテスト付きで計測する工程で失敗します。ホスト用 glibc 成果物の直下には `/usr/include` が存在せず、コンパイラが標準ヘッダを解決できないためです。この検査が失敗するとポインタサイズが `-1` と判定され、64-bit linux-user 向けの TCG（Tiny Code Generator）バックエンドが正しく選択されなくなります。

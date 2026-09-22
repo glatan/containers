@@ -50,12 +50,11 @@ impl Package for Zlib {
     }
 
     fn recipe(&self, ctx: &BuildContext) -> Recipe {
-        const CONFIGURE: &[&str] = &[
-            "./configure",
-            "--prefix=/usr",
-            "--libdir=/usr/lib64",
-            "--shared",
-        ];
+        let configure = |env: Vec<(&'static str, Arg)>| Step::ConfigureScript {
+            program: vec![Arg::lit("./configure")],
+            args: argv(&["--prefix=/usr", "--libdir=/usr/lib64", "--shared"]),
+            env,
+        };
         let mut steps = Steps::new(Env::None)
             .workdir(Workdir::InSource)
             // sysroot:true — 検出・CFLAGS 付与は wrap_script が注入。
@@ -87,17 +86,11 @@ impl Package for Zlib {
         if ctx.cross() {
             // クロスではプロファイルを実行できない
             steps = steps
-                .step(Step::Exec {
-                    env: vec![("CHOST", Arg::quoted(Arg::Var("TRIPLE")))],
-                    pipe: Pipe::cmd(argv(CONFIGURE)),
-                })
+                .step(configure(vec![("CHOST", Arg::quoted(Arg::Var("TRIPLE")))]))
                 .step(Step::make(&[]));
         } else {
             steps = steps
-                .step(Step::Exec {
-                    env: vec![],
-                    pipe: Pipe::cmd(argv(CONFIGURE)),
-                })
+                .step(configure(vec![]))
                 .step(Step::Make {
                     jobs: true,
                     args: vec![
@@ -157,10 +150,7 @@ impl Package for Zlib {
                     jobs: false,
                     args: vec!["distclean".to_owned()],
                 })
-                .step(Step::Exec {
-                    env: vec![],
-                    pipe: Pipe::cmd(argv(CONFIGURE)),
-                })
+                .step(configure(vec![]))
                 .step(Step::Make {
                     jobs: true,
                     args: vec![
