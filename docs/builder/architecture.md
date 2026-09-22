@@ -1,7 +1,7 @@
-# 実装構成
+# builder アーキテクチャ
 
 パッケージおよびパッケージイメージのビルドツール（builder）の内部設計と実装構成を定めます。
-コマンドの外部仕様については [README.md](./README.md) を参照してください。
+コマンドの外部仕様については [cli.md](./cli.md) を参照してください。
 
 ## 概要
 
@@ -15,6 +15,7 @@
 |-|-|
 | `main.rs` | コマンドライン引数の解析、プロセスの起動、および終了ステータスの管理 |
 | `command/` | サブコマンドの実行ロジック（`mod` = 引数解析と選択、`query` = 照会、`work` = 作業、`env` = ビルド環境、`docs` = 定義文書の生成ブロック再生成） |
+| `package/describe.rs` | `docs` 生成用の構造情報収集（recipe 評価・フラグ差分・configure 呼出・スクリプト variant の射影） |
 | `error.rs` / `process.rs` | 型付きエラー定義と外部コマンドプロセスの実行制御 |
 | `package/mod.rs` | `Package` および `Bootstrap` トレイトと共通データ構造の定義 |
 | `package/definition/` | 個別パッケージの定義実装と `PACKAGES` 登録一覧 |
@@ -33,11 +34,11 @@
 | `util.rs` | OCI 用 SHA-256、ソース検証用 SHA3-512 / BLAKE3（512 bit）、および RFC 3339 タイムスタンプ生成 |
 
 `lib.rs` では外部および統合テスト向けに各モジュールを公開します。
-OCI 仕様準拠のテスト群は `tests/oci_spec.rs`、CLI 仕様のテスト群は `tests/cli.rs` に配置しています。
+OCI 仕様準拠のテスト群は `tests/oci_spec.rs`（本体は `tests/oci_spec/`）、CLI 仕様のテスト群は `tests/cli.rs` に配置しています。スクリプト描画・plan の検証は `tests/golden_scripts.rs`・`tests/golden_plans.rs`・`tests/render_scripts.rs`（fixture は `tests/golden/`・`tests/golden-plans/`・`tests/support/`）です。
 
 ## 依存クレート
 
-直接依存クレートは、サプライチェーンの安全性を保つため `builder/Cargo.toml` において `=` によりバージョンを完全固定します。
+直接依存クレートは、サプライチェーンの安全性を保つため `builder/Cargo.toml` で `=` によりバージョンを完全固定します。
 
 | クレート | 用途 |
 |-|-|
@@ -69,7 +70,7 @@ OCI 仕様準拠のテスト群は `tests/oci_spec.rs`、CLI 仕様のテスト�
 ```
 fetch            ソース取得 + SHA3-512 / BLAKE3 検証 + 展開（--deps で依存閉包）
     ↓                 packages/sources/{package}/
-env bootstrap    build-env の依存閉包を HOST 上で一度歩き、失敗しても後続を続ける
+env bootstrap    build-env の依存閉包を HOST 上で一度たどり、失敗しても後続を続ける
     ↓                 packages/artifacts/ および packages/logs/bootstrap.log
 build            依存関係をトポロジカル順に取得・ビルドしたのち、podman 上でビルドスクリプトを実行
     ↓                 packages/artifacts/{package}-{version}-{arch}-{variant}/
@@ -81,23 +82,53 @@ compose          dependencies の推移閉包を単一の出力イメージへ�
     ↓                 oci-layouts/{name}-{arch}-{date}-{revision}/
 clean            成果物・ビルド作業ツリー・個別ログを削除（再ビルド前の掃除、--images で oci-layouts/ も対象）
 ls / info / tree / targets / env plan  照会系（tree --reverse は逆依存、env plan はシード相の最小集合）
-docs             定義文書（docs/package/definition/）の生成ブロックと索引を PACKAGES から再生成（--check で差分検査）
+docs             定義文書（docs/package/definition/）の生成ブロックと索引、および docs/package/{README,host-tools,toolchain}.md の名前つき GENERATED:{name} ブロックを PACKAGES から再生成（--check で差分検査）
 ```
 
 ビルドスクリプトへ渡す環境変数と `/dep` へのマウントは [package/README.md](../package/README.md) です。
+
+### 依存グラフとスキップ
+
 `build` は依存パッケージを先にビルドします。グラフは `Package` の宣言辺のみから構成され、`Via::Ordered` 辺だけがビルド順に参加します（Ordered 部分グラフは常に DAG で、未宣言の循環はエラー）。循環を断つ辺は `Via::Seed` / `Via::Artifact` / `Via::Optional` で明示し、シード相（`is_seed` = `Bootstrap::seed` の BUILD_ENV ビルド）では `Via::Seed` 辺が distro パッケージで担保され、それ以外では成果物を要求します。`own`（合成済みイメージの使用、`pacman` 前置きの有無、ネットワーク遮断）だけを `build_env_ready()` で決めます。成果物ディレクトリが既に存在し空でない場合はそのターゲットのコンパイルをスキップし、ビルド途中で失敗した成果物は不整合を防ぐため自動的に削除します。`podman` の出力は `packages/logs/` の個別ファイルへ tee し、失敗してもログは残します。
 
-コンテナ内で plan を解釈する runner は、ビルドツール自身を `/tmp/runner` にマウントして起動します。マウントするバイナリは `CONTAINERS_BUILDER_RUNNER` 環境変数の明示指定を最優先とし、次に cargo 規約パス `target/x86_64-unknown-linux-musl/<profile>/containers-builder` の musl 静的ビルドを探し、見つからなければ実行中のバイナリを使います。musl 静的ビルドはコンテナ側 libc に依存しないため推奨であり、`rustup target add x86_64-unknown-linux-musl` ののち `cargo build --target x86_64-unknown-linux-musl` で生成します。フォールバック時は、コンテナ側 glibc がホストより古いと runner が起動しない旨の警告を一度だけ出力します。実際にマウントした runner のパスは個別ログの `runner:` 行に記録します。
+### runner
 
-runner の意味論は bash 描画スクリプトと揃えています。`$(cmd)`・`$(cmd || true)` は失敗時も部分 stdout を保持し（裸の代入 `X=$(f)` のみ errexit で中断）、`ln -sf t dir/` は実在ディレクトリ配下にリンクし、`cp -a` 相当のコピーは symlink・mode・mtime（ディレクトリ含む）を保持し、glob は `*`・`?`・`[...]` クラスと dotfiles 規則、`cd` 後の `PWD` は正規化済みパス、`if cmd` の条件コマンド出力はログへ継承します。`cp -a` の owner 保持だけはコンテナ内で一様に root のため意図的に省略しています。
-LTO や PGO の適用方針はパッケージの種別ごとに異なります。個別の指定内容は [各パッケージのビルド設定](../package/definition/) を参照してください。
+コンテナ内で plan を解釈する runner は、ビルドツール自身を `/tmp/runner` にマウントして起動します。マウントするバイナリは次の優先順で選びます。
 
-ビルド専用のパッケージ定義（`build_only`）は、中間成果物としてのみ扱い、パッケージイメージ化は行いません。これらは他のパッケージの `build-dependencies` にのみ現れます。
-`Bootstrap` トレイトを実装したパッケージは、シード環境（Arch Linux イメージ）上で直接ビルドできます。判定は `Package::as_bootstrap()` で行い、登録一覧は持ちません。`env bootstrap` の対象は `build-env` の依存閉包から導出します。
-自前で合成したビルド環境イメージ上では `--network=none` を指定して完全に隔離された状態でビルドします。一方、シード環境では `Package::pacman()` によるパッケージ導入や、カタログのクロス gcc 導入のためにネットワークアクセスを許可します。
+1. `CONTAINERS_BUILDER_RUNNER` 環境変数の明示指定
+2. cargo 規約パス `target/x86_64-unknown-linux-musl/<profile>/containers-builder` の musl 静的ビルド
+3. 実行中のバイナリ（フォールバック）
 
-新規パッケージを定義する場合は、`builder/src/package/definition/{name}.rs` に `Package` トレイトを実装し、`builder/src/package/definition/mod.rs` の一覧へ登録します。`Bootstrap` を実装するのは x86_64 ツールチェーン、POSIX PATH、cmake、mold、linux-headers です。他の Host tools は `env bootstrap` の対象に依存グラフ経由で入ります。`flags(target)` メソッドの実装は必須であり、フラグを要求しない場合は空の `Flag` を返します。
-文書としては、[`docs/package/definition/{name}.md`](../package/definition/) にビルド設定を記述します。1 パッケージ 1 ファイルです。各ファイルの先頭部（タイトル・メタデータ・ソース・依存表）と索引表は `<!-- GENERATED -->` マーカーで囲まれた生成ブロックであり、`containers-builder docs` が `PACKAGES` から再生成します（`docs --check` で差分検査）。手書きの補足はマーカーの外側に書きます。索引は [definition/README.md](../package/definition/README.md) です。Host tools の共通前処理については [host-tools.md](../package/host-tools.md)、プレフィックス付きツールチェーンのステージ順については [toolchain.md](../package/toolchain.md) を参照してください。モジュール名の `linux_headers.rs` はパッケージ名 `linux-headers` に対応します。プレフィックス付きパッケージも 1 パッケージ 1 ファイルで、`x86_64_linux_gnu_binutils.rs` が `x86_64-linux-gnu-binutils` に対応します。ステージ共通の実装（レシピ・依存表・バージョン）は `definition/` 直下の `binutils.rs` / `gcc.rs` / `gcc_stage1.rs` / `gcc_stage2.rs` / `glibc.rs` / `glibc_headers.rs`（共有部品は `stages.rs`）に置き、各タプルのリーフは `impl Package` / `impl Bootstrap` で共有実装へ委譲します。
+musl 静的ビルドはコンテナ側 libc に依存しないため推奨します（手順は [builder/README.md](../../builder/README.md)）。フォールバック時は、コンテナ側 glibc がホストより古いと runner が起動しない旨の警告を一度だけ出力します。実際にマウントした runner のパスは個別ログの `runner:` 行に記録します。
+
+runner の意味論は bash 描画スクリプトと揃えています。
+
+- `$(cmd)`・`$(cmd || true)` は失敗時も部分 stdout を保持します（裸の代入 `X=$(f)` のみ errexit で中断）。
+- `ln -sf t dir/` は実在ディレクトリ配下にリンクします。
+- `cp -a` 相当のコピーは symlink・mode・mtime（ディレクトリ含む）を保持します。owner 保持だけは、コンテナ内で一様に root のため意図的に省略しています。
+- glob は `*`・`?`・`[...]` クラスと dotfiles 規則に従います。
+- `cd` 後の `PWD` は正規化済みパスです。
+- `if cmd` の条件コマンド出力はログへ継承します。
+
+### パッケージの種別と追加
+
+- ビルド専用のパッケージ定義（`build_only`）は、中間成果物としてのみ扱い、パッケージイメージ化は行いません。これらは他のパッケージの `build-dependencies` にのみ現れます。
+- `Bootstrap` トレイトを実装したパッケージは、シード環境（Arch Linux イメージ）上で直接ビルドできます。判定は `Package::as_bootstrap()` で行い、登録一覧は持ちません。`env bootstrap` の対象は `build-env` の依存閉包から導出します。
+- 自前で合成したビルド環境イメージ上では `--network=none` を指定して完全に隔離された状態でビルドします。一方、シード環境では `Package::pacman()` によるパッケージ導入や、カタログのクロス gcc 導入のためにネットワークアクセスを許可します。
+
+新規パッケージを定義する場合は次の手順です。
+
+1. `builder/src/package/definition/{name}.rs` に `Package` トレイトを実装します。
+2. `builder/src/package/definition/mod.rs` の一覧へ登録します。
+3. `flags(target)` メソッドを実装します（フラグを要求しない場合は空の `Flag` を返します）。
+
+`Bootstrap` を実装するのは x86_64 ツールチェーン、POSIX PATH、cmake、mold、linux-headers です。他の Host tools は `env bootstrap` の対象に依存グラフ経由で入ります。
+
+### 定義文書の生成
+
+各パッケージのビルド設定は [`docs/package/definition/{name}.md`](../package/definition/) に記述します。1 パッケージ 1 ファイルです。各ファイルの先頭部（タイトル・メタデータ・ソース・依存表）と索引表は `<!-- GENERATED -->` マーカーで囲まれた生成ブロックであり、`containers-builder docs` が `PACKAGES` から再生成します（`docs --check` で差分検査）。手書きの補足はマーカーの外側に書きます。索引は [definition/README.md](../package/definition/README.md) です。Host tools の共通前処理については [host-tools.md](../package/host-tools.md)、プレフィックス付きツールチェーンのステージ順については [toolchain.md](../package/toolchain.md) を参照してください。
+
+モジュール名はパッケージ名のハイフンをアンダースコアに置き換えた名前です（`linux_headers.rs` は `linux-headers`、`x86_64_linux_gnu_binutils.rs` は `x86_64-linux-gnu-binutils` に対応します）。プレフィックス付きパッケージも 1 パッケージ 1 ファイルです。ステージ共通の実装（レシピ・依存表・バージョン）は `definition/` 直下の `binutils.rs` / `gcc.rs` / `gcc_stage1.rs` / `gcc_stage2.rs` / `glibc.rs` / `glibc_headers.rs`（共有部品は `stages.rs`）に置き、各タプルのリーフは `impl Package` / `impl Bootstrap` で共有実装へ委譲します。
 
 ## クロスビルドの構成
 
@@ -123,39 +154,39 @@ LTO や PGO の適用方針はパッケージの種別ごとに異なります�
 ## コンテナ内ステージングの規約
 
 - 生成オーバーレイ（la-overlay / pc-overlay / 各種ラッパ）はホスト側で
-  packages/build/{target}/.gen/{pkg}/ に生成し、コンテナの /tmp 配下へ
-  read-only でマウントします。ビルドツリー（/build マウント）配下には
-  置きません。openssl の make clean のように配下のシンボリックリンクを
+  `packages/build/{target}/.gen/{pkg}/` に生成し、コンテナの `/tmp` 配下へ
+  read-only でマウントします。ビルドツリー（`/build` マウント）配下には
+  置きません。openssl の `make clean` のように配下のシンボリックリンクを
   全削除する手順があるためです。
-- dep 成果物の .la ファイルのうち、cc1/lto1 が実行時リンクする
+- dep 成果物の `.la` ファイルのうち、cc1/lto1 が実行時リンクする
   ライブラリ（gmp / mpfr / mpc / isl）は la-overlay に staging しません。
-  installed=no の dep .la が dependency_libs に入ると libtool が
-  install 時に relink し、relink 出力と同名の .so を lto1 が読み込み
-  中に truncate されて衝突するためです。.so / .a のシンボリックリンクは
-  残るため -l による解決は維持されます。
-- dep glibc の libc.so リンカスクリプトは /lib/libc.so.6 等の絶対パスを
-  参照するため、コンテナ内で /lib を glibc のライブラリディレクトリへの
+  `installed=no` の dep `.la` が `dependency_libs` に入ると libtool が
+  install 時に relink し、relink 出力と同名の `.so` が lto1 の読み込み
+  中に truncate され、衝突するためです。`.so` / `.a` のシンボリックリンクは
+  残るため `-l` による解決は維持されます。
+- dep glibc の `libc.so` リンカスクリプトは `/lib/libc.so.6` 等の絶対パスを
+  参照するため、コンテナ内で `/lib` を glibc のライブラリディレクトリへの
   シンボリックリンクとして生成します（ターゲット glibc を優先し、
   Canadian cross ではホスト glibc にフォールバック）。
-- ld はリンカスクリプトの実パスが sysroot 配下にある場合のみ、
+- `ld` はリンカスクリプトの実パスが sysroot 配下にある場合のみ、
   スクリプト内の絶対パスへ sysroot を適用します。このため shadow
-  sysroot の lib ディレクトリは /dep への symlink ではなく実コピーです。
+  sysroot の lib ディレクトリは `/dep` への symlink ではなく実コピーです。
 
 ## マルチターゲット検証の状況
 
-2026-09-21 時点で次のカタログビルドを完走しています。
+2026-09-21 時点で次のカタログビルドが完了しています。
 
 - amd64 / v4（BUILD_ENV ベースライン）
 - amd64 / v1（x86-64 baseline への回帰。Canadian gcc を含む）
 - arm64 / v8（カタログ 40 件 + toolchain）
 - riscv64 / rva20u64（同規模）
 
-check --all による動的依存検証は全件グリーンです。ppc64le / s390x は
+`check --all` による動的依存検証は全件パスしています。ppc64le / s390x は
 bootstrap 全体の検証として別途整理するため本範囲外です。生成バイナリを
 実行できないクロスビルドでは PGO を適用しません。
 
 ## 現状の制約事項
 
-- 対象とする architecture / variant の一覧は [platforms.md](../image/platforms.md) および `targets` コマンドを参照してください。シード環境ではクロス gcc が提供されていないため、`--all-targets` 指定時は ppc64le および s390x をスキップします。合成済み `build-env` が利用可能な状態ではスキップせずにビルドを実行します。
+- 対象とする architecture / variant の一覧は [targets.md](../targets.md) および `targets` コマンドを参照してください。シード環境ではクロス gcc が提供されていないため、`--all-targets` 指定時は ppc64le および s390x をスキップします。合成済み `build-env` が利用可能な状態ではスキップせずにビルドを実行します。
 - `pack --with-build` は `Target::all()` 上でパッケージビルドを連鎖的に実行し、定義の存在しないターゲットはビルドをスキップして警告を出力します。`compose --with-build` は `-t` で指定したターゲットのみを対象とし、非対応の場合はスキップではなくエラーになります。
 - `compose` の `-t` は任意ターゲットを受理しますが、実行時依存の `{triple}-gcc` 成果物は `artifact_target` により常に BUILD_ENV（amd64 / v4）へ配置される一方、`compose_layer_dirs` はこの正規化を適用しません。そのため C++ ランタイム依存を持つパッケージは BUILD_ENV 以外では構造的に合成できません（既知の制約）。

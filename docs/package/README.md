@@ -1,6 +1,6 @@
 # パッケージ
 
-パッケージ定義に共通するビルド方針です。段階ごとのコマンドは [build-flow.md](./build-flow.md)、個別設定は [definition/](./definition/)、Host tools の共通前処理は [host-tools.md](./host-tools.md)、プレフィックス付きツールチェーンは [toolchain.md](./toolchain.md) です。公開対象の分類は [image/packages.md](../image/packages.md) です。
+パッケージ定義に共通するビルド方針です。段階ごとのコマンドは [build-flow.md](./build-flow.md)、個別設定は [definition/](./definition/)、Host tools の共通前処理は [host-tools.md](./host-tools.md)、プレフィックス付きツールチェーンは [toolchain.md](./toolchain.md) です。公開対象の分類は [image/published.md](../image/published.md) です。
 
 `PACKAGES` に載るパッケージは [definition/](./definition/) に `{パッケージ名}.md` を 1 ファイル置きます。索引は [definition/README.md](./definition/README.md) です。実装は [`builder/src/package/definition/`](../../builder/src/package/definition/) です。ハイフンはモジュール名ではアンダースコア `_` です。プレフィックス付きツールチェーンも `{パッケージ名}.rs` の 1 ファイル 1 定義で、ステージ共通の実装は `binutils.rs` / `gcc.rs` / `gcc_stage1.rs` / `gcc_stage2.rs` / `glibc.rs` / `glibc_headers.rs` / `stages.rs` に置きます。
 
@@ -15,6 +15,13 @@
 `CC`、`CXX`、`AR`、`RANLIB`、`NM` などのツールチェーン環境変数は builder が制御します。シード上で HOST 向けに組むあいだは `CC=gcc` です。自前 gcc のあと、および合成イメージ上では、対象 Platform の `CROSS` 接頭辞を付けます。amd64 では `x86_64-linux-gnu-gcc`、arm64 では `aarch64-linux-gnu-gcc` です。
 
 フラグトークンの正本は [`builder/src/flags.rs`](../../builder/src/flags.rs) です。builder は `CFLAGS` に指定された `-flto` を `LDFLAGS` へ暗黙に複製せず、両者で独立してフラグを管理します。基本最適化レベルには `-O2` を指定し、CPU 最適化オプションは対象 variant から一意に決定します（ppc64le は `-mcpu=`、それ以外は `-march=` を使用し、ホスト環境に依存する `native` は指定しません）。`FormatSecurityError` トークンは `-Wformat` と `-Werror=format-security` の 2 つのコンパイラフラグへ、`FortifySource` トークンは `-U_FORTIFY_SOURCE` と `-D_FORTIFY_SOURCE=3` へ展開されます。PGO の適用方針は `Package::pgo()`（`Pgo::None` / `Pgo::Profiled(ワークロード)` / `Pgo::Custom`）で宣言し、プロファイル採取および適用手順は `recipe(ctx)` が `ctx.cross()` で分岐して静的に組み込みます。`-O3`、`-g`、`-Wall` はカタログ用コンパイラフラグとしては付与しません（`-fexceptions` は既定セットに含みます）。
+
+依存パッケージは `/dep/{パッケージ名}` に読み取り専用でマウントされます。`dependencies` と `build-dependencies` は `-I` / `-L` の対象（`dep:true`）で、`host-dependencies` は PATH・`LD_LIBRARY_PATH`・`PKG_CONFIG_PATH` に載る `dep:false` マウントです（ターゲット向け `-I` / `-L` の入力にはなりません）。同名パッケージが両種別で必要な場合、HOST 側は `/dep/{パッケージ名}-host` へ退避されます。リンカ環境変数 `LD` には gcc を入れません。共有ライブラリのリンクは gcc ドライバと `-fuse-ld=mold` に任せます。libtool が `LD` を GNU ld と誤認しないようにするためです。
+
+- architecture および variant 単位で CPU プラットフォームを指定します。対象プラットフォームの一覧は [targets.md](../targets.md) です。
+- LTO および PGO の適用方針はパッケージの種別に応じて分かれます。カタログの共有ライブラリでは各ビルド設定で個別に宣言し、Host tools の共通前処理やプレフィックス付き最終 gcc・qemu の例外設定については各設計文書に記載しています。
+- 自前で合成したビルド環境イメージ上では `--network=none` を指定してネットワークを遮断します。シード環境上でのビルド時に限り、pacman による依存解決や、カタログのクロス gcc および cmake 導入のためにネットワークアクセスを許可します。
+- シード環境には ppc64le および s390x 向けのクロス gcc が存在しないため、`--all-targets` 指定時はそれらのターゲットをスキップします。自前の合成イメージが存在する場合はスキップせずビルドします。
 
 ## フラグ注入経路
 
@@ -121,13 +128,6 @@
 <!-- /GENERATED:pgo -->
 
 種別ごとの例外は、glibc と最終 gcc は [toolchain.md](./toolchain.md)、Host tools は [host-tools.md](./host-tools.md)、カタログと qemu は各 `{パッケージ名}.md` です。
-
-依存パッケージは `/dep/{パッケージ名}` に読み取り専用でマウントされます。`dependencies` と `build-dependencies` は `-I` / `-L` の対象（`dep:true`）で、`host-dependencies` は PATH・`LD_LIBRARY_PATH`・`PKG_CONFIG_PATH` に載る `dep:false` マウントです（ターゲット向け `-I` / `-L` の入力にはなりません）。同名パッケージが両種別で必要な場合、HOST 側は `/dep/{パッケージ名}-host` へ退避されます。リンカ環境変数 `LD` には gcc を入れません。共有ライブラリのリンクは gcc ドライバと `-fuse-ld=mold` に任せます。libtool が `LD` を GNU ld と誤認しないようにするためです。
-
-- architecture および variant 単位で CPU プラットフォームを指定します。対象プラットフォームの一覧は [platforms.md](../image/platforms.md) です。
-- LTO および PGO の適用方針はパッケージの種別に応じて分かれます。カタログの共有ライブラリでは各ビルド設定で個別に宣言し、Host tools の共通前処理やプレフィックス付き最終 gcc・qemu の例外設定については各設計文書に記載しています。
-- 自前で合成したビルド環境イメージ上では `--network=none` を指定してネットワークを遮断します。シード環境上でのビルド時に限り、pacman による依存解決や、カタログのクロス gcc および cmake 導入のためにネットワークアクセスを許可します。
-- シード環境には ppc64le および s390x 向けのクロス gcc が存在しないため、`--all-targets` 指定時はそれらのターゲットをスキップします。自前の合成イメージが存在する場合はスキップせずビルドします。
 
 ## ブートストラップと定義の管理
 

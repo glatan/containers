@@ -63,7 +63,7 @@ fn documented_platforms_match_targets() {
         .collect::<Vec<_>>();
     assert_eq!(
         documented, targets,
-        "docs/image/platforms.md と Target::all() が一致しません"
+        "docs/targets.md と Target::all() が一致しません"
     );
 }
 

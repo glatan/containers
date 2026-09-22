@@ -183,7 +183,7 @@ make install_sw DESTDIR="${OUT}"
 
 ## ターゲット
 
-`Configure` スクリプトの第 1 引数は architecture から決めます。CPU 指定フラグは builder が variant から決めます（ppc64le は `-mcpu=`、それ以外は `-march=`）。対象 Platform は `Target::all()` です。variant ごとの CPU 名は [platforms.md](../../image/platforms.md) と `Target::march()` です。
+`Configure` スクリプトの第 1 引数は architecture から決めます。CPU 指定フラグは builder が variant から決めます（ppc64le は `-mcpu=`、それ以外は `-march=`）。対象 Platform は `Target::all()` です。variant ごとの CPU 名は [targets.md](../../targets.md) と `Target::march()` です。
 
 ## LTO / PGO 方針
 
