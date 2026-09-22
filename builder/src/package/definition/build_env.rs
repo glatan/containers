@@ -1,11 +1,7 @@
 use crate::flags::Flag;
 use crate::package::recipe::{BuildContext, Recipe};
-use crate::package::{Dependency, Package, Source};
+use crate::package::{Dependency, Package, Source, dep};
 use crate::target::Target;
-
-const fn dep(name: &'static str, version: &'static str) -> Dependency {
-    Dependency { name, version }
-}
 
 pub struct BuildEnv;
 
@@ -54,6 +50,10 @@ impl Package for BuildEnv {
         ]
     }
     fn build_dependencies(&self, _target: Target) -> Vec<Dependency> {
+        vec![]
+    }
+    /// 合成ルートはビルドされないためツールチェーン辺も持たない。
+    fn host_dependencies(&self, _target: Target) -> Vec<Dependency> {
         vec![]
     }
     fn flags(&self, _target: Target) -> Flag {

@@ -1,5 +1,5 @@
 use crate::package::recipe::{BuildContext, Recipe};
-use crate::package::{Package, Source};
+use crate::package::{Dependency, Package, Source, dep};
 use crate::target::Target;
 
 pub struct Libxcrypt;
@@ -14,8 +14,12 @@ impl Package for Libxcrypt {
     fn license(&self) -> &'static str {
         "LGPL-2.1-or-later"
     }
-    fn host_tools(&self, _target: Target) -> Vec<&'static str> {
-        vec!["perl"]
+    /// ビルドは tarball 事前生成物で自足するが、perl が
+    /// あれば使う（任意）。
+    fn host_dependencies(&self, target: Target) -> Vec<Dependency> {
+        let mut deps = crate::package::cc_deps(self, target);
+        deps.push(dep("perl", "5.42.3").via(crate::package::Via::Optional));
+        deps
     }
 
     fn source(&self) -> Source {

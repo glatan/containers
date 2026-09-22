@@ -133,13 +133,14 @@ impl Package for Perl {
         true
     }
 
-    /// クロス perl ビルドは HOST perl（miniperl）を使うため自分自身をマウントする。
-    fn host_tools(&self, target: Target) -> Vec<&'static str> {
-        if target == Target::BUILD_ENV {
-            vec![]
-        } else {
-            vec!["perl"]
+    /// クロス perl ビルドは HOST perl（miniperl）を使うため自分自身を
+    /// マウントする（自己参照。パスがバージョン固定のため distro では賄えない）。
+    fn host_dependencies(&self, target: Target) -> Vec<crate::package::Dependency> {
+        let mut deps = crate::package::cc_deps(self, target);
+        if !matches!(target, crate::target::Target::Amd64(_)) {
+            deps.push(crate::package::dep("perl", "5.42.3").via(crate::package::Via::Artifact));
         }
+        deps
     }
 
     fn source(&self) -> Source {
@@ -151,13 +152,7 @@ impl Package for Perl {
         }
     }
     fn dependencies(&self, target: crate::target::Target) -> Vec<crate::package::Dependency> {
-        crate::package::with_libc(
-            target,
-            &[crate::package::Dependency {
-                name: "libxcrypt",
-                version: "4.5.2",
-            }],
-        )
+        crate::package::with_libc(target, &[crate::package::dep("libxcrypt", "4.5.2")])
     }
     fn build_dependencies(
         &self,

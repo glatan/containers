@@ -22,13 +22,7 @@ impl Package for Isl {
         }
     }
     fn dependencies(&self, target: crate::target::Target) -> Vec<crate::package::Dependency> {
-        crate::package::with_libc(
-            target,
-            &[crate::package::Dependency {
-                name: "gmp",
-                version: "6.3.0",
-            }],
-        )
+        crate::package::with_libc(target, &[crate::package::dep("gmp", "6.3.0")])
     }
     fn build_dependencies(
         &self,

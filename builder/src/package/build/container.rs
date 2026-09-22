@@ -10,7 +10,7 @@ use crate::flags::Ldflag;
 #[cfg(test)]
 use crate::package::recipe::Env;
 use crate::package::recipe::{Arg, BuildContext, BuildPlan, Cond, Pipe, Recipe, Step, argv};
-use crate::package::{self, Package};
+use crate::package::{self, Dependency, Package, Via};
 use crate::process;
 use crate::target::Target;
 use crate::util;
@@ -90,8 +90,11 @@ pub(super) fn build_target(
     // podman の -v は絶対パスを要求する（相対だと named volume と解釈される）。
     let gen_dir = fs::canonicalize(&gen_dir).map_err(|source| Error::io(&gen_dir, source))?;
     let out_dir_mnt = fs::canonicalize(&tmp_dir).map_err(|source| Error::io(&tmp_dir, source))?;
-    let (runtime, build) = graph_deps(package, target);
+    let deps = graph_deps(package, target);
     let mut mounts: Vec<Mount> = Vec::new();
+    // (パッケージ名, 成果物ディレクトリ)。同名パッケージでも異なる
+    // 成果物は共存し得る（ターゲット側と HOST 側の二重マウント）。
+    let mut mounted: Vec<(&'static str, PathBuf)> = Vec::new();
     let mut command = Command::new("podman");
     command.args([
         "run",
@@ -106,116 +109,41 @@ pub(super) fn build_target(
     command
         .args(["-v"])
         .arg(format!("{}:/src:ro", sources.display()));
-    for dependency in runtime.iter().chain(build.iter()) {
+    // 宣言辺から全マウントを構築する。runtime/build は dep:true
+    // （ターゲット向け -I/-L に載る）、host は dep:false（PATH・
+    // LD_LIBRARY_PATH のみ）。`own` は成果物必須性の判定に使う
+    // （シード相では Seed 辺を distro が担保するため任意）。
+    for dependency in deps.dep_edges() {
         let found = package::find(dependency.name)?;
-        let mounted = artifact_target(found, target);
-        let dep_dir = found.artifact_dir(mounted);
-        if !workspace::artifact_ready(&dep_dir) {
-            return Err(Error::message(format!(
-                "依存パッケージがありません: {} (build を実行してください)",
-                dep_dir.display()
-            )));
-        }
-        let dep_dir = fs::canonicalize(&dep_dir).map_err(|source| Error::io(&dep_dir, source))?;
-        command
-            .args(["-v"])
-            .arg(format!("{}:/dep/{}:ro", dep_dir.display(), dependency.name));
-        mounts.push(Mount {
-            name: dependency.name.to_owned(),
-            dir: dep_dir,
-            dep: true,
-        });
+        mount_dependency(
+            dependency,
+            found,
+            artifact_target(found, target),
+            true,
+            own,
+            &mut command,
+            &mut mounts,
+            &mut mounted,
+        )?;
     }
-    let mut mounted: Vec<&str> = runtime
-        .iter()
-        .chain(build.iter())
-        .map(|dependency| dependency.name)
-        .collect();
-    if uses_mold(package, target)
-        && let Some(dir) = mold_artifact_dir()
-        && !mounted.contains(&"mold")
-    {
-        let dir = fs::canonicalize(&dir).map_err(|source| Error::io(&dir, source))?;
-        command
-            .args(["-v"])
-            .arg(format!("{}:/dep/mold:ro", dir.display()));
-        mounted.push("mold");
-        mounts.push(Mount {
-            name: "mold".to_owned(),
-            dir,
-            dep: false,
-        });
+    for dependency in &deps.host {
+        let found = package::find(dependency.name)?;
+        // HOST 実行ツールの成果物は常に BUILD_ENV 側。
+        mount_dependency(
+            dependency,
+            found,
+            artifact_target(found, Target::BUILD_ENV),
+            false,
+            own,
+            &mut command,
+            &mut mounts,
+            &mut mounted,
+        )?;
     }
-    for name in compiler_tool_names(package, target, own) {
-        if mounted.contains(&name.as_str()) {
-            continue;
-        }
-        let found = package::find(&name)?;
-        let mounted_target = if found.target_artifact() {
-            artifact_target(found, target)
-        } else {
-            Target::BUILD_ENV
-        };
-        let dir = found.artifact_dir(mounted_target);
-        if !workspace::artifact_ready(&dir) {
-            return Err(Error::message(format!(
-                "依存パッケージがありません: {} (build を実行してください)",
-                dir.display()
-            )));
-        }
-        let dir = fs::canonicalize(&dir).map_err(|source| Error::io(&dir, source))?;
-        command
-            .args(["-v"])
-            .arg(format!("{}:/dep/{name}:ro", dir.display()));
-        mounted.push(found.name());
-        mounts.push(Mount {
-            name: found.name().to_owned(),
-            dir,
-            dep: false,
-        });
-    }
-    for name in extra_host_tool_names(package, target) {
-        if mounted.contains(&name) {
-            continue;
-        }
-        let found = package::find(name)?;
-        let mounted_target = if found.target_artifact() {
-            artifact_target(found, target)
-        } else {
-            Target::BUILD_ENV
-        };
-        let dir = found.artifact_dir(mounted_target);
-        if !workspace::artifact_ready(&dir) {
-            continue;
-        }
-        let dir = fs::canonicalize(&dir).map_err(|source| Error::io(&dir, source))?;
-        command
-            .args(["-v"])
-            .arg(format!("{}:/dep/{name}:ro", dir.display()));
-        mounted.push(found.name());
-        mounts.push(Mount {
-            name: found.name().to_owned(),
-            dir,
-            dep: false,
-        });
-    }
-    // HOST perl の libperl.so は libcrypt.so.1 を要求する。ターゲット libxcrypt を
-    // LD_LIBRARY_PATH に載せると別 ARCH になるので、HOST 専用パスへ載せる。
-    if mounted.contains(&"perl") || package.name() == "perl" {
-        let crypt = package::find("libxcrypt")?;
-        let dir = crypt.artifact_dir(Target::BUILD_ENV);
-        if workspace::artifact_ready(&dir) {
-            let dir = fs::canonicalize(&dir).map_err(|source| Error::io(&dir, source))?;
-            command
-                .args(["-v"])
-                .arg(format!("{}:/dep/libxcrypt-host:ro", dir.display()));
-            mounts.push(Mount {
-                name: "libxcrypt-host".to_owned(),
-                dir,
-                dep: false,
-            });
-        }
-    }
+    // HOST ツール（dep:false）の実行時依存を BUILD_ENV 成果物で追補する。
+    // `/dep/libxcrypt-host` の perl 用特例を一般化したもので、マウント名
+    // 衝突時は `{pkg}-host` に退避する。
+    mount_host_closure(&mut command, &mut mounts, &mut mounted)?;
     let ctx = build_context(package, target);
     // .la/.pc オーバーレイと {gmp,mpfr}-prefix をホスト側で生成し、
     // プリアンブルが作っていた /tmp/* パスへそのままマウントする。
@@ -406,9 +334,7 @@ pub(super) fn compiler_cc(
     }
 }
 
-pub(super) fn is_seed(package: &dyn Package, target: Target) -> bool {
-    target == Target::BUILD_ENV && package.as_bootstrap().is_some_and(|b| b.seed())
-}
+pub(super) use crate::package::is_seed;
 
 pub(super) fn mold_artifact_dir() -> Option<std::path::PathBuf> {
     let mold = package::find("mold").ok()?;
@@ -450,69 +376,147 @@ pub(super) fn strip_fuse_ld_mold(env: &mut Vec<(&'static str, String)>) {
     env.retain(|(name, value)| !(*name == "LDFLAGS" && value.is_empty()));
 }
 
-pub(super) fn compiler_tool_names(package: &dyn Package, target: Target, own: bool) -> Vec<String> {
-    let cc = compiler_cc(package, target, own)
-        .into_iter()
-        .find(|(name, _)| *name == "CC")
-        .map(|(_, value)| value)
-        .unwrap_or_default();
-    if cc == "gcc" {
-        return Vec::new();
-    }
-    let Some(prefix) = cc.strip_suffix("gcc") else {
-        return Vec::new();
-    };
-    // その target の libc 提供者（`{triple}-glibc`）は full
-    // `{triple}-gcc` ではなく stage2 でビルドする。full gcc は glibc に
-    // 依存するため、ここで要求すると循環する
-    // （stage2 は build_deps で既にマウント済み）。
-    let gcc = if provides_target_libc(package, target) {
-        format!("{prefix}gcc-stage2")
-    } else {
-        format!("{prefix}gcc")
-    };
-    [gcc, format!("{prefix}binutils")].into_iter().collect()
-}
-
-/// `target` 向けの libc を提供するパッケージか（`{triple}-glibc`
-/// 最終成果物）。コード生成 triple 一致・ターゲット成果物・
-/// ビルド専用でない（glibc-headers を除く）で判定する。
-fn provides_target_libc(package: &dyn Package, target: Target) -> bool {
-    package.gnu_triple() == Some(target.gnu_triple())
-        && package.target_artifact()
-        && !package.build_only()
-}
-
-pub(super) fn extra_host_tool_names(package: &dyn Package, target: Target) -> Vec<&'static str> {
-    let mut names = package.host_tools(target);
-    // ホスト triple 以外の toolchain 構成要素や非 amd64 向けビルドには
-    // ホスト toolchain を追加マウントする。seed 相のパッケージ
-    // （linux-headers 等）はシードのコンパイラを使うため除外。
-    if !is_seed(package, target)
-        && (package.gnu_triple() != Some(Target::HOST_GNU_TRIPLE)
-            || !matches!(target, Target::Amd64(_)))
+/// 宣言辺 1 本をマウントする。`via` に応じて成果物の必須性を判定し、
+/// 充足できない任意辺はマウントしない。
+///
+/// - `Ordered` / `Artifact`: 常に成果物必須。
+/// - `Seed`: `own`（合成済み env / リビルド）では成果物必須、シード相
+///   （`!own`）では distro パッケージが担保するため成果物があればマウント。
+/// - `Optional`: 成果物があればマウント。
+///
+/// `/dep/{name}` はレシピが参照する契約名なので直接辺は改名しない。
+/// `dep:false` マウントのみ、名前衝突時に `{pkg}-host` へ退避する
+/// （参照は PATH/LD_LIBRARY_PATH 経由のため壊れない）。
+fn mount_dependency(
+    dependency: &Dependency,
+    found: &dyn Package,
+    mounted_target: Target,
+    dep_flag: bool,
+    own: bool,
+    command: &mut Command,
+    mounts: &mut Vec<Mount>,
+    mounted: &mut Vec<(&'static str, PathBuf)>,
+) -> Result<()> {
+    let dir = found.artifact_dir(mounted_target);
+    // 同一成果物の重複マウントは省略（runtime/build/host の重複宣言など）。
+    if mounted
+        .iter()
+        .any(|(name, mounted_dir)| *name == dependency.name && *mounted_dir == dir)
     {
-        names.push(Target::BUILD_ENV.gcc_package());
-        names.push(Target::BUILD_ENV.binutils_package());
+        return Ok(());
     }
-    if target != Target::BUILD_ENV && !provides_target_libc(package, target) {
-        names.push(target.glibc_package());
+    let required = match dependency.via {
+        Via::Ordered | Via::Artifact => true,
+        Via::Seed(_) => own,
+        Via::Optional => false,
+    };
+    if !workspace::artifact_ready(&dir) {
+        if required {
+            return Err(Error::message(format!(
+                "依存パッケージがありません: {} (build を実行してください)",
+                dir.display()
+            )));
+        }
+        return Ok(());
     }
-    names
+    let dir = fs::canonicalize(&dir).map_err(|source| Error::io(&dir, source))?;
+    let name = if mounts.iter().any(|m| m.name == dependency.name) {
+        if dep_flag {
+            return Err(Error::message(format!(
+                "マウント名が衝突しています: {}",
+                dependency.name
+            )));
+        }
+        format!("{}-host", dependency.name)
+    } else {
+        dependency.name.to_owned()
+    };
+    command
+        .args(["-v"])
+        .arg(format!("{}:/dep/{name}:ro", dir.display()));
+    mounted.push((dependency.name, dir.clone()));
+    mounts.push(Mount {
+        pkg: dependency.name,
+        name,
+        dir,
+        dep: dep_flag,
+    });
+    Ok(())
+}
+
+/// dep:false マウント（HOST 実行ツール）の実行時依存を BUILD_ENV 成果物で
+/// 追補する。ツールが動くにはその NEEDED ライブラリが要るため、宣言済み
+/// `dependencies()` を推移的にたどる（`/dep/libxcrypt-host` の perl 用
+/// 特例を一般化したもの）。成果物が無ければスキップする（env イメージや
+/// distro パッケージが担保する経路もあるため、ここでは必須にしない）。
+fn mount_host_closure(
+    command: &mut Command,
+    mounts: &mut Vec<Mount>,
+    mounted: &mut Vec<(&'static str, PathBuf)>,
+) -> Result<()> {
+    let mut index = 0;
+    while index < mounts.len() {
+        let pkg = {
+            let mount = &mounts[index];
+            index += 1;
+            if mount.dep {
+                continue;
+            }
+            mount.pkg
+        };
+        let found = package::find(pkg)?;
+        for dependency in found.dependencies(Target::BUILD_ENV) {
+            let dep_found = package::find(dependency.name)?;
+            let dir = dep_found.artifact_dir(artifact_target(dep_found, Target::BUILD_ENV));
+            if mounted
+                .iter()
+                .any(|(name, mounted_dir)| *name == dependency.name && *mounted_dir == dir)
+            {
+                continue;
+            }
+            if !workspace::artifact_ready(&dir) {
+                continue;
+            }
+            let dir = fs::canonicalize(&dir).map_err(|source| Error::io(&dir, source))?;
+            let name = if mounts.iter().any(|m| m.name == dependency.name) {
+                format!("{}-host", dependency.name)
+            } else {
+                dependency.name.to_owned()
+            };
+            if mounts.iter().any(|m| m.name == name) {
+                continue;
+            }
+            command
+                .args(["-v"])
+                .arg(format!("{}:/dep/{name}:ro", dir.display()));
+            mounted.push((dependency.name, dir.clone()));
+            mounts.push(Mount {
+                pkg: dependency.name,
+                name,
+                dir,
+                dep: false,
+            });
+        }
+    }
+    Ok(())
 }
 
 /// シード（Arch base-devel）イメージ上で pacman -Sy するパッケージ。
-/// 各パッケージの `Package::pacman()` 宣言に加えて、非 bootstrap
-/// パッケージの非 amd64 ビルドには distro の cross gcc を入れる
-/// （Bootstrap 実装パッケージは pacman() で環境を完結させる）。
+/// `Package::pacman()` のプラットフォーム宣言に加え、`Via::Seed` 辺の
+/// distro 名（空文字列はベースイメージ同梱のため除外）を導出する。
 pub(super) fn seed_pacman(package: &dyn Package, target: Target) -> Vec<String> {
     let mut pkgs: Vec<String> = package
         .pacman()
         .iter()
         .map(|name| (*name).to_string())
         .collect();
-    if package.as_bootstrap().is_none() && !matches!(target, Target::Amd64(_)) {
-        pkgs.push(format!("{}gcc", target.cross_prefix()));
+    for dependency in graph_deps(package, target).all() {
+        if let Via::Seed(distro) = dependency.via
+            && !distro.is_empty()
+            && !pkgs.iter().any(|name| name == distro)
+        {
+            pkgs.push(distro.to_string());
+        }
     }
     // seed 相 toolchain（gnu_triple 持ち）と、mold 未構築で -fuse-ld=mold
     // を使うパッケージには distro の mold を入れる。
@@ -528,12 +532,16 @@ pub(super) fn seed_pacman(package: &dyn Package, target: Target) -> Vec<String> 
 /// `/dep` にマウントされる依存成果物。ホスト側が把握しているため、
 /// wrap_script は `/dep/*/` glob ではなくこの一覧から環境を生成する。
 pub(super) struct Mount {
-    /// コンテナ側名（`/dep/{name}`）。
+    /// パッケージ名。フィルタ・引き当てはこの識別子で行う
+    /// （マウント名の `-host` サフィックスに左右されない）。
+    pub pkg: &'static str,
+    /// コンテナ側名（`/dep/{name}`）。HOST 側で衝突した場合は
+    /// `{pkg}-host` に退避される。
     pub name: String,
     /// ホスト側の成果物ディレクトリ。
     pub dir: std::path::PathBuf,
-    /// パッケージの依存宣言由来か。`false` のものは HOST 実行ツールの
-    /// マウントで、ターゲット向け `-I`/`-L` には載せない。
+    /// ターゲット向け `-I`/`-L` に載せるか。`false` のものは HOST
+    /// 実行ツール（とその推移閉包）のマウント。
     pub dep: bool,
 }
 
@@ -614,9 +622,14 @@ fn glob_in(dir: &std::path::Path, pattern: &str) -> Vec<std::path::PathBuf> {
     current
 }
 
-/// マウント済み dep のパターンを展開し、（マウント名、`/dep` 側パス、
-/// ホスト側パス）を bash glob と同じバイト順で返す。
-fn dep_glob(mounts: &[Mount], pattern: &str) -> Vec<(String, String, std::path::PathBuf)> {
+/// マウント済み dep のパターンを展開し、（マウント、`/dep` 側パス、
+/// ホスト側パス）を bash glob と同じバイト順で返す。フィルタは
+/// `Mount.pkg`（パッケージ名）に対して行う（マウント名の `-host`
+/// サフィックスに左右されない）。
+fn dep_glob<'a>(
+    mounts: &'a [Mount],
+    pattern: &str,
+) -> Vec<(&'a Mount, String, std::path::PathBuf)> {
     let mut out = Vec::new();
     for mount in mounts {
         for path in glob_in(&mount.dir, pattern) {
@@ -624,7 +637,7 @@ fn dep_glob(mounts: &[Mount], pattern: &str) -> Vec<(String, String, std::path::
                 continue;
             };
             out.push((
-                mount.name.clone(),
+                mount,
                 format!("/dep/{}/{}", mount.name, rel.display()),
                 path,
             ));
@@ -740,7 +753,8 @@ pub(super) fn stage_generated(
     let mut prep = Prep::default();
     let la_over = gen_dir.join("la-overlay");
     // .la 複写（*/linux-headers/* 等の case 除外を Rust 側で再現）
-    let la_skip = |name: &str| {
+    let la_skip = |mount: &Mount| {
+        let name = mount.pkg;
         name == "linux-headers"
             || name == "python"
             || name == "perl"
@@ -750,11 +764,11 @@ pub(super) fn stage_generated(
             || name.ends_with("-glibc")
             || name.ends_with("-binutils")
     };
-    for (name, container, host) in dep_glob(mounts, "usr/lib/*.la")
+    for (mount, container, host) in dep_glob(mounts, "usr/lib/*.la")
         .into_iter()
         .chain(dep_glob(mounts, "usr/lib64/*.la"))
     {
-        if la_skip(&name) {
+        if la_skip(mount) {
             continue;
         }
         fs::create_dir_all(&la_over).map_err(|source| Error::io(&la_over, source))?;
@@ -786,7 +800,7 @@ pub(super) fn stage_generated(
         // libtool が install 時 relink し、relink 出力と同名の .so を
         // lto1 が読み込み中に truncate されて衝突する（mpfr/isl 等）。
         // .so シンボリックリンクは残すため -l 解決は維持される。
-        if matches!(name.as_str(), "gmp" | "mpfr" | "mpc" | "isl") {
+        if matches!(mount.pkg, "gmp" | "mpfr" | "mpc" | "isl") {
             prep.la = true;
             continue;
         }
@@ -800,7 +814,7 @@ pub(super) fn stage_generated(
     }
     // {dep}-prefix: include/* へのリンク + la-overlay 内の lib{dep}.* へのリンク
     for dep in ["gmp", "mpfr"] {
-        let Some(mount) = mounts.iter().find(|m| m.name == dep) else {
+        let Some(mount) = mounts.iter().find(|m| m.pkg == dep) else {
             continue;
         };
         if !mount.dir.join("usr").is_dir() {
@@ -815,7 +829,11 @@ pub(super) fn stage_generated(
             let Some(h_name) = h.file_name() else {
                 continue;
             };
-            let target = format!("/dep/{dep}/usr/include/{}", h_name.to_string_lossy());
+            let target = format!(
+                "/dep/{}/usr/include/{}",
+                mount.name,
+                h_name.to_string_lossy()
+            );
             force_symlink(&target, &include.join(h_name))
                 .map_err(|source| Error::io(&include, source))?;
         }
@@ -829,7 +847,7 @@ pub(super) fn stage_generated(
     }
     // .pc オーバーレイ（フィルタなし）
     let pc_over = gen_dir.join("pc-overlay");
-    for (name, _, host) in dep_glob(mounts, "usr/lib/pkgconfig/*.pc")
+    for (mount, _, host) in dep_glob(mounts, "usr/lib/pkgconfig/*.pc")
         .into_iter()
         .chain(dep_glob(mounts, "usr/lib64/pkgconfig/*.pc"))
         .chain(dep_glob(mounts, "usr/share/pkgconfig/*.pc"))
@@ -838,7 +856,7 @@ pub(super) fn stage_generated(
         let content = fs::read_to_string(&host).map_err(|source| Error::io(&host, source))?;
         fs::write(
             pc_over.join(host.file_name().unwrap_or_default()),
-            rewrite_pc(&content, &format!("/dep/{name}/usr")),
+            rewrite_pc(&content, &format!("/dep/{}/usr", mount.name)),
         )
         .map_err(|source| Error::io(&pc_over, source))?;
         prep.pc = true;
@@ -850,7 +868,8 @@ pub(super) fn stage_generated(
     let cc_binutils = format!("{cc}-binutils");
     let cc_gcc = format!("{cc}-gcc");
     let inject = package.uses_cc_wrapper();
-    let mount = |name: &str| mounts.iter().find(|m| m.name == name);
+    // パッケージ名でマウントを引き当てる（`-host` 退避を透過）。
+    let mount = |name: &str| mounts.iter().find(|m| m.pkg == name);
 
     // pkg-config ラッパ。/dep/pkgconf があればホスト側で生成。
     // 無い場合の command -v フォールバックはイメージ依存なのでシェルに残す。
@@ -861,7 +880,10 @@ pub(super) fn stage_generated(
         fs::create_dir_all(&dir).map_err(|source| Error::io(&dir, source))?;
         write_exec(
             &dir.join("pkg-config"),
-            "#!/bin/sh\nexec /dep/pkgconf/usr/bin/pkgconf \"$@\"\n",
+            &format!(
+                "#!/bin/sh\nexec /dep/{}/usr/bin/pkgconf \"$@\"\n",
+                pkgconf.name
+            ),
         )?;
         prep.pkg_config = true;
     }
@@ -871,8 +893,10 @@ pub(super) fn stage_generated(
         let meson_bin = meson.dir.join("usr/bin/meson");
         if meson_bin.is_file() {
             let py = match mount("python") {
-                Some(p) if is_exec(&p.dir.join("usr/bin/python3")) => "/dep/python/usr/bin/python3",
-                _ => "/usr/bin/python3",
+                Some(p) if is_exec(&p.dir.join("usr/bin/python3")) => {
+                    format!("/dep/{}/usr/bin/python3", p.name)
+                }
+                _ => "/usr/bin/python3".to_owned(),
             };
             let content =
                 fs::read_to_string(&meson_bin).map_err(|source| Error::io(&meson_bin, source))?;
@@ -881,18 +905,18 @@ pub(super) fn stage_generated(
             // python が解釈して壊れるため、shim 形式は python3 の
             // 呼び出しパスだけ差し替える。
             let rewritten = if let Some(body) = content.strip_prefix("#!/bin/sh\nexec python3 ") {
-                format!("#!/bin/sh\nexec {py} {body}")
+                format!("#!/bin/sh\nexec {} {}", py, body)
             } else {
                 match content.strip_prefix("#!").and_then(|_| content.find('\n')) {
-                    Some(nl) => format!("#!{py}{}", &content[nl..]),
-                    None if content.starts_with("#!") => format!("#!{py}\n"),
+                    Some(nl) => format!("#!{}{}", py, &content[nl..]),
+                    None if content.starts_with("#!") => format!("#!{}\n", py),
                     None => content,
                 }
             };
             let dir = gen_dir.join("meson-bin");
             fs::create_dir_all(&dir).map_err(|source| Error::io(&dir, source))?;
             write_exec(&dir.join("meson"), &rewritten)?;
-            prep.meson = Some(py.to_owned());
+            prep.meson = Some(py.clone());
         }
     }
 
@@ -904,7 +928,7 @@ pub(super) fn stage_generated(
         if is_exec(&bu.dir.join(&strip)) {
             let dir = gen_dir.join("host-strip");
             fs::create_dir_all(&dir).map_err(|source| Error::io(&dir, source))?;
-            force_symlink(&format!("/dep/{cc_binutils}/{strip}"), &dir.join("strip"))
+            force_symlink(&format!("/dep/{}/{strip}", bu.name), &dir.join("strip"))
                 .map_err(|source| Error::io(&dir, source))?;
             prep.host_strip = true;
         }
@@ -927,14 +951,14 @@ pub(super) fn stage_generated(
                 .find(|p| p.is_dir())
             {
                 let rel = lib.strip_prefix(&gcc.dir).unwrap_or(&lib);
-                prep.gcc_lib = Some(format!("/dep/{cc_gcc}/{}", rel.display()));
+                prep.gcc_lib = Some(format!("/dep/{}/{}", gcc.name, rel.display()));
                 let dir = gen_dir.join("gcc-b");
                 fs::create_dir_all(&dir).map_err(|source| Error::io(&dir, source))?;
                 for tool in ["gcc", "g++"] {
                     let bin = format!("usr/bin/{cc}-{tool}");
                     if is_exec(&gcc.dir.join(&bin)) {
                         force_symlink(
-                            &format!("/dep/{cc_gcc}/{bin}"),
+                            &format!("/dep/{}/{bin}", gcc.name),
                             &dir.join(format!("{cc}-{tool}")),
                         )
                         .map_err(|source| Error::io(&dir, source))?;
@@ -950,7 +974,7 @@ pub(super) fn stage_generated(
             .find(|p| p.is_file())
             {
                 let rel = plugin.strip_prefix(&gcc.dir).unwrap_or(&plugin);
-                let plugin = format!("/dep/{cc_gcc}/{}", rel.display());
+                let plugin = format!("/dep/{}/{}", gcc.name, rel.display());
                 let dir = gen_dir.join("lto-binutils");
                 fs::create_dir_all(&dir).map_err(|source| Error::io(&dir, source))?;
                 if let Some(bu) = mount(&cc_binutils) {
@@ -960,7 +984,8 @@ pub(super) fn stage_generated(
                             write_exec(
                                 &dir.join(format!("{cc}-{tool}")),
                                 &format!(
-                                    "#!/bin/sh\nexec /dep/{cc_binutils}/{real} --plugin {plugin} \"$@\"\n"
+                                    "#!/bin/sh\nexec /dep/{}/{real} --plugin {plugin} \"$@\"\n",
+                                    bu.name
                                 ),
                             )?;
                             prep.lto_tools.push(tool.to_owned());
@@ -997,7 +1022,7 @@ pub(super) fn stage_generated(
                 let target_path = if prep.lto_tools.iter().any(|t| t == tool) {
                     Some(format!("/tmp/lto-binutils/{cc}-{tool}"))
                 } else if is_exec(&bu.dir.join(&real)) {
-                    Some(format!("/dep/{cc_binutils}/{real}"))
+                    Some(format!("/dep/{}/{real}", bu.name))
                 } else {
                     None
                 };
@@ -1020,13 +1045,13 @@ pub(super) fn stage_generated(
             let dir = gen_dir.join("host-cc");
             fs::create_dir_all(&dir).map_err(|source| Error::io(&dir, source))?;
             for name in ["gcc", "cc"] {
-                force_symlink(&format!("/dep/{host_gcc}/{bin}"), &dir.join(name))
+                force_symlink(&format!("/dep/{}/{bin}", gcc.name), &dir.join(name))
                     .map_err(|source| Error::io(&dir, source))?;
             }
             let gxx = format!("usr/bin/{}-g++", ctx.host_triple);
             if is_exec(&gcc.dir.join(&gxx)) {
                 for name in ["g++", "c++"] {
-                    force_symlink(&format!("/dep/{host_gcc}/{gxx}"), &dir.join(name))
+                    force_symlink(&format!("/dep/{}/{gxx}", gcc.name), &dir.join(name))
                         .map_err(|source| Error::io(&dir, source))?;
                 }
             }
@@ -1100,7 +1125,6 @@ pub(crate) fn build_plan(
     );
     let cc = &ctx.package_host;
     let inject = package.uses_cc_wrapper();
-    let host_gcc = format!("{}-gcc", ctx.host_triple);
     let exec = |args: &[&'static str]| Step::Exec {
         env: vec![],
         pipe: Pipe::cmd(argv(args)),
@@ -1130,7 +1154,7 @@ pub(crate) fn build_plan(
     // レシピも同じリンクを張るが、クロスターゲットの汎用パッケージでも
     // 必要になるため prelude で冪等に用意する。
     let triple_binutils = format!("{}-binutils", ctx.triple);
-    if mounts.iter().any(|m| m.name == triple_binutils) {
+    if let Some(bu) = mounts.iter().find(|m| m.pkg == triple_binutils) {
         for tool in ["as", "ld"] {
             steps.push(Step::Exec {
                 env: vec![],
@@ -1138,8 +1162,8 @@ pub(crate) fn build_plan(
                     Arg::lit("ln"),
                     Arg::lit("-sfn"),
                     Arg::owned(format!(
-                        "\"/dep/{triple_binutils}/usr/bin/{}-{tool}\"",
-                        ctx.triple
+                        "\"/dep/{}/usr/bin/{}-{tool}\"",
+                        bu.name, ctx.triple
                     )),
                     Arg::owned(format!("/usr/bin/{}-{tool}", ctx.triple)),
                 ]),
@@ -1157,9 +1181,9 @@ pub(crate) fn build_plan(
         format!("{}-glibc", ctx.host_triple),
     ]
     .into_iter()
-    .find(|name| mounts.iter().any(|m| m.name == *name));
-    if let Some(triple_glibc) = glibc_mount {
-        let glibc_triple = triple_glibc.trim_end_matches("-glibc");
+    .find_map(|name| mounts.iter().find(|m| m.pkg == name));
+    if let Some(glibc_mount) = glibc_mount {
+        let glibc_triple = glibc_mount.pkg.trim_end_matches("-glibc");
         steps.push(Step::If {
             cond: Cond::Not(Box::new(Cond::Exists(Arg::lit("/lib")))),
             then: vec![Step::Exec {
@@ -1167,7 +1191,10 @@ pub(crate) fn build_plan(
                 pipe: Pipe::cmd(vec![
                     Arg::lit("ln"),
                     Arg::lit("-sfn"),
-                    Arg::owned(format!("\"/dep/{triple_glibc}/usr/{glibc_triple}/lib\"")),
+                    Arg::owned(format!(
+                        "\"/dep/{}/usr/{glibc_triple}/lib\"",
+                        glibc_mount.name
+                    )),
                     Arg::lit("/lib"),
                 ]),
             }],
@@ -1175,19 +1202,18 @@ pub(crate) fn build_plan(
         });
     }
 
-    // LD_LIBRARY_PATH: HOST 実行ライブラリのみ（case フィルタをホスト側で再現）
-    let dep_lib_ok = |name: &str| {
-        matches!(
-            name,
-            "python" | "perl" | "libxcrypt-host" | "cmake" | "meson" | "ninja" | "qemu" | "pkgconf"
-        ) || name == host_gcc
+    // LD_LIBRARY_PATH: dep:false マウント（HOST 実行ツールとその推移
+    // 閉包）の usr/lib を載せる。target glibc 系は除外する（別 ARCH の
+    // libc を HOST 実行へ混ぜない）。
+    let dep_lib_ok = |mount: &Mount| {
+        !mount.dep && !mount.pkg.ends_with("-glibc") && !mount.pkg.ends_with("-glibc-headers")
     };
     let mut dep_libs = dep_glob(mounts, "usr/lib");
     dep_libs.extend(dep_glob(mounts, "usr/lib64"));
     dep_libs.extend(dep_glob(mounts, "usr/lib/perl5/*/*/CORE"));
     let dep_libs: Vec<String> = dep_libs
         .into_iter()
-        .filter(|(name, _, _)| dep_lib_ok(name))
+        .filter(|(mount, _, _)| dep_lib_ok(mount))
         .map(|(_, c, _)| c)
         .collect();
     if !dep_libs.is_empty() {
@@ -1200,7 +1226,7 @@ pub(crate) fn build_plan(
     // bison はビルド時に検出した m4 の絶対パスをバイナリへ焼く
     // （seed では /usr/sbin/m4）。dep マウント環境ではそのパスが
     // 存在しないため、env M4 で実行時に差し替える。
-    if mounts.iter().any(|m| m.name == "m4") {
+    if mounts.iter().any(|m| m.pkg == "m4") {
         steps.push(export("M4", "\"/dep/m4/usr/bin/m4\"".to_owned()));
     }
     // PKG_CONFIG_PATH: pkgconfig ディレクトリを順に append
@@ -1218,18 +1244,17 @@ pub(crate) fn build_plan(
     // マウント（dep=false）は別 arch 成果物であり得るため混ぜない。
     // 依存としての pcre2 等はターゲット成果物なので載せる必要がある
     // （glib リンク時の rpath-link 等）。
-    let is_dep = |name: &str| mounts.iter().any(|m| m.name == name && m.dep);
     // -I: include ディレクトリ（case 除外をホスト側で再現）
-    let inc_skip = |name: &str| {
-        !is_dep(name)
-            || name == "linux-headers"
-            || name.ends_with("-gcc")
-            || name.ends_with("-glibc")
-            || name.ends_with("-binutils")
+    let inc_skip = |mount: &Mount| {
+        !mount.dep
+            || mount.pkg == "linux-headers"
+            || mount.pkg.ends_with("-gcc")
+            || mount.pkg.ends_with("-glibc")
+            || mount.pkg.ends_with("-binutils")
     };
     let incs: Vec<String> = dep_glob(mounts, "usr/include")
         .into_iter()
-        .filter(|(name, _, _)| !inc_skip(name))
+        .filter(|(mount, _, _)| !inc_skip(mount))
         .map(|(_, c, _)| c)
         .collect();
     if !incs.is_empty() {
@@ -1239,17 +1264,17 @@ pub(crate) fn build_plan(
         steps.push(export("CXXFLAGS", format!("\"${{CXXFLAGS:-}}{flags}\"")));
     }
     // -L/-rpath-link: lib ディレクトリ（case 除外をホスト側で再現）
-    let lib_skip = |name: &str| {
-        !is_dep(name)
-            || name == "linux-headers"
-            || name.ends_with("-gcc")
-            || name.ends_with("-binutils")
+    let lib_skip = |mount: &Mount| {
+        !mount.dep
+            || mount.pkg == "linux-headers"
+            || mount.pkg.ends_with("-gcc")
+            || mount.pkg.ends_with("-binutils")
     };
     let mut lib_globs = dep_glob(mounts, "usr/lib");
     lib_globs.extend(dep_glob(mounts, "usr/lib64"));
     let libs: Vec<String> = lib_globs
         .into_iter()
-        .filter(|(name, _, _)| !lib_skip(name))
+        .filter(|(mount, _, _)| !lib_skip(mount))
         .map(|(_, c, _)| c)
         .collect();
     if !libs.is_empty() {
@@ -1267,7 +1292,7 @@ pub(crate) fn build_plan(
     // glibc sysroot libdir（_t in cc, triple の順、重複も元通り再現）
     for t in [cc.as_str(), ctx.triple.as_str()] {
         let glibc = format!("{t}-glibc");
-        if let Some(m) = mounts.iter().find(|m| m.name == glibc) {
+        if let Some(m) = mounts.iter().find(|m| m.pkg == glibc) {
             for sub in [
                 format!("usr/{t}/lib"),
                 format!("usr/{t}/lib64"),
@@ -1278,7 +1303,8 @@ pub(crate) fn build_plan(
                     steps.push(export(
                         "LDFLAGS",
                         format!(
-                            "\"${{LDFLAGS:-}} -L/dep/{glibc}/{sub} -Wl,-rpath-link=/dep/{glibc}/{sub}\""
+                            "\"${{LDFLAGS:-}} -L/dep/{}/{sub} -Wl,-rpath-link=/dep/{}/{sub}\"",
+                            m.name, m.name
                         ),
                     ));
                 }
@@ -1287,10 +1313,10 @@ pub(crate) fn build_plan(
     }
     // crti.o のある sysroot libdir に -B（最初のヒットで break 相当）
     let cc_glibc = format!("{cc}-glibc");
-    if let Some(m) = mounts.iter().find(|m| m.name == cc_glibc) {
+    if let Some(m) = mounts.iter().find(|m| m.pkg == cc_glibc) {
         for sub in [format!("usr/{cc}/lib"), format!("usr/{cc}/lib64")] {
             if m.dir.join(&sub).join("crti.o").exists() {
-                let slib = format!("/dep/{cc_glibc}/{sub}");
+                let slib = format!("/dep/{}/{sub}", m.name);
                 steps.push(export("CFLAGS", format!("\"${{CFLAGS:-}} -B{slib}\"")));
                 steps.push(export("CXXFLAGS", format!("\"${{CXXFLAGS:-}} -B{slib}\"")));
                 steps.push(export("LDFLAGS", format!("\"${{LDFLAGS:-}} -B{slib}\"")));
@@ -1391,7 +1417,7 @@ pub(crate) fn build_plan(
         ));
     }
     // PERL5LIB: perl5 のバージョン/アーキディレクトリ（ls -d | head -n1 相当）
-    if let Some(perl) = mounts.iter().find(|m| m.name == "perl") {
+    if let Some(perl) = mounts.iter().find(|m| m.pkg == "perl") {
         let perl5 = perl.dir.join("usr/lib/perl5");
         if perl5.is_dir() {
             let first = |pattern_match: &dyn Fn(&str) -> bool| -> Option<String> {
@@ -1519,14 +1545,14 @@ pub(crate) fn build_plan(
         for (name, sub) in &candidates {
             let hit = mounts
                 .iter()
-                .find(|m| m.name == *name)
+                .find(|m| m.pkg == *name)
                 .filter(|m| m.dir.join(sub).is_dir());
             if let Some(m) = hit {
                 let dep_root = m.dir.join(sub);
                 let sysroot = if sub.is_empty() {
-                    format!("/dep/{name}")
+                    format!("/dep/{}", m.name)
                 } else {
-                    format!("/dep/{name}/{sub}")
+                    format!("/dep/{}/{sub}", m.name)
                 };
                 steps.push(Step::Set {
                     name: "SYSROOT",
@@ -1645,14 +1671,14 @@ pub(crate) fn build_plan(
                 break;
             }
         }
-        if let Some(headers) = mounts.iter().find(|m| m.name == "linux-headers") {
+        if let Some(headers) = mounts.iter().find(|m| m.pkg == "linux-headers") {
             for sub in [
                 format!("usr/{cc}/include"),
                 format!("usr/{}/include", ctx.triple),
                 "usr/include".to_owned(),
             ] {
                 if headers.dir.join(&sub).is_dir() {
-                    let hdr = format!("/dep/linux-headers/{sub}");
+                    let hdr = format!("/dep/{}/{sub}", headers.name);
                     steps.push(export(
                         "CFLAGS",
                         format!("\"${{CFLAGS:-}} -idirafter {hdr}\""),

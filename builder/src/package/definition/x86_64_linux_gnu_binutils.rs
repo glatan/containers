@@ -27,9 +27,8 @@ impl Package for X8664LinuxGnuBinutils {
     fn dependencies(&self, target: Target) -> Vec<Dependency> {
         binutils::deps(target)
     }
-    fn build_dependencies(&self, target: Target) -> Vec<Dependency> {
-        // シード相では glibc 依存を切り離す（循環回避）。
-        binutils::build_deps(!(self.seed() && target == Target::BUILD_ENV))
+    fn build_dependencies(&self, _target: Target) -> Vec<Dependency> {
+        binutils::build_deps()
     }
     fn recipe(&self, ctx: &BuildContext) -> Recipe {
         Recipe::Steps(binutils::recipe(ctx))
@@ -60,8 +59,5 @@ impl Bootstrap for X8664LinuxGnuBinutils {
     /// シード（Arch base-devel）相の中間ステージ。
     fn seed(&self) -> bool {
         true
-    }
-    fn seed_dependencies(&self, target: Target) -> Option<(Vec<Dependency>, Vec<Dependency>)> {
-        Some((vec![], self.build_dependencies(target)))
     }
 }

@@ -1,14 +1,11 @@
 //! ツールチェーン構成ステージ（binutils/glibc/gcc 系）の共有ヘルパー。
 //! 各 `{triple}-*.rs` パッケージが参照する定義側の共通部品。
 
-use crate::package::Dependency;
 use crate::package::recipe::Cond;
 use crate::package::recipe::{Arg, Pipe, Step};
 
-/// `Dependency` 構築の糖衣。
-pub(crate) const fn dep(name: &'static str, version: &'static str) -> Dependency {
-    Dependency { name, version }
-}
+/// `Dependency` 構築の糖衣（`crate::package::dep` の再エクスポート）。
+pub(crate) use crate::package::dep;
 
 /// `find dir -name '*.so'` の ld script（`GROUP ( //lib/libc.so.6 )`）を
 /// `//` → `/` へ修正する共有ステップ。ld は `//` を sysroot しない。

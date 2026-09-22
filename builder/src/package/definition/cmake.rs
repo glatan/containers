@@ -1,6 +1,6 @@
 use crate::flags::Flag;
 use crate::package::recipe::{Arg, BuildContext, Env, Pipe, Recipe, Step, Steps};
-use crate::package::{Bootstrap, Dependency, Package, Source};
+use crate::package::{Bootstrap, Dependency, Package, Source, Via, dep};
 use crate::target::Target;
 
 pub struct Cmake;
@@ -77,15 +77,15 @@ impl Package for Cmake {
         )
     }
 
-    fn host_tools(&self, target: Target) -> Vec<&'static str> {
-        // クロスビルドでは bootstrap の実行テストがホストで動かないため
-        // BUILD_ENV 側の cmake で configure する（artifact があれば
-        // /dep/cmake へマウントされ PATH に入る）。
+    /// クロスビルドでは bootstrap の実行テストがホストで動かないため
+    /// BUILD_ENV 側の cmake で configure する（自己参照。シード相は
+    /// distro cmake が担保し、env では成果物必須）。
+    fn host_dependencies(&self, target: Target) -> Vec<Dependency> {
+        let mut deps = crate::package::cc_deps(self, target);
         if target.gnu_triple() != Target::HOST_GNU_TRIPLE {
-            vec!["cmake"]
-        } else {
-            Vec::new()
+            deps.push(dep("cmake", "4.4.3").via(Via::Seed("cmake")));
         }
+        deps
     }
 
     fn recipe(&self, ctx: &BuildContext) -> Recipe {

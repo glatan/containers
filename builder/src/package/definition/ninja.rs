@@ -38,12 +38,16 @@ impl Package for Ninja {
     /// `configure.py --bootstrap` の実行に必要（成果物にはリンクしない）。
     /// クロスでは bootstrap がターゲットバイナリを実行するため使えず、
     /// BUILD_ENV 側の cmake で configure する。
-    fn host_tools(&self, target: crate::target::Target) -> Vec<&'static str> {
-        if target.gnu_triple() == crate::target::Target::HOST_GNU_TRIPLE {
-            vec!["python"]
+    /// configure.py --bootstrap は python3 が必須。クロス
+    /// ビルドではホスト側 cmake で構成する（いずれも必須）。
+    fn host_dependencies(&self, target: crate::target::Target) -> Vec<crate::package::Dependency> {
+        let mut deps = crate::package::cc_deps(self, target);
+        deps.push(if matches!(target, crate::target::Target::Amd64(_)) {
+            crate::package::dep("python", "3.14.7")
         } else {
-            vec!["cmake"]
-        }
+            crate::package::dep("cmake", "4.4.3")
+        });
+        deps
     }
 
     fn flags(&self, target: crate::target::Target) -> crate::flags::Flag {

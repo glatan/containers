@@ -2,7 +2,7 @@ use crate::flags::{Flag, Ldflag};
 use crate::package::recipe::{
     Arg, BuildContext, Cond, Env, Pipe, Recipe, Step, Steps, Workdir, argv,
 };
-use crate::package::{Bootstrap, Dependency, Package, Source};
+use crate::package::{Bootstrap, Dependency, Package, Source, dep};
 use crate::target::Target;
 
 pub struct Mold;
@@ -34,26 +34,21 @@ impl Package for Mold {
             target,
             &[
                 crate::package::gcc_dep(target),
-                Dependency {
-                    name: "zlib",
-                    version: "1.3.2",
-                },
-                Dependency {
-                    name: "zstd",
-                    version: "1.5.7",
-                },
+                dep("zlib", "1.3.2"),
+                dep("zstd", "1.5.7"),
             ],
         )
     }
 
     fn build_dependencies(&self, _target: Target) -> Vec<Dependency> {
-        vec![
-            crate::package::LINUX_HEADERS,
-            Dependency {
-                name: "cmake",
-                version: "4.4.3",
-            },
-        ]
+        vec![crate::package::LINUX_HEADERS]
+    }
+
+    /// cmake ビルド系で cmake を実行するため必須の HOST 依存。
+    fn host_dependencies(&self, target: Target) -> Vec<Dependency> {
+        let mut deps = crate::package::cc_deps(self, target);
+        deps.push(dep("cmake", "4.4.3"));
+        deps
     }
 
     fn flags(&self, target: Target) -> Flag {

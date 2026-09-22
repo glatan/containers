@@ -25,14 +25,8 @@ impl Package for Mpc {
         crate::package::with_libc(
             target,
             &[
-                crate::package::Dependency {
-                    name: "gmp",
-                    version: "6.3.0",
-                },
-                crate::package::Dependency {
-                    name: "mpfr",
-                    version: "4.2.2",
-                },
+                crate::package::dep("gmp", "6.3.0"),
+                crate::package::dep("mpfr", "4.2.2"),
             ],
         )
     }

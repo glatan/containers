@@ -27,9 +27,8 @@ impl Package for Riscv64LinuxGnuBinutils {
     fn dependencies(&self, target: Target) -> Vec<Dependency> {
         binutils::deps(target)
     }
-    fn build_dependencies(&self, target: Target) -> Vec<Dependency> {
-        // シード相では glibc 依存を切り離す（循環回避）。
-        binutils::build_deps(!(self.seed() && target == Target::BUILD_ENV))
+    fn build_dependencies(&self, _target: Target) -> Vec<Dependency> {
+        binutils::build_deps()
     }
     fn recipe(&self, ctx: &BuildContext) -> Recipe {
         Recipe::Steps(binutils::recipe(ctx))
@@ -56,8 +55,4 @@ impl Package for Riscv64LinuxGnuBinutils {
     }
 }
 
-impl Bootstrap for Riscv64LinuxGnuBinutils {
-    fn seed_dependencies(&self, target: Target) -> Option<(Vec<Dependency>, Vec<Dependency>)> {
-        Some((vec![], self.build_dependencies(target)))
-    }
-}
+impl Bootstrap for Riscv64LinuxGnuBinutils {}

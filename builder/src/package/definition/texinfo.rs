@@ -1,5 +1,5 @@
 use crate::package::recipe::{Arg, BuildContext, Cond, Env, Pipe, Recipe, Step, Steps, Workdir};
-use crate::package::{Package, Source};
+use crate::package::{Dependency, Package, Source, dep};
 use crate::target::Target;
 
 pub struct Texinfo;
@@ -14,8 +14,12 @@ impl Package for Texinfo {
     fn license(&self) -> &'static str {
         "GPL-3.0-or-later"
     }
-    fn host_tools(&self, _target: Target) -> Vec<&'static str> {
-        vec!["perl"]
+    /// ビルドは tarball 事前生成物で自足するが、perl が
+    /// あれば使う（任意）。
+    fn host_dependencies(&self, target: Target) -> Vec<Dependency> {
+        let mut deps = crate::package::cc_deps(self, target);
+        deps.push(dep("perl", "5.42.3").via(crate::package::Via::Optional));
+        deps
     }
     /// HOST 側で実行されるツール。依存として常に BUILD_ENV 成果物を使う。
     fn runs_on_host(&self) -> bool {
@@ -31,13 +35,7 @@ impl Package for Texinfo {
         }
     }
     fn dependencies(&self, target: crate::target::Target) -> Vec<crate::package::Dependency> {
-        crate::package::with_libc(
-            target,
-            &[crate::package::Dependency {
-                name: "ncurses",
-                version: "6.6",
-            }],
-        )
+        crate::package::with_libc(target, &[crate::package::dep("ncurses", "6.6")])
     }
     fn build_dependencies(
         &self,

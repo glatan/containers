@@ -39,6 +39,9 @@ impl Package for CaCertificates {
         vec![]
     }
 
+    fn host_dependencies(&self, _target: Target) -> Vec<Dependency> {
+        Vec::new()
+    }
     fn flags(&self, _target: Target) -> Flag {
         Flag::new(vec![], vec![])
     }

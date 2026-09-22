@@ -20,16 +20,31 @@ pub const SOURCE: Source = Source {
 };
 
 pub fn deps(target: Target) -> Vec<Dependency> {
-    crate::package::with_libc(target, &[dep("zlib", "1.3.2"), dep("zstd", "1.5.7")])
+    // glibc/zlib/zstd との循環は via(Seed) で断つ。シード相は distro
+    // パッケージが担保し、env では成果物必須。
+    let distro = |name: &'static str| -> &'static str {
+        if matches!(target, Target::Amd64(_)) {
+            name
+        } else {
+            ""
+        }
+    };
+    vec![
+        crate::package::glibc_dep(target).via(crate::package::Via::Seed(
+            if matches!(target, Target::Amd64(_)) {
+                "glibc"
+            } else {
+                target.glibc_package()
+            },
+        )),
+        dep("zlib", "1.3.2").via(crate::package::Via::Seed(distro("zlib"))),
+        dep("zstd", "1.5.7").via(crate::package::Via::Seed(distro("zstd"))),
+    ]
 }
 
-/// seed ビルド環境では glibc との循環を避けるため zlib/zstd を外す。
-pub fn build_deps(full: bool) -> Vec<Dependency> {
-    let mut deps = vec![LINUX_HEADERS];
-    if full {
-        deps.extend_from_slice(&[dep("zlib", "1.3.2"), dep("zstd", "1.5.7")]);
-    }
-    deps
+/// linux-headers のみのビルド時依存（循環は `deps()` 側の via(Seed) で断つ）。
+pub fn build_deps() -> Vec<Dependency> {
+    vec![LINUX_HEADERS]
 }
 
 /// `--enable-cet` は x86_64 のみ。ネイティブ x86_64 のみ PGO を行い、

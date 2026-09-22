@@ -25,18 +25,9 @@ impl Package for Glib {
         crate::package::with_libc(
             target,
             &[
-                crate::package::Dependency {
-                    name: "libffi",
-                    version: "3.8.0",
-                },
-                crate::package::Dependency {
-                    name: "pcre2",
-                    version: "10.48",
-                },
-                crate::package::Dependency {
-                    name: "zlib",
-                    version: "1.3.2",
-                },
+                crate::package::dep("libffi", "3.8.0"),
+                crate::package::dep("pcre2", "10.48"),
+                crate::package::dep("zlib", "1.3.2"),
             ],
         )
     }
@@ -44,24 +35,18 @@ impl Package for Glib {
         &self,
         _target: crate::target::Target,
     ) -> Vec<crate::package::Dependency> {
-        let mut deps = crate::package::headers_dep();
+        crate::package::headers_dep()
+    }
+
+    /// meson ビルド系。meson/ninja/python/pkgconf はビルド中に
+    /// 実行するため必須の HOST 依存。
+    fn host_dependencies(&self, target: crate::target::Target) -> Vec<crate::package::Dependency> {
+        let mut deps = crate::package::cc_deps(self, target);
         deps.extend([
-            crate::package::Dependency {
-                name: "meson",
-                version: "1.12.0",
-            },
-            crate::package::Dependency {
-                name: "ninja",
-                version: "1.13.2",
-            },
-            crate::package::Dependency {
-                name: "python",
-                version: "3.14.7",
-            },
-            crate::package::Dependency {
-                name: "pkgconf",
-                version: "2.5.1",
-            },
+            crate::package::dep("meson", "1.12.0"),
+            crate::package::dep("ninja", "1.13.2"),
+            crate::package::dep("python", "3.14.7"),
+            crate::package::dep("pkgconf", "2.5.1"),
         ]);
         deps
     }

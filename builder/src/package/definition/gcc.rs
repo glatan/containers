@@ -42,30 +42,12 @@ pub const SOURCE: Source = Source {
 };
 
 pub const RUNTIME_LIBS: [Dependency; 6] = [
-    Dependency {
-        name: "gmp",
-        version: "6.3.0",
-    },
-    Dependency {
-        name: "mpfr",
-        version: "4.2.2",
-    },
-    Dependency {
-        name: "mpc",
-        version: "1.4.1",
-    },
-    Dependency {
-        name: "isl",
-        version: "0.26",
-    },
-    Dependency {
-        name: "zlib",
-        version: "1.3.2",
-    },
-    Dependency {
-        name: "zstd",
-        version: "1.5.7",
-    },
+    dep("gmp", "6.3.0"),
+    dep("mpfr", "4.2.2"),
+    dep("mpc", "1.4.1"),
+    dep("isl", "0.26"),
+    dep("zlib", "1.3.2"),
+    dep("zstd", "1.5.7"),
 ];
 
 /// gmp/mpfr/mpc/isl + zlib/zstd のビルド機側ライブラリ設定。
@@ -129,6 +111,7 @@ pub fn lib_flag_steps() -> Vec<Step> {
     steps
 }
 
+/// ビルド補助ツール。tarball の事前生成物で自足するため任意。
 const HOST_TOOLS: [Dependency; 5] = [
     dep("bison", "3.8.2"),
     dep("flex", "2.6.4"),
@@ -136,6 +119,43 @@ const HOST_TOOLS: [Dependency; 5] = [
     dep("texinfo", "7.3"),
     dep("m4", "1.4.21"),
 ];
+
+/// stage1/stage2 の HOST 側依存。cc 辺 + ステージコンパイラが動的
+/// リンクするランタイムライブラリ（シード相は distro パッケージが
+/// 担保し、env では成果物必須）。
+pub fn stage_host_deps<P: crate::package::Package + ?Sized>(
+    package: &P,
+    target: Target,
+) -> Vec<Dependency> {
+    let mut deps = crate::package::cc_deps(package, target);
+    deps.extend(RUNTIME_LIBS.iter().map(|d| {
+        d.via(crate::package::Via::Seed(match d.name {
+            "mpc" => "libmpc",
+            "isl" => "libisl",
+            name => name,
+        }))
+    }));
+    deps
+}
+
+/// 最終 gcc の HOST 側依存。cc 辺 + ビルド補助ツール（任意）+
+/// 非 BUILD_ENV ビルドでの旧成果物の自己参照（任意）。
+pub fn host_deps<P: crate::package::Package + ?Sized>(
+    package: &P,
+    target: Target,
+    name: &'static str,
+) -> Vec<Dependency> {
+    let mut deps = crate::package::cc_deps(package, target);
+    deps.extend(
+        HOST_TOOLS
+            .iter()
+            .map(|d| d.via(crate::package::Via::Optional)),
+    );
+    if target != Target::BUILD_ENV && !deps.iter().any(|d| d.name == name) {
+        deps.push(dep(name, crate::package::GCC_VERSION).via(crate::package::Via::Optional));
+    }
+    deps
+}
 
 const X86_GCC_BUILD: [Dependency; 3] = [
     LINUX_HEADERS,
@@ -163,12 +183,6 @@ const S390X_GCC_BUILD: [Dependency; 3] = [
     dep("s390x-linux-gnu-glibc", GLIBC_VERSION),
 ];
 
-fn gcc_build_deps(base: &[Dependency]) -> Vec<Dependency> {
-    let mut dependencies = base.to_vec();
-    dependencies.extend_from_slice(&HOST_TOOLS);
-    dependencies
-}
-
 pub fn build_deps(triple: &str) -> Vec<Dependency> {
     let base = match triple {
         "x86_64-linux-gnu" => &X86_GCC_BUILD,
@@ -177,7 +191,7 @@ pub fn build_deps(triple: &str) -> Vec<Dependency> {
         "powerpc64le-linux-gnu" => &PPC64LE_GCC_BUILD,
         _ => &S390X_GCC_BUILD,
     };
-    gcc_build_deps(base)
+    base.to_vec()
 }
 
 pub fn deps(target: Target) -> Vec<Dependency> {
