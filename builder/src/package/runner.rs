@@ -993,6 +993,10 @@ fn exec_step(
             sb.pop_scope();
             result.map(|_| ())
         }
+        Step::Cmake { .. } | Step::Meson { .. } | Step::ConfigureScript { .. } => {
+            let (vars, pipe) = step.configure_pipe().unwrap();
+            exec_step(&Step::Exec { env: vars, pipe }, env, sb, redirect, lax)
+        }
         Step::Comment(_) => Ok(()),
         Step::Cd(dir) => {
             let dir = eval_value(dir, sb)?;

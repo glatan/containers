@@ -7,6 +7,7 @@
 | バージョン | 1 |
 | ライセンス | CC0-1.0 |
 | 分類 | build-env（合成ルート） |
+| 対象 Platform | amd64: v4 |
 | 定義 | [`builder/src/package/definition/build_env.rs`](../../../builder/src/package/definition/build_env.rs) |
 
 ## 依存

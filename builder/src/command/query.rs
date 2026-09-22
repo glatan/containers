@@ -88,30 +88,15 @@ pub fn info(name: &str, target: Target) -> Result<()> {
         crate::flags::Pgo::None => {}
     }
     let ctx = crate::package::recipe::BuildContext::of(defined.gnu_triple(), target);
-    println!("recipe: {}", describe_recipe(&defined.recipe(&ctx)));
-    println!("対応ターゲット: {}", describe_supported(defined));
+    println!(
+        "recipe: {}",
+        crate::package::describe::recipe_summary(&defined.recipe(&ctx))
+    );
+    println!(
+        "対応ターゲット: {}",
+        crate::package::describe::supported_label(defined)
+    );
     Ok(())
-}
-
-fn describe_supported(defined: &dyn package::Package) -> String {
-    let mut grouped: std::collections::BTreeMap<&str, Vec<&str>> =
-        std::collections::BTreeMap::new();
-    for target in Target::all() {
-        if defined.supports(target) {
-            grouped
-                .entry(target.architecture())
-                .or_default()
-                .push(target.variant());
-        }
-    }
-    if grouped.is_empty() {
-        return "なし".to_string();
-    }
-    grouped
-        .iter()
-        .map(|(arch, variants)| format!("{arch}: {}", variants.join(" ")))
-        .collect::<Vec<_>>()
-        .join("; ")
 }
 
 pub fn tree(name: &str, target: Target, reverse: bool) -> Result<()> {
@@ -353,70 +338,5 @@ fn describe_role(defined: &dyn package::Package) -> String {
         "catalog".to_owned()
     } else {
         "package".to_owned()
-    }
-}
-
-fn pipe_label(pipe: &crate::package::recipe::Pipe) -> String {
-    pipe.stages
-        .iter()
-        .map(|argv| {
-            argv.first()
-                .map(|arg| format!("{arg:?}"))
-                .unwrap_or_default()
-        })
-        .collect::<Vec<_>>()
-        .join("|")
-}
-
-fn describe_recipe(recipe: &crate::package::recipe::Recipe) -> String {
-    use crate::package::recipe::{Env, PgoTemplate, Recipe, Step, Workdir};
-    match recipe {
-        Recipe::Noop => "noop".to_owned(),
-        Recipe::Steps(steps) => {
-            let env = match steps.env {
-                Env::Autotools => "autotools",
-                Env::Lto => "lto",
-                Env::None => "none",
-            };
-            let workdir = match steps.workdir {
-                Workdir::Build => "build",
-                Workdir::InSource => "in-source",
-                Workdir::None => "none",
-            };
-            let kinds: Vec<String> = steps
-                .steps
-                .iter()
-                .map(|step| match step {
-                    Step::Configure(args) => format!("configure({})", args.join(" ")),
-                    Step::Make { .. } => "make".to_owned(),
-                    Step::MakeInstall { .. } => "make-install".to_owned(),
-                    Step::Install { .. } => "install".to_owned(),
-                    Step::Symlink { .. } => "symlink".to_owned(),
-                    Step::Exec { pipe, .. } => format!("exec({})", pipe_label(pipe)),
-                    Step::Cd(_) => "cd".to_owned(),
-                    Step::Export { name, .. } => format!("export({name})"),
-                    Step::ExportBare(name) => format!("export({name})"),
-                    Step::Set { name, .. } => format!("set({name})"),
-                    Step::Unset(name) => format!("unset({name})"),
-                    Step::If { .. } => "if".to_owned(),
-                    Step::ForEach { var, .. } => format!("for({var})"),
-                    Step::Or { .. } => "or".to_owned(),
-                    Step::WriteFile { .. } => "write-file".to_owned(),
-                    Step::Subshell(_) => "subshell".to_owned(),
-                    Step::Comment(_) => "comment".to_owned(),
-                })
-                .collect();
-            let pgo = match steps.pgo {
-                Some(PgoTemplate::Autotools(_)) => "autotools",
-                Some(PgoTemplate::Make(_)) => "make",
-                None => "none",
-            };
-            format!(
-                "steps(env={env} std={} sysroot={} workdir={workdir} pgo={pgo}): {}",
-                steps.std.as_str(),
-                steps.sysroot,
-                kinds.join(" ")
-            )
-        }
     }
 }

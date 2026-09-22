@@ -446,8 +446,7 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
 
     // -- configure_final_gcc（クロージャへ展開） --------------------------
     let configure = |env: Vec<(&'static str, Arg)>| -> Step {
-        let mut argv = vec![
-            Arg::Concat(vec![Arg::Var("SOURCE"), Arg::lit("/configure")]),
+        let mut args = vec![
             Arg::Opt("build", Box::new(Arg::Var("HOST_TRIPLE"))),
             // ツールはビルド機で動くクロスツール。--host=HOST_TRIPLE が正しい
             //（=PACKAGE_HOST は host==target になる誤り）。prefixed 名は
@@ -472,8 +471,8 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
             Arg::lit("--with-system-zlib"),
             Arg::Var("GCC_LIB_FLAGS"),
         ];
-        argv.append(&mut arch_args.clone());
-        argv.extend(
+        args.append(&mut arch_args.clone());
+        args.extend(
             [
                 "--disable-nls",
                 "--disable-werror",
@@ -486,9 +485,9 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
             .map(|f| Arg::lit(f)),
         );
         if !sanitizer.is_empty() {
-            argv.push(Arg::lit(sanitizer));
+            args.push(Arg::lit(sanitizer));
         }
-        argv.extend(
+        args.extend(
             [
                 "--enable-plugin",
                 "--enable-languages=c,c++",
@@ -511,13 +510,17 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
             .iter()
             .map(|f| Arg::lit(f)),
         );
-        argv.push(Arg::Opt(
+        args.push(Arg::Opt(
             "with-specs",
             Box::new(Arg::lit("'%{!fno-hardened:-fhardened} -Wno-hardened'")),
         ));
-        Step::Exec {
+        Step::ConfigureScript {
+            program: vec![Arg::Concat(vec![
+                Arg::Var("SOURCE"),
+                Arg::lit("/configure"),
+            ])],
+            args,
             env,
-            pipe: Pipe::cmd(argv),
         }
     };
 

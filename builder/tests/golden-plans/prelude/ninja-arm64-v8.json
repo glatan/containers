@@ -432,73 +432,57 @@
       "std": "Gnu17",
       "steps": [
         {
-          "Exec": {
-            "env": [],
-            "pipe": {
-              "stages": [
-                [
+          "Cmake": {
+            "args": [
+              {
+                "Lit": "-DCMAKE_SYSTEM_NAME=Linux"
+              },
+              {
+                "Lit": "-DCMAKE_SYSTEM_PROCESSOR=aarch64"
+              },
+              {
+                "Lit": "-DCMAKE_SYSROOT=/tmp/sysroot"
+              },
+              {
+                "Lit": "-DCMAKE_BUILD_TYPE=Release"
+              },
+              {
+                "Lit": "-DCMAKE_INSTALL_PREFIX=/usr"
+              },
+              {
+                "Lit": "-DBUILD_TESTING=OFF"
+              },
+              {
+                "Concat": [
                   {
-                    "Lit": "cmake"
+                    "Lit": "-DCMAKE_C_COMPILER="
                   },
                   {
-                    "Lit": "-S"
-                  },
-                  {
-                    "Lit": "."
-                  },
-                  {
-                    "Lit": "-B"
-                  },
-                  {
-                    "Lit": "build-cmake"
-                  },
-                  {
-                    "Lit": "-DCMAKE_SYSTEM_NAME=Linux"
-                  },
-                  {
-                    "Lit": "-DCMAKE_SYSTEM_PROCESSOR=aarch64"
-                  },
-                  {
-                    "Lit": "-DCMAKE_SYSROOT=/tmp/sysroot"
-                  },
-                  {
-                    "Lit": "-DCMAKE_BUILD_TYPE=Release"
-                  },
-                  {
-                    "Lit": "-DCMAKE_INSTALL_PREFIX=/usr"
-                  },
-                  {
-                    "Lit": "-DBUILD_TESTING=OFF"
-                  },
-                  {
-                    "Concat": [
-                      {
-                        "Lit": "-DCMAKE_C_COMPILER="
-                      },
-                      {
-                        "Quoted": {
-                          "Var": "CC"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "Concat": [
-                      {
-                        "Lit": "-DCMAKE_CXX_COMPILER="
-                      },
-                      {
-                        "Quoted": {
-                          "Var": "CXX"
-                        }
-                      }
-                    ]
+                    "Quoted": {
+                      "Var": "CC"
+                    }
                   }
                 ]
-              ],
-              "stderr": null,
-              "stdin": null,
-              "stdout": null
+              },
+              {
+                "Concat": [
+                  {
+                    "Lit": "-DCMAKE_CXX_COMPILER="
+                  },
+                  {
+                    "Quoted": {
+                      "Var": "CXX"
+                    }
+                  }
+                ]
+              }
+            ],
+            "build_dir": {
+              "Lit": "build-cmake"
+            },
+            "env": [],
+            "source_dir": {
+              "Lit": "."
             }
           }
         },

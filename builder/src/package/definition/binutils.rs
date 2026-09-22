@@ -47,15 +47,19 @@ pub fn build_deps() -> Vec<Dependency> {
     vec![LINUX_HEADERS]
 }
 
-/// `--enable-cet` は x86_64 のみ。ネイティブ x86_64 のみ PGO を行い、
-/// as/ld/objdump を回してプロファイルを集める。
+/// `--enable-cet` は x86_64 のみ。PGO も x86_64 triple のみ:
+/// instrumented な as/ld/objdump をビルドホスト上で実行して
+/// プロファイルを採取するため、生成コードが HOST で動かせる
+/// （= `$TRIPLE` = `$HOST_TRIPLE`）ことが前提。HOST とずれる triple では
+/// プロファイル生成の保証が難しいため適用しない。
+/// x86_64 triple の binutils は常にホスト triple と一致するため全対象で
+/// 発火する。
 pub fn recipe(ctx: &BuildContext) -> Steps {
     let cet = ctx.triple == "x86_64-linux-gnu";
     let pgo = cet && !ctx.cross();
 
     let configure = |env: Vec<(&'static str, Arg)>| -> Step {
-        let mut argv = vec![
-            Arg::Concat(vec![Arg::Var("SOURCE"), Arg::lit("/configure")]),
+        let mut args = vec![
             Arg::Opt("build", Box::new(Arg::Var("HOST_TRIPLE"))),
             // ツールはビルド機で動くクロスツール。--host=HOST_TRIPLE が正しい
             //（=PACKAGE_HOST は host==target になる誤り）。prefixed 名は
@@ -84,11 +88,15 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
             Arg::lit("--enable-default-hash-style=gnu"),
         ];
         if cet {
-            argv.push(Arg::lit("--enable-cet"));
+            args.push(Arg::lit("--enable-cet"));
         }
-        Step::Exec {
+        Step::ConfigureScript {
+            program: vec![Arg::Concat(vec![
+                Arg::Var("SOURCE"),
+                Arg::lit("/configure"),
+            ])],
+            args,
             env,
-            pipe: Pipe::cmd(argv),
         }
     };
     let cmd = |argv: Vec<Arg>| Step::Exec {

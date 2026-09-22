@@ -7,6 +7,8 @@
 | バージョン | 1.3.2 |
 | ライセンス | Zlib |
 | 分類 | カタログ |
+| 対象 Platform | amd64: v1 v2 v3 v4; arm64: v8 v8.1 v8.2 v8.3 v8.4 v8.5 v8.6 v8.7 v8.8 v8.9 v9 v9.1 v9.2 v9.3 v9.4 v9.5; ppc64le: power8 power9 power10 power11; riscv64: rva20u64 rva22u64 rva23u64; s390x: z900 z990 z9-ec z10 z196 zEC12 z13 z14 z15 z16 z17 |
+| PGO | amd64 で適用（`Pgo::Custom`、レシピ内の個別手順） |
 | 定義 | [`builder/src/package/definition/zlib.rs`](../../../builder/src/package/definition/zlib.rs) |
 
 ## ソース
@@ -43,26 +45,112 @@
 | [mold](./mold.md) | 2.42.1 | optional |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
+## ビルド設定
+
+| 項目 | 値 |
+|-|-|
+| env プリリュード | `Env::None`（前処理なし） |
+| sysroot | あり（`--sysroot`/`-idirafter` は `wrap_script` が注入） |
+| ビルドディレクトリ | `$BUILD`（`$SOURCE` をコピーして in-source） |
+
+`make install` には `DESTDIR="$OUT"` を自動付与します。
+
+## ツールチェーンフラグ
+
+`tool_flags` の既定セットと同一です（[README.md](../README.md) の既定フラグ表）。
+
+`-march`/`-mcpu` の値は variant 依存です（上記は amd64/v4 で評価）。
+
+## ビルドフラグ
+
+対象 Platform 全件で `recipe()` を評価した configure 系呼出の引数です。条件列は引数が出現するターゲット集合です。
+
+### `./configure`（1回目の呼出）
+
+- 対象: arm64, ppc64le, riscv64, s390x
+- env: `CHOST="${TRIPLE}"`
+
+| フラグ | 設定値 | 条件 |
+|-|-|-|
+| `--prefix` | `/usr` | arm64, ppc64le, riscv64, s390x |
+| `--libdir` | `/usr/lib64` | arm64, ppc64le, riscv64, s390x |
+| `--shared` |  | arm64, ppc64le, riscv64, s390x |
+
+### `./configure`（2回目の呼出）
+
+- 対象: amd64
+
+| フラグ | 設定値 | 条件 |
+|-|-|-|
+| `--prefix` | `/usr` | amd64 |
+| `--libdir` | `/usr/lib64` | amd64 |
+| `--shared` |  | amd64 |
+
+## ビルド手順
+
+`recipe()` が生成するスクリプトです（`builder` が runner へ渡す IR のレンダリング）。対象 Platform 間で 2 系統に分かれます。
+
+<details>
+<summary>amd64</summary>
+
+```bash
+set -euxo pipefail
+mkdir -p "$BUILD"
+cp -a "$SOURCE"/. "$BUILD"/
+cd "$BUILD"
+if [ -n "${SYSROOT:-}" ]; then
+  export CC="${CC} --sysroot=${SYSROOT}"
+fi
+PGO=/tmp/zlib-pgo
+rm -rf "$PGO"
+mkdir -p "$PGO"
+./configure --prefix=/usr --libdir=/usr/lib64 --shared
+make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-generate=$PGO -fprofile-update=atomic" LDFLAGS="$LDFLAGS -fprofile-generate"
+export LD_LIBRARY_PATH="${PWD}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+(
+  for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
+    cat ./*.c ./*.h
+  done > /tmp/zlib-pgo-input
+  for _level in 1 6 9; do
+    ./minigzip -c "-$_level" < /tmp/zlib-pgo-input | ./minigzip -d -c > /dev/null
+  done
+  ./example > /dev/null
+) || true
+make distclean
+./configure --prefix=/usr --libdir=/usr/lib64 --shared
+make -j"$(nproc)" CFLAGS="$CFLAGS -fprofile-use=$PGO -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch" LDFLAGS="$LDFLAGS -fprofile-use"
+make install DESTDIR="$OUT"
+```
+
+</details>
+
+<details>
+<summary>arm64, ppc64le, riscv64, s390x（クロス・Canadian）</summary>
+
+```bash
+set -euxo pipefail
+mkdir -p "$BUILD"
+cp -a "$SOURCE"/. "$BUILD"/
+cd "$BUILD"
+if [ -n "${SYSROOT:-}" ]; then
+  export CC="${CC} --sysroot=${SYSROOT}"
+fi
+PGO=/tmp/zlib-pgo
+rm -rf "$PGO"
+mkdir -p "$PGO"
+CHOST="${TRIPLE}" ./configure --prefix=/usr --libdir=/usr/lib64 --shared
+make -j"$(nproc)"
+make install DESTDIR="$OUT"
+```
+
+</details>
+
 <!-- /GENERATED -->
 
 
 
 openssl からは依存されません。
 
-## ターゲット
-
-`CFLAGS` の CPU 指定フラグは、builder が architecture および variant から決めます（ppc64le は `-mcpu=`、それ以外は `-march=`）。対象 Platform は `Target::all()` です。variant ごとの CPU 名は [platforms.md](../../image/platforms.md) です。
-
-## ビルドフラグ
-
-| フラグ | 設定値 | 条件 |
-|-|-|-|
-| `--prefix` | `/usr` | 常時 |
-| `--libdir` | `/usr/lib64` | 常時 |
-| `--shared` | | 常時 |
-| `flags()` | `tool_flags(target)`（既定セット。[README.md](../README.md) の既定フラグ表） | 個別追加・除外はなし |
-| `flags()` の Ldflag | openssl と同等 | 依存関係グラフの末端ライブラリであるため |
-| LTO | 適用する | builder のフラグ指定による |
-| PGO | ネイティブビルドのみ適用 | `make` の `CFLAGS` / `LDFLAGS` に `-fprofile-generate` / `-fprofile-use` を付与 |
+## PGO ワークロード
 
 PGO は生成バイナリを実行可能なネイティブビルド時のみ適用します（`Pgo::Custom`）。クロスビルドではプロファイル採取を実行できないため、`recipe(ctx)` が `ctx.cross()` で分岐して素の `make`（`CHOST=$TRIPLE` 付き `configure`）に切り替えます。ネイティブでは `-fprofile-generate` でビルド後、同梱ソース（`.c` / `.h` を 16 回連結した複数 MB 入力）を `minigzip` で `-1` / `-6` / `-9` の 3 レベルで圧縮・解凍し、`example` も実行して `make distclean` のうえ `-fprofile-use` で再ビルドします。

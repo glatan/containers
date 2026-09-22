@@ -117,26 +117,21 @@
         }
       },
       {
-        "Exec": {
+        "ConfigureScript": {
+          "args": [
+            {
+              "Lit": "--bootstrap"
+            }
+          ],
           "env": [],
-          "pipe": {
-            "stages": [
-              [
-                {
-                  "Lit": "python3"
-                },
-                {
-                  "Lit": "configure.py"
-                },
-                {
-                  "Lit": "--bootstrap"
-                }
-              ]
-            ],
-            "stderr": null,
-            "stdin": null,
-            "stdout": null
-          }
+          "program": [
+            {
+              "Lit": "python3"
+            },
+            {
+              "Lit": "configure.py"
+            }
+          ]
         }
       },
       {
@@ -309,26 +304,21 @@
         }
       },
       {
-        "Exec": {
+        "ConfigureScript": {
+          "args": [
+            {
+              "Lit": "--bootstrap"
+            }
+          ],
           "env": [],
-          "pipe": {
-            "stages": [
-              [
-                {
-                  "Lit": "python3"
-                },
-                {
-                  "Lit": "configure.py"
-                },
-                {
-                  "Lit": "--bootstrap"
-                }
-              ]
-            ],
-            "stderr": null,
-            "stdin": null,
-            "stdout": null
-          }
+          "program": [
+            {
+              "Lit": "python3"
+            },
+            {
+              "Lit": "configure.py"
+            }
+          ]
         }
       },
       {

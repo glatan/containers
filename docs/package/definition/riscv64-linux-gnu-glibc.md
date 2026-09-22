@@ -7,6 +7,11 @@
 | バージョン | 2.44 |
 | ライセンス | LGPL-2.1-or-later |
 | 分類 | パッケージ（Bootstrap） |
+| 対象 Platform | riscv64: rva20u64 rva22u64 rva23u64 |
+| シード用 pacman | python bison gawk make mold |
+| コード生成 triple | `riscv64-linux-gnu` |
+| ターゲット成果物 | 依存マウント時に depender のターゲット成果物を選択 |
+| cc ラッパ | 付与しない |
 | 定義 | [`builder/src/package/definition/riscv64_linux_gnu_glibc.rs`](../../../builder/src/package/definition/riscv64_linux_gnu_glibc.rs) |
 
 ## ソース
@@ -45,6 +50,85 @@
 | [m4](./m4.md) | 1.4.21 | seed:m4 |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
+## ビルド設定
+
+| 項目 | 値 |
+|-|-|
+| env プリリュード | `Env::None`（前処理なし） |
+| sysroot | なし |
+| ビルドディレクトリ | なし |
+
+## ツールチェーンフラグ
+
+`CFLAGS`/`LDFLAGS` は設定しません。
+
+`-march`/`-mcpu` の値は variant 依存です（上記は amd64/v4 で評価）。
+
+## ビルドフラグ
+
+対象 Platform 全件で `recipe()` を評価した configure 系呼出の引数です。条件列は引数が出現するターゲット集合です。
+
+- env: `BUILD_CC="${HOST_TRIPLE}-gcc"` `CC="${STAGE2}/bin/${TRIPLE}-gcc"` `AR="${TRIPLE}-ar"` `RANLIB="${TRIPLE}-ranlib"` `NM="${TRIPLE}-nm"` `AS="${TRIPLE}-as"` `LD="${TRIPLE}-ld"` `OBJCOPY="${TRIPLE}-objcopy"` `OBJDUMP="${TRIPLE}-objdump"` `READELF="${TRIPLE}-readelf"`
+| フラグ | 設定値 | 条件 |
+|-|-|-|
+| `--prefix` | `/` | 常時 |
+| `--host` | `${TRIPLE}` | 常時 |
+| `--build` | `${HOST_TRIPLE}` | 常時 |
+| `--libdir` | `/lib` | 常時 |
+| `--with-headers` | `${SYSROOT}/include` | 常時 |
+| `--disable-werror` |  | 常時 |
+| `--disable-nscd` |  | 常時 |
+| `--disable-profile` |  | 常時 |
+| `--enable-stack-protector` | `strong` | 常時 |
+| `--enable-bind-now` |  | 常時 |
+| `--enable-fortify-source` |  | 常時 |
+| `libc_cv_forced_unwind` | `yes` | 常時 |
+| `libc_cv_c_cleanup` | `yes` | 常時 |
+
+## ビルド手順
+
+`recipe()` が生成するスクリプトです（`builder` が runner へ渡す IR のレンダリング）。対象 Platform 間で差分はありません。
+
+<details>
+<summary>常時（クロス・Canadian）</summary>
+
+```bash
+set -euxo pipefail
+export PATH="/dep/${TRIPLE}-binutils/usr/bin:${PATH}"
+if [ -d /dep/bison/usr/share/bison ]; then
+  export BISON_PKGDATADIR=/dep/bison/usr/share/bison
+fi
+STAGE2=/dep/${TRIPLE}-gcc-stage2/usr/lib/cross/${TRIPLE}/stage2
+SYSROOT=${OUT}/usr/${TRIPLE}
+mkdir -p ${SYSROOT}/include ${BUILD}
+HDR=/dep/linux-headers/usr/${TRIPLE}/include
+[ -d ${HDR} ] || HDR=/dep/linux-headers/usr/include
+cp -a ${HDR}/. ${SYSROOT}/include/
+ln -sfn /dep/${TRIPLE}-binutils/usr/bin/${TRIPLE}-as /usr/bin/${TRIPLE}-as
+ln -sfn /dep/${TRIPLE}-binutils/usr/bin/${TRIPLE}-ld /usr/bin/${TRIPLE}-ld
+cd ${BUILD}
+unset CFLAGS
+unset CXXFLAGS
+unset LDFLAGS
+export CFLAGS="-O2 -pipe -march=${MARCH}"
+export CXXFLAGS="${CFLAGS:-}"
+unset LD
+export CPP="${STAGE2}/bin/${TRIPLE}-gcc -E"
+BUILD_CC="${HOST_TRIPLE}-gcc" CC="${STAGE2}/bin/${TRIPLE}-gcc" AR="${TRIPLE}-ar" RANLIB="${TRIPLE}-ranlib" NM="${TRIPLE}-nm" AS="${TRIPLE}-as" LD="${TRIPLE}-ld" OBJCOPY="${TRIPLE}-objcopy" OBJDUMP="${TRIPLE}-objdump" READELF="${TRIPLE}-readelf" ${SOURCE}/configure --prefix=/ --host=${TRIPLE} --build=${HOST_TRIPLE} --libdir=/lib --with-headers=${SYSROOT}/include --disable-werror --disable-nscd --disable-profile --enable-stack-protector=strong --enable-bind-now --enable-fortify-source libc_cv_forced_unwind=yes libc_cv_c_cleanup=yes
+echo "build-programs=no" >> configparms
+make -j"$(nproc)"
+make DESTDIR="$SYSROOT" install
+rm -rf ${SYSROOT}/share ${SYSROOT}/etc ${SYSROOT}/var ${SYSROOT}/bin ${SYSROOT}/sbin
+for _so in $(find ${SYSROOT} -type f -name "*.so"); do
+  if grep -q "GNU ld script" ${_so} >/dev/null; then
+    sed -i "s|//lib/|/lib/|g; s|//lib64/|/lib64/|g" ${_so}
+  fi
+done
+ln -sfn lib ${SYSROOT}/lib64
+```
+
+</details>
+
 <!-- /GENERATED -->
 
 python / bison / m4 のホスト依存は、glibc→python→openssl→glibc の循環を断つため `Via::Seed` です（シード相は distro パッケージが担保し、合成 env 上では成果物が必須）。

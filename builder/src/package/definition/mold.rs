@@ -103,12 +103,8 @@ impl Package for Mold {
         // configure_mold() シェル関数を Rust 側の呼び出しへ展開。
         let configure_mold =
             |dir: Arg, cflags: Vec<Arg>, cxxflags: Vec<Arg>, ldflags: Vec<Arg>| -> Step {
-                let mut cmd = argv(&["cmake", "-S"]);
-                cmd.push(Arg::quoted(Arg::Var("SOURCE")));
-                cmd.push(Arg::lit("-B"));
-                cmd.push(dir);
-                cmd.extend(cross_args.iter().cloned());
-                cmd.extend(argv(&[
+                let mut args = cross_args.clone();
+                args.extend(argv(&[
                     "-DCMAKE_BUILD_TYPE=Release",
                     "-DCMAKE_INSTALL_PREFIX=/usr",
                 ]));
@@ -116,33 +112,35 @@ impl Package for Mold {
                     ("-DCMAKE_C_COMPILER=", "CC"),
                     ("-DCMAKE_CXX_COMPILER=", "CXX"),
                 ] {
-                    cmd.push(Arg::Concat(vec![
+                    args.push(Arg::Concat(vec![
                         Arg::lit(flag),
                         Arg::quoted(Arg::Var(var)),
                     ]));
                 }
-                cmd.push(Arg::Concat(vec![
+                args.push(Arg::Concat(vec![
                     Arg::lit("-DCMAKE_C_FLAGS="),
                     Arg::quoted(Arg::Concat(cflags)),
                 ]));
-                cmd.push(Arg::Concat(vec![
+                args.push(Arg::Concat(vec![
                     Arg::lit("-DCMAKE_CXX_FLAGS="),
                     Arg::quoted(Arg::Concat(cxxflags)),
                 ]));
                 for flag in ["-DCMAKE_EXE_LINKER_FLAGS=", "-DCMAKE_SHARED_LINKER_FLAGS="] {
-                    cmd.push(Arg::Concat(vec![
+                    args.push(Arg::Concat(vec![
                         Arg::lit(flag),
                         Arg::quoted(Arg::Concat(ldflags.clone())),
                     ]));
                 }
-                cmd.extend(argv(&[
+                args.extend(argv(&[
                     "-DMOLD_USE_MIMALLOC=ON",
                     "-DMOLD_USE_SYSTEM_MIMALLOC=OFF",
                     "-DMOLD_USE_SYSTEM_TBB=OFF",
                 ]));
-                Step::Exec {
+                Step::Cmake {
+                    source_dir: Arg::quoted(Arg::Var("SOURCE")),
+                    build_dir: dir,
+                    args,
                     env: vec![],
-                    pipe: Pipe::cmd(cmd),
                 }
             };
         let gen_dir = || Arg::quoted(Arg::Concat(vec![Arg::Var("BUILD"), Arg::lit("/gen")]));

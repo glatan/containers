@@ -7,6 +7,8 @@
 | バージョン | 1.12.0 |
 | ライセンス | Apache-2.0 |
 | 分類 | パッケージ |
+| 対象 Platform | amd64: v1 v2 v3 v4; arm64: v8 v8.1 v8.2 v8.3 v8.4 v8.5 v8.6 v8.7 v8.8 v8.9 v9 v9.1 v9.2 v9.3 v9.4 v9.5; ppc64le: power8 power9 power10 power11; riscv64: rva20u64 rva22u64 rva23u64; s390x: z900 z990 z9-ec z10 z196 zEC12 z13 z14 z15 z16 z17 |
+| host 実行 | 依存として常に BUILD_ENV 側で実行 |
 | 定義 | [`builder/src/package/definition/meson.rs`](../../../builder/src/package/definition/meson.rs) |
 
 ## ソース
@@ -36,19 +38,50 @@
 
 なし。
 
+## ビルド設定
+
+| 項目 | 値 |
+|-|-|
+| env プリリュード | `Env::None`（前処理なし） |
+| sysroot | なし |
+| ビルドディレクトリ | なし |
+
+## ツールチェーンフラグ
+
+`CFLAGS`/`LDFLAGS` は設定しません。
+
+`-march`/`-mcpu` の値は variant 依存です（上記は amd64/v4 で評価）。
+
+## ビルド手順
+
+`recipe()` が生成するスクリプトです（`builder` が runner へ渡す IR のレンダリング）。対象 Platform 間で差分はありません。
+
+<details>
+<summary>常時（ネイティブ・クロス混在・Canadian 混在）</summary>
+
+```bash
+set -euxo pipefail
+_pyver=$(python3 -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')
+_site="${OUT}/usr/lib/${_pyver}/site-packages"
+mkdir -p "${_site}" "${OUT}/usr/bin"
+cp -a "${SOURCE}"/mesonbuild "${_site}"/
+cat > "${OUT}/usr/bin/meson" <<'EOF'
+#!/bin/sh
+exec python3 -m mesonbuild.mesonmain "$@"
+EOF
+chmod +x "${OUT}/usr/bin/meson"
+```
+
+</details>
+
 <!-- /GENERATED -->
 
 
 
 
-## ビルド設定
 
-対象 Platform と共通前処理は [host-tools.md](../host-tools.md) です。他パッケージがビルド時に実行する meson は HOST 成果物をマウントします。
+## 補足
 
-C 言語のコンパイルは行いません。
+他パッケージがビルド時に実行する meson は HOST 成果物をマウントします。C 言語のコンパイルは行いません。`$SOURCE/mesonbuild` を `$OUT/usr/lib/python{ver}/site-packages/` へコピーし、`python3 -m mesonbuild.mesonmain` を呼ぶ `usr/bin/meson` を生成します（python 成果物は `--without-ensurepip` で pip を持たないため）。
 
-| フラグ | 設定値 | 条件 |
-|-|-|-|
-| `mesonbuild` 配置 | `$SOURCE/mesonbuild` を `$OUT/usr/lib/python{ver}/site-packages/` へコピーし、`python3 -m mesonbuild.mesonmain` を呼ぶ `usr/bin/meson` を生成 | 常時（python 成果物は `--without-ensurepip` で pip を持たないため） |
-| LTO | 適用しない | C 言語のコンパイルを伴わないため |
-| PGO | 適用しない（`Pgo::None`） | C 言語のコンパイルを伴わないため |
+PGO は適用しません。C 言語のコンパイルを伴わないため適用しません（`Pgo::None`）。

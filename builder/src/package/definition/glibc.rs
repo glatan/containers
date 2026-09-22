@@ -104,8 +104,7 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
 
     let cet = ctx.triple == "x86_64-linux-gnu";
 
-    let mut configure = vec![
-        Arg::Concat(vec![Arg::Var("SOURCE"), Arg::lit("/configure")]),
+    let mut configure_args = vec![
         Arg::lit("--prefix=/"),
         Arg::Opt("host", Box::new(Arg::Var("TRIPLE"))),
         Arg::Opt("build", Box::new(Arg::Var("HOST_TRIPLE"))),
@@ -119,10 +118,10 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
         Arg::lit("--enable-fortify-source"),
     ];
     if cet {
-        configure.push(Arg::lit("--enable-cet"));
+        configure_args.push(Arg::lit("--enable-cet"));
     }
-    configure.push(Arg::lit("libc_cv_forced_unwind=yes"));
-    configure.push(Arg::lit("libc_cv_c_cleanup=yes"));
+    configure_args.push(Arg::lit("libc_cv_forced_unwind=yes"));
+    configure_args.push(Arg::lit("libc_cv_c_cleanup=yes"));
 
     let steps = Steps::new(Env::None)
         .sysroot(false)
@@ -221,7 +220,7 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
             name: "CPP",
             value: Arg::quoted(Arg::Concat(vec![stage2_gcc(), Arg::lit(" -E")])),
         })
-        .step(Step::Exec {
+        .step(Step::ConfigureScript {
             env: vec![
                 env_pair(
                     "BUILD_CC",
@@ -237,7 +236,11 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
                 env_pair("OBJDUMP", tool("objdump")),
                 env_pair("READELF", tool("readelf")),
             ],
-            pipe: Pipe::cmd(configure),
+            program: vec![Arg::Concat(vec![
+                Arg::Var("SOURCE"),
+                Arg::lit("/configure"),
+            ])],
+            args: configure_args,
         })
         .step(Step::Exec {
             env: vec![],

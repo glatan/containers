@@ -588,7 +588,52 @@
           }
         },
         {
-          "Exec": {
+          "ConfigureScript": {
+            "args": [
+              {
+                "Lit": "--prefix=/"
+              },
+              {
+                "Opt": [
+                  "host",
+                  {
+                    "Var": "TRIPLE"
+                  }
+                ]
+              },
+              {
+                "Opt": [
+                  "build",
+                  {
+                    "Var": "HOST_TRIPLE"
+                  }
+                ]
+              },
+              {
+                "Opt": [
+                  "with-headers",
+                  {
+                    "Concat": [
+                      {
+                        "Var": "SYSROOT"
+                      },
+                      {
+                        "Lit": "/include"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "Lit": "--disable-werror"
+              },
+              {
+                "Lit": "libc_cv_forced_unwind=yes"
+              },
+              {
+                "Lit": "libc_cv_c_cleanup=yes"
+              }
+            ],
             "env": [
               [
                 "BUILD_CC",
@@ -735,68 +780,18 @@
                 }
               ]
             ],
-            "pipe": {
-              "stages": [
-                [
+            "program": [
+              {
+                "Concat": [
                   {
-                    "Concat": [
-                      {
-                        "Var": "SOURCE"
-                      },
-                      {
-                        "Lit": "/configure"
-                      }
-                    ]
+                    "Var": "SOURCE"
                   },
                   {
-                    "Lit": "--prefix=/"
-                  },
-                  {
-                    "Opt": [
-                      "host",
-                      {
-                        "Var": "TRIPLE"
-                      }
-                    ]
-                  },
-                  {
-                    "Opt": [
-                      "build",
-                      {
-                        "Var": "HOST_TRIPLE"
-                      }
-                    ]
-                  },
-                  {
-                    "Opt": [
-                      "with-headers",
-                      {
-                        "Concat": [
-                          {
-                            "Var": "SYSROOT"
-                          },
-                          {
-                            "Lit": "/include"
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "Lit": "--disable-werror"
-                  },
-                  {
-                    "Lit": "libc_cv_forced_unwind=yes"
-                  },
-                  {
-                    "Lit": "libc_cv_c_cleanup=yes"
+                    "Lit": "/configure"
                   }
                 ]
-              ],
-              "stderr": null,
-              "stdin": null,
-              "stdout": null
-            }
+              }
+            ]
           }
         },
         {

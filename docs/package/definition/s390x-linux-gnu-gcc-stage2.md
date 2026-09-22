@@ -7,6 +7,9 @@
 | バージョン | 16.2.0 |
 | ライセンス | GPL-3.0-or-later WITH GCC-exception-3.1 |
 | 分類 | ビルド専用（Bootstrap） |
+| 対象 Platform | amd64: v4 |
+| シード用 pacman | make bison flex perl texinfo m4 gmp mpfr libmpc libisl zstd zlib |
+| コード生成 triple | `s390x-linux-gnu` |
 | 定義 | [`builder/src/package/definition/s390x_linux_gnu_gcc_stage2.rs`](../../../builder/src/package/definition/s390x_linux_gnu_gcc_stage2.rs) |
 
 ## ソース
@@ -48,6 +51,111 @@
 | [zstd](./zstd.md) | 1.5.7 | seed:zstd |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
+## ビルド設定
+
+| 項目 | 値 |
+|-|-|
+| env プリリュード | `Env::None`（前処理なし） |
+| sysroot | なし |
+| ビルドディレクトリ | なし |
+
+## ツールチェーンフラグ
+
+`CFLAGS`/`LDFLAGS` は設定しません。
+
+`-march`/`-mcpu` の値は variant 依存です（上記は amd64/v4 で評価）。
+
+## ビルドフラグ
+
+対象 Platform 全件で `recipe()` を評価した configure 系呼出の引数です。条件列は引数が出現するターゲット集合です。
+
+| フラグ | 設定値 | 条件 |
+|-|-|-|
+| `--build` | `${HOST_TRIPLE}` | 常時 |
+| `--host` | `${HOST_TRIPLE}` | 常時 |
+| `--target` | `${TRIPLE}` | 常時 |
+| `--program-prefix` | `${TRIPLE}-` | 常時 |
+| `--prefix` | `/usr/lib/cross/${TRIPLE}/stage2` | 常時 |
+| `--with-sysroot` | `/usr/${TRIPLE}` | 常時 |
+| `--with-build-sysroot` | `/usr/${TRIPLE}` | 常時 |
+| `--with-native-system-header-dir` | `/include` | 常時 |
+| `--with-as` | `/usr/bin/${TRIPLE}-as` | 常時 |
+| `--with-ld` | `/usr/bin/${TRIPLE}-ld` | 常時 |
+| `--infodir` | `/usr/share/info/${TRIPLE}` | 常時 |
+| `--with-system-zlib` |  | 常時 |
+| `${GCC_LIB_FLAGS}` |  | 常時 |
+| `--with-arch` | `z900` | 常時 |
+| `--disable-nls` |  | 常時 |
+| `--disable-multilib` |  | 常時 |
+| `--disable-werror` |  | 常時 |
+| `--disable-libatomic` |  | 常時 |
+| `--disable-libsanitizer` |  | 常時 |
+| `--disable-libssp` |  | 常時 |
+| `--disable-libquadmath` |  | 常時 |
+| `--disable-libgomp` |  | 常時 |
+| `--disable-libstdcxx` |  | 常時 |
+| `--disable-libvtv` |  | 常時 |
+| `--disable-bootstrap` |  | 常時 |
+| `--enable-shared` |  | 常時 |
+| `--enable-threads` | `posix` | 常時 |
+| `--enable-languages` | `c` | 常時 |
+| `--enable-lto` |  | 常時 |
+| `--enable-plugin` |  | 常時 |
+| `--enable-checking` | `release` | 常時 |
+| `--enable-default-pie` |  | 常時 |
+| `--enable-default-ssp` |  | 常時 |
+| `--with-linker-hash-style` | `gnu` | 常時 |
+| `--enable-linker-build-id` |  | 常時 |
+| `--enable-gnu-indirect-function` |  | 常時 |
+| `--enable-gnu-unique-object` |  | 常時 |
+| `--enable-initfini-array` |  | 常時 |
+
+## ビルド手順
+
+`recipe()` が生成するスクリプトです（`builder` が runner へ渡す IR のレンダリング）。対象 Platform 間で差分はありません。
+
+<details>
+<summary>常時（クロス）</summary>
+
+```bash
+set -euxo pipefail
+unset CPP
+export PATH="/dep/${TRIPLE}-binutils/usr/bin:${PATH}"
+PREFIX=/usr/lib/cross/${TRIPLE}/stage2
+SYSROOT=/usr/${TRIPLE}
+mkdir -p ${SYSROOT} ${BUILD}
+if [ -d /dep/${TRIPLE}-glibc-headers/usr/${TRIPLE} ]; then
+  cp -a /dep/${TRIPLE}-glibc-headers/usr/${TRIPLE}/. ${SYSROOT}/
+fi
+HDR=/dep/linux-headers/usr/${TRIPLE}/include
+[ -d ${HDR} ] || HDR=/dep/linux-headers/usr/include
+mkdir -p ${SYSROOT}/include
+cp -a ${HDR}/. ${SYSROOT}/include/
+ln -sfn /dep/${TRIPLE}-binutils/usr/bin/${TRIPLE}-as /usr/bin/${TRIPLE}-as
+ln -sfn /dep/${TRIPLE}-binutils/usr/bin/${TRIPLE}-ld /usr/bin/${TRIPLE}-ld
+if [ -d /dep/gmp/usr ]; then
+  GCC_LIB_FLAGS="--with-gmp=/dep/gmp/usr --with-mpfr=/dep/mpfr/usr --with-mpc=/dep/mpc/usr --with-isl=/dep/isl/usr"
+else
+  GCC_LIB_FLAGS=--with-isl
+fi
+if [ -d /dep/zlib/usr/include ]; then
+  export CFLAGS=" -I/dep/zlib/usr/include"
+  export CXXFLAGS=" -I/dep/zlib/usr/include"
+  export LDFLAGS=" -L/dep/zlib/usr/lib64 -L/dep/zlib/usr/lib"
+fi
+if [ -d /dep/zstd/usr/include ]; then
+  export CFLAGS=" -I/dep/zstd/usr/include"
+  export CXXFLAGS=" -I/dep/zstd/usr/include"
+  export LDFLAGS=" -L/dep/zstd/usr/lib64 -L/dep/zstd/usr/lib"
+fi
+cd ${BUILD}
+${SOURCE}/configure --build=${HOST_TRIPLE} --host=${HOST_TRIPLE} --target=${TRIPLE} --program-prefix=${TRIPLE}- --prefix=/usr/lib/cross/${TRIPLE}/stage2 --with-sysroot=/usr/${TRIPLE} --with-build-sysroot=/usr/${TRIPLE} --with-native-system-header-dir=/include --with-as=/usr/bin/${TRIPLE}-as --with-ld=/usr/bin/${TRIPLE}-ld --infodir=/usr/share/info/${TRIPLE} --with-system-zlib ${GCC_LIB_FLAGS} --with-arch=z900 --disable-nls --disable-multilib --disable-werror --disable-libatomic --disable-libsanitizer --disable-libssp --disable-libquadmath --disable-libgomp --disable-libstdcxx --disable-libvtv --disable-bootstrap --enable-shared --enable-threads=posix --enable-languages=c --enable-lto --enable-plugin --enable-checking=release --enable-default-pie --enable-default-ssp --with-linker-hash-style=gnu --enable-linker-build-id --enable-gnu-indirect-function --enable-gnu-unique-object --enable-initfini-array
+make -j"$(nproc)" all-gcc all-target-libgcc
+make DESTDIR="$OUT" install-gcc install-target-libgcc
+```
+
+</details>
+
 <!-- /GENERATED -->
 
 

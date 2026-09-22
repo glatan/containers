@@ -7,6 +7,9 @@
 | バージョン | 6.18.33 |
 | ライセンス | GPL-2.0-only WITH Linux-syscall-note |
 | 分類 | ビルド専用（Bootstrap・seed） |
+| 対象 Platform | amd64: v4 |
+| host 実行 | 依存として常に BUILD_ENV 側で実行 |
+| cc ラッパ | 付与しない |
 | 定義 | [`builder/src/package/definition/linux_headers.rs`](../../../builder/src/package/definition/linux_headers.rs) |
 
 ## ソース
@@ -34,6 +37,50 @@
 
 なし。
 
+## ビルド設定
+
+| 項目 | 値 |
+|-|-|
+| env プリリュード | `Env::None`（前処理なし） |
+| sysroot | なし |
+| ビルドディレクトリ | なし |
+
+## ツールチェーンフラグ
+
+`CFLAGS`/`LDFLAGS` は設定しません。
+
+`-march`/`-mcpu` の値は variant 依存です（上記は amd64/v4 で評価）。
+
+## ビルド手順
+
+`recipe()` が生成するスクリプトです（`builder` が runner へ渡す IR のレンダリング）。対象 Platform 間で差分はありません。
+
+<details>
+<summary>常時</summary>
+
+```bash
+set -euxo pipefail
+mkdir -p "$BUILD/x86_64" "$OUT/usr/x86_64-linux-gnu/include"
+make -C "$SOURCE" O="$BUILD/x86_64" ARCH="x86_64" headers
+cp -a "$BUILD/x86_64/usr/include/." "$OUT/usr/x86_64-linux-gnu/include/"
+mkdir -p "$BUILD/arm64" "$OUT/usr/aarch64-linux-gnu/include"
+make -C "$SOURCE" O="$BUILD/arm64" ARCH="arm64" headers
+cp -a "$BUILD/arm64/usr/include/." "$OUT/usr/aarch64-linux-gnu/include/"
+mkdir -p "$BUILD/riscv" "$OUT/usr/riscv64-linux-gnu/include"
+make -C "$SOURCE" O="$BUILD/riscv" ARCH="riscv" headers
+cp -a "$BUILD/riscv/usr/include/." "$OUT/usr/riscv64-linux-gnu/include/"
+mkdir -p "$BUILD/powerpc" "$OUT/usr/powerpc64le-linux-gnu/include"
+make -C "$SOURCE" O="$BUILD/powerpc" ARCH="powerpc" headers
+cp -a "$BUILD/powerpc/usr/include/." "$OUT/usr/powerpc64le-linux-gnu/include/"
+mkdir -p "$BUILD/s390" "$OUT/usr/s390x-linux-gnu/include"
+make -C "$SOURCE" O="$BUILD/s390" ARCH="s390" headers
+cp -a "$BUILD/s390/usr/include/." "$OUT/usr/s390x-linux-gnu/include/"
+mkdir -p "$OUT/usr/include"
+cp -a "$OUT/usr/${HOST_TRIPLE}/include/." "$OUT/usr/include/"
+```
+
+</details>
+
 <!-- /GENERATED -->
 
 
@@ -51,4 +98,4 @@
 | `powerpc64le-linux-gnu` | `powerpc` | `$OUT/usr/powerpc64le-linux-gnu/include` |
 | `s390x-linux-gnu` | `s390` | `$OUT/usr/s390x-linux-gnu/include` |
 
-`$OUT/usr/include` には、上表のうち `$HOST_TRIPLE` と一致するディレクトリツリーを複製して配置します。`{triple}-glibc` と openssl / zlib は `usr/${TRIPLE}/include` を優先し、無い場合にこの共通パスへフォールバックします。プレフィックス付きツールチェーンも各 `$OUT/usr/{triple}/include` を使います。`supports` は全 Platform で真ですが、成果物は HOST の 1 系統を使い回します。
+`$OUT/usr/include` には、上表のうち `$HOST_TRIPLE` と一致するディレクトリツリーを複製して配置します。`{triple}-glibc` と openssl / zlib は `usr/${TRIPLE}/include` を優先し、無い場合にこの共通パスへフォールバックします。プレフィックス付きツールチェーンも各 `$OUT/usr/{triple}/include` を使います。`supports` は BUILD_ENV（amd64 / v4）のみで、`runs_on_host` により全消費側はこの BUILD_ENV スコープの 1 系統成果物を使い回します（単一成果物が全アーキテクチャの UAPI ヘッダを内包するため）。

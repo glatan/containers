@@ -49,64 +49,46 @@
         }
       },
       {
-        "Exec": {
-          "env": [],
-          "pipe": {
-            "stages": [
-              [
-                {
-                  "Lit": "meson"
-                },
-                {
-                  "Lit": "setup"
-                },
-                {
-                  "Quoted": {
-                    "Var": "SOURCE"
+        "Meson": {
+          "args": [
+            {
+              "Lit": "--prefix=/usr"
+            },
+            {
+              "Lit": "--wrap-mode=nofallback"
+            },
+            {
+              "Lit": "-Dlibmount=disabled"
+            },
+            {
+              "Lit": "-Dnls=disabled"
+            },
+            {
+              "Lit": "-Dtests=false"
+            },
+            {
+              "Lit": "-Dsysprof=disabled"
+            },
+            {
+              "Lit": "-Dintrospection=disabled"
+            },
+            {
+              "Lit": "--cross-file"
+            },
+            {
+              "Quoted": {
+                "Concat": [
+                  {
+                    "Var": "BUILD"
+                  },
+                  {
+                    "Lit": "/meson-cross.ini"
                   }
-                },
-                {
-                  "Lit": "--prefix=/usr"
-                },
-                {
-                  "Lit": "--wrap-mode=nofallback"
-                },
-                {
-                  "Lit": "-Dlibmount=disabled"
-                },
-                {
-                  "Lit": "-Dnls=disabled"
-                },
-                {
-                  "Lit": "-Dtests=false"
-                },
-                {
-                  "Lit": "-Dsysprof=disabled"
-                },
-                {
-                  "Lit": "-Dintrospection=disabled"
-                },
-                {
-                  "Lit": "--cross-file"
-                },
-                {
-                  "Quoted": {
-                    "Concat": [
-                      {
-                        "Var": "BUILD"
-                      },
-                      {
-                        "Lit": "/meson-cross.ini"
-                      }
-                    ]
-                  }
-                }
-              ]
-            ],
-            "stderr": null,
-            "stdin": null,
-            "stdout": null
-          }
+                ]
+              }
+            }
+          ],
+          "env": []
         }
       },
       {

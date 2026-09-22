@@ -108,6 +108,144 @@ pub enum Ldflag {
     WerrorStrictAliasing,
 }
 
+impl Cflag {
+    /// 全 variant の列挙（文書生成での opt-in トークン導出用）。
+    /// 新しい variant を追加したらここにも列挙すること。
+    pub const ALL: &[Cflag] = &[
+        Cflag::O2,
+        Cflag::Pipe,
+        Cflag::March(crate::target::Target::BUILD_ENV),
+        Cflag::TreeVectorize,
+        Cflag::NoSemanticInterposition,
+        Cflag::NoPlt,
+        Cflag::TlsDialectGnu2,
+        Cflag::Hardened,
+        Cflag::NoHardened,
+        Cflag::NoWhardened,
+        Cflag::FortifySource,
+        Cflag::StackProtectorStrong,
+        Cflag::StackClashProtection,
+        Cflag::CfProtection,
+        Cflag::TrivialAutoVarInit,
+        Cflag::GlibcxxAssertions,
+        Cflag::StrictFlexArrays3,
+        Cflag::ZeroInitPaddingBits,
+        Cflag::ZeroCallUsedRegs,
+        Cflag::NoDeleteNullPointer,
+        Cflag::NoStrictOverflow,
+        Cflag::NoStrictAliasing,
+        Cflag::Exceptions,
+        Cflag::Wtrampolines,
+        Cflag::FormatSecurityError,
+        Cflag::BranchProtection,
+        Cflag::Lto,
+        Cflag::WerrorOdr,
+        Cflag::WerrorLtoTypeMismatch,
+        Cflag::WerrorStrictAliasing,
+    ];
+
+    /// 文書上の分類（既定フラグ表の種別列）。
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::O2
+            | Self::Pipe
+            | Self::March(_)
+            | Self::TreeVectorize
+            | Self::NoSemanticInterposition
+            | Self::NoPlt
+            | Self::TlsDialectGnu2
+            | Self::Lto
+            | Self::WerrorOdr
+            | Self::WerrorLtoTypeMismatch
+            | Self::WerrorStrictAliasing => "Perf",
+            _ => "Harden",
+        }
+    }
+
+    /// 表記名（`March(target)` のように payload を識別子へ戻す）。
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::O2 => "O2",
+            Self::Pipe => "Pipe",
+            Self::March(_) => "March(target)",
+            Self::TreeVectorize => "TreeVectorize",
+            Self::NoSemanticInterposition => "NoSemanticInterposition",
+            Self::NoPlt => "NoPlt",
+            Self::TlsDialectGnu2 => "TlsDialectGnu2",
+            Self::Hardened => "Hardened",
+            Self::NoHardened => "NoHardened",
+            Self::NoWhardened => "NoWhardened",
+            Self::FortifySource => "FortifySource",
+            Self::StackProtectorStrong => "StackProtectorStrong",
+            Self::StackClashProtection => "StackClashProtection",
+            Self::CfProtection => "CfProtection",
+            Self::TrivialAutoVarInit => "TrivialAutoVarInit",
+            Self::GlibcxxAssertions => "GlibcxxAssertions",
+            Self::StrictFlexArrays3 => "StrictFlexArrays3",
+            Self::ZeroInitPaddingBits => "ZeroInitPaddingBits",
+            Self::ZeroCallUsedRegs => "ZeroCallUsedRegs",
+            Self::NoDeleteNullPointer => "NoDeleteNullPointer",
+            Self::NoStrictOverflow => "NoStrictOverflow",
+            Self::NoStrictAliasing => "NoStrictAliasing",
+            Self::Exceptions => "Exceptions",
+            Self::Wtrampolines => "Wtrampolines",
+            Self::FormatSecurityError => "FormatSecurityError",
+            Self::BranchProtection => "BranchProtection",
+            Self::Lto => "Lto",
+            Self::WerrorOdr => "WerrorOdr",
+            Self::WerrorLtoTypeMismatch => "WerrorLtoTypeMismatch",
+            Self::WerrorStrictAliasing => "WerrorStrictAliasing",
+        }
+    }
+}
+
+impl Ldflag {
+    /// 全 variant の列挙（文書生成での opt-in トークン導出用）。
+    /// 新しい variant を追加したらここにも列挙すること。
+    pub const ALL: &[Ldflag] = &[
+        Ldflag::O1,
+        Ldflag::AsNeeded,
+        Ldflag::Relro,
+        Ldflag::Now,
+        Ldflag::NoExecStack,
+        Ldflag::NoCopyDtNeeded,
+        Ldflag::PackRelativeRelocs,
+        Ldflag::CetReportError,
+        Ldflag::Lto,
+        Ldflag::FuseLdMold,
+        Ldflag::NoHardened,
+        Ldflag::NoDlopen,
+        Ldflag::Zdefs,
+        Ldflag::BsymbolicFunctions,
+        Ldflag::WerrorOdr,
+        Ldflag::WerrorLtoTypeMismatch,
+        Ldflag::WerrorStrictAliasing,
+    ];
+
+    /// 表記名。
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::O1 => "O1",
+            Self::AsNeeded => "AsNeeded",
+            Self::Relro => "Relro",
+            Self::Now => "Now",
+            Self::NoExecStack => "NoExecStack",
+            Self::NoCopyDtNeeded => "NoCopyDtNeeded",
+            Self::PackRelativeRelocs => "PackRelativeRelocs",
+            Self::CetReportError => "CetReportError",
+            Self::Lto => "Lto",
+            Self::FuseLdMold => "FuseLdMold",
+            Self::NoHardened => "NoHardened",
+            Self::NoDlopen => "NoDlopen",
+            Self::Zdefs => "Zdefs",
+            Self::BsymbolicFunctions => "BsymbolicFunctions",
+            Self::WerrorOdr => "WerrorOdr",
+            Self::WerrorLtoTypeMismatch => "WerrorLtoTypeMismatch",
+            Self::WerrorStrictAliasing => "WerrorStrictAliasing",
+        }
+    }
+}
+
 /// PGO（プロファイルガイド最適化）ポリシー。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Pgo {

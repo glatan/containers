@@ -93,14 +93,11 @@ impl Package for Cmake {
             let arch = ctx.triple.split('-').next().unwrap_or(&ctx.triple);
             return Recipe::Steps(
                 Steps::new(Env::None)
-                    .step(Step::Exec {
+                    .step(Step::Cmake {
+                        source_dir: Arg::quoted(Arg::Var("SOURCE")),
+                        build_dir: Arg::quoted(Arg::Var("BUILD")),
                         env: vec![],
-                        pipe: Pipe::cmd(vec![
-                            Arg::lit("cmake"),
-                            Arg::lit("-S"),
-                            Arg::quoted(Arg::Var("SOURCE")),
-                            Arg::lit("-B"),
-                            Arg::quoted(Arg::Var("BUILD")),
+                        args: vec![
                             Arg::lit("-DCMAKE_SYSTEM_NAME=Linux"),
                             Arg::owned(format!("-DCMAKE_SYSTEM_PROCESSOR={arch}")),
                             // find_* は sysroot 配下を検索させる
@@ -118,7 +115,7 @@ impl Package for Cmake {
                                 Arg::lit("-DCMAKE_CXX_COMPILER="),
                                 Arg::quoted(Arg::Var("CXX")),
                             ]),
-                        ]),
+                        ],
                     })
                     .step(Step::Exec {
                         env: vec![],
@@ -141,13 +138,13 @@ impl Package for Cmake {
         }
         Recipe::Steps(
             Steps::new(Env::Autotools)
-                .step(Step::Exec {
+                .step(Step::ConfigureScript {
                     env: vec![],
-                    pipe: Pipe::cmd(vec![
-                        Arg::Concat(vec![
-                            Arg::quoted(Arg::Var("SOURCE")),
-                            Arg::lit("/bootstrap"),
-                        ]),
+                    program: vec![Arg::Concat(vec![
+                        Arg::quoted(Arg::Var("SOURCE")),
+                        Arg::lit("/bootstrap"),
+                    ])],
+                    args: vec![
                         Arg::lit("--prefix=/usr"),
                         Arg::nproc_jobs("--parallel="),
                         Arg::lit("--"),
@@ -157,7 +154,7 @@ impl Package for Cmake {
                         Arg::lit("-DCMAKE_SYSROOT=/tmp/sysroot"),
                         Arg::lit("-DCMAKE_USE_OPENSSL=OFF"),
                         Arg::lit("-DCMAKE_DISABLE_FIND_PACKAGE_Libidn2=ON"),
-                    ]),
+                    ],
                 })
                 .step(Step::make(&[]))
                 .step(Step::make_install(&[])),
