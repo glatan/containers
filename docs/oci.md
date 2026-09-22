@@ -16,7 +16,6 @@ builder が生成するパッケージイメージおよび Image Layout は、�
 
 ## 要件とテスト対応
 
-記載の要件はすべて OCI Image Specification v1.1.1 に準拠しています。
 
 ### Image Layout
 
@@ -102,5 +101,5 @@ zstd の圧縮レベル設定は仕様外の実装方針です。ビルドの再
 
 `platform.variant` は OPTIONAL な文字列フィールドです。仕様書の [Platform Variants](https://github.com/opencontainers/image-spec/blob/v1.1.1/image-index.md#platform-variants) 表に記載されていない値であっても、仕様上は implementation-defined（実装定義）として扱われ、Image Index や Image Config として不正ではありません。
 
-本プロジェクトが対応するプラットフォームの一覧、および仕様表に記載されている組み合わせと実装定義の組み合わせの区別については [platforms.md](../image/platforms.md) を参照してください。
+本プロジェクトが対応するプラットフォームの一覧、および仕様表に記載されている組み合わせと実装定義の組み合わせの区別については [targets.md](./targets.md) を参照してください。
 一部のコンテナランタイムは、一般的に使われる組み合わせ以外のプラットフォームを自動選択できない場合があります。そのため、利用者側でイメージを指定する際は、予期しないプラットフォームの選択を防ぐために image digest（Image Index のダイジェスト）を用いて固定します。

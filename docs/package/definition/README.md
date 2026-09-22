@@ -1,6 +1,6 @@
 # パッケージ定義
 
-`PACKAGES` に載るすべてのパッケージの仕様文書です。1 パッケージにつき 1 ファイルです。実装は [`builder/src/package/definition/`](../../../builder/src/package/definition/) です。プレフィックス付きツールチェーンのステージ順と共通ソースは [toolchain.md](../toolchain.md)、Host tools の共通前処理は [host-tools.md](../host-tools.md) です。公開対象の分類は [image/packages.md](../../image/packages.md) です。
+`PACKAGES` に載るすべてのパッケージの仕様文書です。1 パッケージにつき 1 ファイルです。実装は [`builder/src/package/definition/`](../../../builder/src/package/definition/) です。プレフィックス付きツールチェーンのステージ順と共通ソースは [toolchain.md](../toolchain.md)、Host tools の共通前処理は [host-tools.md](../host-tools.md) です。公開対象の分類は [image/published.md](../../image/published.md) です。
 
 各ファイルの先頭部（タイトル・メタデータ・ソース・依存表）と下記の索引表は生成ブロックであり、`containers-builder docs` が `PACKAGES` から再生成します（生成区間は `GENERATED` コメントマーカーで囲まれています）。差分の検査は `docs --check` です。手書きの補足（ビルド設定・フラグ・手順の根拠）はマーカーの外側に書きます。並びは `PACKAGES` 登録順です。
 

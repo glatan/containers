@@ -6,7 +6,7 @@
 
 ## カタログ
 
-[platforms.md](./platforms.md) の `Target::all()` 向けに提供します。実行時 libc は各 Platform の `{triple}-glibc` です。
+[targets.md](../targets.md) の `Target::all()` 向けに提供します。実行時 libc は各 Platform の `{triple}-glibc` です。
 
 | パッケージ名 | バージョン | ビルド設定 |
 |-|-|-|
@@ -27,7 +27,7 @@
 
 ## Host tools
 
-qemu 以外は `Target::all()` 向け成果物も出します。索引と共通前処理は [host-tools.md](../package/host-tools.md) です。各パッケージのファイルは [definition/](../package/definition/) です。
+qemu 以外は `Target::all()` 向け成果物も出します。対象パッケージの列挙と共通前処理は [host-tools.md](../package/host-tools.md) が正本です。各パッケージのファイルは [definition/](../package/definition/) です。
 
 ## amd64 / v4 のみ
 
