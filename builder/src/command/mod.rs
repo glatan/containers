@@ -8,6 +8,8 @@ use crate::target::Target;
 mod docs;
 mod env;
 mod query;
+mod registry;
+mod sync;
 mod work;
 
 #[derive(Parser)]
@@ -108,6 +110,48 @@ enum Command {
         /// 合成前に必要なパッケージをビルドします
         #[arg(long)]
         with_build: bool,
+        #[command(flatten)]
+        compression: Compression,
+    },
+    /// oci-layouts/ からレジストリ index を生成します
+    Index {
+        /// レジストリ前置詞（既定: ghcr.io または CONTAINERS_REGISTRY）
+        #[arg(long)]
+        registry: Option<String>,
+        /// 生成せず既存の生成物との差分のみ検査します
+        #[arg(long)]
+        check: bool,
+    },
+    /// パッケージイメージと index をレジストリへ push します
+    Push {
+        #[command(flatten)]
+        selection: PackageSelection,
+        /// レジストリ前置詞（既定: ghcr.io または CONTAINERS_REGISTRY）
+        #[arg(long)]
+        registry: Option<String>,
+        /// push せず対象のみ表示します
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// 設定ファイルに基づき Dockerfile の GENERATED ブロックを同期します
+    Sync {
+        /// 設定ファイル（containers.json）
+        config: std::path::PathBuf,
+        /// 差分のみ検査して書き込みません
+        #[arg(long)]
+        check: bool,
+        /// 使用する index 参照（既定: 設定の index / CONTAINERS_INDEX）
+        #[arg(long)]
+        index: Option<String>,
+        /// レジストリ前置詞（既定: ghcr.io または CONTAINERS_REGISTRY）
+        #[arg(long)]
+        registry: Option<String>,
+        /// mode=compose の合成イメージの出力先
+        #[arg(long)]
+        output: Option<std::path::PathBuf>,
+        /// 合成イメージを push せずローカル layout のみ生成します
+        #[arg(long)]
+        no_push: bool,
         #[command(flatten)]
         compression: Compression,
     },
@@ -227,6 +271,29 @@ pub fn run() -> Result<()> {
             images,
             dry_run,
         } => work::clean(&selection, &targets, images, dry_run),
+        Command::Index { registry, check } => registry::index(registry.as_deref(), check),
+        Command::Push {
+            selection,
+            registry,
+            dry_run,
+        } => registry::push(&selection, registry.as_deref(), dry_run),
+        Command::Sync {
+            config,
+            check,
+            index,
+            registry,
+            output,
+            no_push,
+            compression,
+        } => sync::sync(
+            &config,
+            check,
+            index.as_deref(),
+            registry.as_deref(),
+            output.as_deref(),
+            no_push,
+            &compression,
+        ),
         Command::RunRecipe { plan, target } => run_recipe(&plan, parse_target(&target)?),
         Command::Env(command) => env::run(command),
     }

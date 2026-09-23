@@ -3,7 +3,7 @@ use serde_json::Value;
 
 use super::documented_platforms;
 use super::sample;
-use super::support::{amd64, blob, build, index, manifests};
+use super::support::{amd64, assert_descriptor, blob, build, index, manifests, nested_index};
 
 #[test]
 fn index_is_image_index() {
@@ -15,6 +15,35 @@ fn index_is_image_index() {
         "application/vnd.oci.image.index.v1+json"
     );
     assert!(!index["manifests"].as_array().unwrap().is_empty());
+}
+
+/// containers/image の oci: トランスポート互換（buildx 出力と同型）:
+/// index.json は ref.name 注釈付きの単一 descriptor でネスト index を指す。
+#[test]
+fn index_json_points_to_nested_index() {
+    let layout = sample();
+    let index = index(&layout);
+    let entries = index["manifests"].as_array().unwrap();
+    assert_eq!(entries.len(), 1);
+    let entry = &entries[0];
+    assert_descriptor(entry);
+    assert_eq!(
+        entry["mediaType"],
+        "application/vnd.oci.image.index.v1+json"
+    );
+    assert_eq!(entry["platform"]["os"], "unknown");
+    assert_eq!(entry["platform"]["architecture"], "unknown");
+    assert_eq!(
+        entry["annotations"]["org.opencontainers.image.ref.name"],
+        "2.44"
+    );
+    let nested = nested_index(&layout);
+    assert_eq!(nested["schemaVersion"], 2);
+    assert_eq!(
+        nested["mediaType"],
+        "application/vnd.oci.image.index.v1+json"
+    );
+    assert_eq!(nested["manifests"].as_array().unwrap().len(), 2);
 }
 
 #[test]
@@ -41,7 +70,10 @@ fn implementation_defined_variant_is_accepted() {
 #[test]
 fn multi_platform_index_lists_each_manifest() {
     let layout = sample();
-    let entries = index(&layout)["manifests"].as_array().unwrap().clone();
+    let entries = nested_index(&layout)["manifests"]
+        .as_array()
+        .unwrap()
+        .clone();
     assert_eq!(entries.len(), 2);
     for entry in entries {
         let digest = entry["digest"].as_str().unwrap();

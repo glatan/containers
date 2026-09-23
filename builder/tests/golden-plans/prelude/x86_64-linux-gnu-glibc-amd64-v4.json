@@ -1134,6 +1134,72 @@
               "stages": [
                 [
                   {
+                    "Lit": "ln"
+                  },
+                  {
+                    "Lit": "-s"
+                  },
+                  {
+                    "Lit": "usr/bin"
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Var": "OUT"
+                      },
+                      {
+                        "Lit": "/bin"
+                      }
+                    ]
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "ln"
+                  },
+                  {
+                    "Lit": "-s"
+                  },
+                  {
+                    "Lit": "usr/sbin"
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Var": "OUT"
+                      },
+                      {
+                        "Lit": "/sbin"
+                      }
+                    ]
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
                     "Lit": "mkdir"
                   },
                   {

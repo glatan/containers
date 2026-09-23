@@ -5,6 +5,7 @@ pub mod image;
 pub mod oci;
 pub mod package;
 pub mod process;
+pub mod registry;
 pub mod sbom;
 pub mod target;
 pub mod util;

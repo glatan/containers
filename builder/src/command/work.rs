@@ -211,9 +211,18 @@ pub fn clean(
 ) -> Result<()> {
     let (targets, skip_unsupported) = super::resolve_targets(targets)?;
     let packages = super::selected(selection, || package::PACKAGES.to_vec())?;
-    super::run_aggregated(packages, |defined| {
+    let result = super::run_aggregated(packages, |defined| {
         clean_package(defined, &targets, skip_unsupported, images, dry_run)
-    })
+    });
+    // index artifact は全パッケージを対象とした生成物なので --all のときだけ消す。
+    // パッケージ側の集約結果を先に返し、index の失敗はそちらが成功したときだけ表面化する。
+    if images && selection.all {
+        match (result, clean_path("oci-layouts", &workspace::index_layout_dir(), dry_run)) {
+            (Err(error), _) | (Ok(()), Err(error)) => return Err(error),
+            (Ok(()), Ok(())) => return Ok(()),
+        }
+    }
+    result
 }
 
 fn clean_package(

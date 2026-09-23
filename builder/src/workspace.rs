@@ -70,6 +70,11 @@ pub fn compose_current_link(name: &str, arch: &str) -> PathBuf {
     PathBuf::from("oci-layouts").join(format!("{name}-{arch}"))
 }
 
+/// index artifact の生成先。`{name}-{version}` 規約とは別の固定パス。
+pub fn index_layout_dir() -> PathBuf {
+    PathBuf::from("oci-layouts/index")
+}
+
 pub fn next_compose_revision(name: &str, arch: &str, date: &str) -> u32 {
     let mut revision = 0;
     while compose_layout_dir(name, arch, date, revision).exists() {
