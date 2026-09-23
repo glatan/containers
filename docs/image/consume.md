@@ -96,3 +96,5 @@ FROM ${CONTAINERS_BASE}
 - mode `compose` の層展開には `tar` と `zstd` が必要です。
 - zstd 圧縮層の展開には Docker 23.0 以降、または BuildKit 経由のビルドが必要です（従来の graphdriver では解凍できない場合があります）。
 - `sync` の実行には index artifact の pull が必要なため、レジストリへのネットワーク接続が必須です。
+
+要件・制約の網羅的な一覧は [requirements.md](./requirements.md) を参照してください。

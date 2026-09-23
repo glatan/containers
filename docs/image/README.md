@@ -25,6 +25,8 @@
 ## 関連ドキュメント
 
 - [naming.md](./naming.md) — レジストリパスとタグポリシー
+- [consume.md](./consume.md) — 消費側の利用手順
+- [requirements.md](./requirements.md) — 配布・利用の要件と制約
 - [targets.md](../targets.md) — architecture / variant の一覧
 - [published.md](./published.md) — 公開するパッケージイメージの一覧
 - [../package/build-flow.md](../package/build-flow.md) — ビルドの段階とコマンド
