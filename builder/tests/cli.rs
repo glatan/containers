@@ -643,3 +643,30 @@ fn validates_real_glibc_and_openssl_artifacts() {
         .success()
         .stdout(contains("openssl 4.0.2 の検証に成功しました"));
 }
+
+#[test]
+fn index_check_requires_existing_artifact() {
+    // テストの CWD は builder/ で oci-layouts/ は存在しない。
+    bin()
+        .args(["index", "--check"])
+        .assert()
+        .failure()
+        .stderr(contains("index が生成されていません"));
+}
+
+#[test]
+fn push_dry_run_without_layouts_is_a_noop() {
+    bin()
+        .args(["push", "--all", "--dry-run"])
+        .assert()
+        .success()
+        .stdout(contains("push 対象がありません"));
+}
+
+#[test]
+fn sync_requires_existing_config() {
+    bin()
+        .args(["sync", "nonexistent-containers.json"])
+        .assert()
+        .failure();
+}

@@ -64,6 +64,21 @@ pub fn index(layout: &Layout) -> Value {
     serde_json::from_str(&fs::read_to_string(layout.output.join("index.json")).unwrap()).unwrap()
 }
 
+/// index.json が指すネストした Image Index blob。
+/// containers/image の oci: トランスポート互換のため、トップレベルの
+/// index.json は単一 descriptor（ref.name 注釈付き）のみを持つ。
+pub fn nested_index(layout: &Layout) -> Value {
+    let outer = index(layout);
+    let entries = outer["manifests"].as_array().unwrap();
+    assert_eq!(entries.len(), 1, "index.json は単一 descriptor のはずです");
+    let entry = &entries[0];
+    assert_eq!(
+        entry["mediaType"],
+        "application/vnd.oci.image.index.v1+json"
+    );
+    blob_json(layout, entry["digest"].as_str().unwrap())
+}
+
 pub fn blob(layout: &Layout, digest: &str) -> Vec<u8> {
     let hex = digest.strip_prefix("sha256:").unwrap_or(digest);
     fs::read(layout.output.join("blobs/sha256").join(hex)).unwrap()
@@ -73,9 +88,11 @@ pub fn blob_json(layout: &Layout, digest: &str) -> Value {
     serde_json::from_slice(&blob(layout, digest)).unwrap()
 }
 
+/// platform 別 manifest の (index エントリ, manifest, config) 一覧。
+/// エントリはネスト index の manifests 要素。
 pub fn manifests(layout: &Layout) -> Vec<(Value, Value, Value)> {
-    let index = index(layout);
-    index["manifests"]
+    let nested = nested_index(layout);
+    nested["manifests"]
         .as_array()
         .unwrap()
         .iter()

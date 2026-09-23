@@ -28,6 +28,8 @@ builder が生成するパッケージイメージおよび Image Layout は、�
 | `layout-blob-name` | blob ファイル名の文字集合が Descriptor のダイジェスト文法に従っていること（SHA-256 は 64 桁の小文字 16 進数） | `blob_names_match_digest_grammar` |
 | `layout-unknown-files` | レイアウト内に未知の追加ファイルが存在してもエラーとしてはならないこと | 運用上 `sbom.spdx.json` を配置する（仕様の対象外として許容） |
 
+なお `index.json` は、containers/image の `oci:` トランスポートとの互換性のため、platform 別 manifest を直接列挙せず、`org.opencontainers.image.ref.name` 注釈付きの単一 descriptor を介してネストした Image Index blob を指します（buildx 形式）。複数エントリの `index.json` は `skopeo copy oci:` で `ErrMoreThanOneImage` により拒否されるためです。
+
 ### Descriptor
 
 | ID | 要件 | 対応テスト |

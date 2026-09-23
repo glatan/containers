@@ -275,6 +275,21 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
             Arg::lit("-sfn"),
             Arg::lit("lib"),
             sysroot_dir("/lib64"),
+        ]))
+        // usrmerge: 合成 rootfs では /bin・/sbin は usr への symlink。
+        // libc は全実行時閉包に入るため、ここで持たせれば Dockerfile 側の
+        // `FROM scratch` + COPY 合成（RUN 不可）でもリンクが揃う。
+        .step(cmd(vec![
+            Arg::lit("ln"),
+            Arg::lit("-s"),
+            Arg::lit("usr/bin"),
+            Arg::Concat(vec![Arg::Var("OUT"), Arg::lit("/bin")]),
+        ]))
+        .step(cmd(vec![
+            Arg::lit("ln"),
+            Arg::lit("-s"),
+            Arg::lit("usr/sbin"),
+            Arg::Concat(vec![Arg::Var("OUT"), Arg::lit("/sbin")]),
         ]));
 
     if !cet {

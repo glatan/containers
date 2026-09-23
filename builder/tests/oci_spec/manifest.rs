@@ -69,7 +69,17 @@ fn json_special_characters_are_escaped() {
     .unwrap();
     let index: Value =
         serde_json::from_str(&fs::read_to_string(output.join("index.json")).unwrap()).unwrap();
-    let digest = index["manifests"][0]["digest"].as_str().unwrap();
+    let nested_digest = index["manifests"][0]["digest"].as_str().unwrap();
+    let nested: Value = serde_json::from_slice(
+        &fs::read(
+            output
+                .join("blobs/sha256")
+                .join(nested_digest.trim_start_matches("sha256:")),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let digest = nested["manifests"][0]["digest"].as_str().unwrap();
     let hex = digest.trim_start_matches("sha256:");
     let manifest: Value =
         serde_json::from_slice(&fs::read(output.join("blobs/sha256").join(hex)).unwrap()).unwrap();

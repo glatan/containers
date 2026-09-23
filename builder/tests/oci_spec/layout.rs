@@ -42,8 +42,9 @@ fn empty_layers_are_rejected() {
 
 #[test]
 fn rebuild_replaces_stale_blobs() {
+    // 層・config・manifest・ネスト index の 4 blob。
     let first = build_with_bytes(&[amd64("v1")], b"hello");
-    assert_eq!(walk_blobs(&blobs_dir(&first)).len(), 3);
+    assert_eq!(walk_blobs(&blobs_dir(&first)).len(), 4);
     let second = build_with_bytes(&[amd64("v1")], b"changed");
     oci::build(
         &first.output,
@@ -57,7 +58,7 @@ fn rebuild_replaces_stale_blobs() {
     .unwrap();
     assert_eq!(
         walk_blobs(&blobs_dir(&first)).len(),
-        3,
+        4,
         "再ビルド後に古い blob が残ってはならない"
     );
 }

@@ -1,19 +1,23 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::error::{Error, Result};
 use crate::oci::layer;
 use crate::oci::model::{
-    Annotations, Descriptor, Digest, ExecConfig, Image, ImageConfig, ImageIndex, ImageManifest,
-    OciLayout, PlatformObject, RootFs, ZstdLevel,
+    Descriptor, Digest, ExecConfig, Image, ImageConfig, ImageIndex, ImageManifest, OciLayout,
+    PlatformObject, RootFs, ZstdLevel,
 };
 use crate::target::Target;
 use crate::util::{self, timestamp};
 
-const MEDIA_INDEX: &str = "application/vnd.oci.image.index.v1+json";
-const MEDIA_MANIFEST: &str = "application/vnd.oci.image.manifest.v1+json";
-const MEDIA_CONFIG: &str = "application/vnd.oci.image.config.v1+json";
-const MEDIA_LAYER: &str = "application/vnd.oci.image.layer.v1.tar+zstd";
+pub(crate) const MEDIA_INDEX: &str = "application/vnd.oci.image.index.v1+json";
+pub(crate) const MEDIA_MANIFEST: &str = "application/vnd.oci.image.manifest.v1+json";
+pub(crate) const MEDIA_CONFIG: &str = "application/vnd.oci.image.config.v1+json";
+pub(crate) const MEDIA_LAYER: &str = "application/vnd.oci.image.layer.v1.tar+zstd";
+/// containers/image の `oci:` トランスポートが受理するよう、トップレベル
+/// index.json の descriptor に付ける参照名（buildx 出力と同じ規約）。
+pub(crate) const ANNOTATION_REF_NAME: &str = "org.opencontainers.image.ref.name";
 
 pub fn build(
     output: &Path,
@@ -30,6 +34,20 @@ pub fn build_with_config(
     layers: &[(Target, Vec<PathBuf>)],
     zstd_level: u8,
     config: ExecConfig,
+) -> Result<()> {
+    build_annotated(output, image, layers, zstd_level, config, &|_| BTreeMap::new())
+}
+
+/// `annotate` は manifest 単位の追加アノテーションを返す
+/// （title/version は自動付与。依存の人間可読版など platform 別に変わる
+/// 値を載せるため Target を受け取る）。
+pub fn build_annotated(
+    output: &Path,
+    image: &Image,
+    layers: &[(Target, Vec<PathBuf>)],
+    zstd_level: u8,
+    config: ExecConfig,
+    annotate: &dyn Fn(Target) -> BTreeMap<String, String>,
 ) -> Result<()> {
     let zstd_level = ZstdLevel::new(zstd_level)?;
     if layers.is_empty() {
@@ -55,13 +73,42 @@ pub fn build_with_config(
     let mut manifests = Vec::new();
     for (target, layer_dirs) in layers {
         manifests.push(build_manifest(
-            &blobs, image, *target, layer_dirs, zstd_level, &config,
+            &blobs,
+            image,
+            *target,
+            layer_dirs,
+            zstd_level,
+            &config,
+            annotate(*target),
         )?);
     }
+    // containers/image の oci: トランスポートは index.json の複数エントリを
+    // 受理しない（ErrMoreThanOneImage）ため、buildx 出力と同じく
+    // 「index.json → 単一 descriptor → ネストした Image Index blob」の形にする。
+    // push 後にタグが指す digest はネスト index blob の digest になる。
+    let nested = ImageIndex {
+        schema_version: 2,
+        media_type: MEDIA_INDEX.to_string(),
+        manifests,
+    };
+    let (nested_digest, nested_size) = store_blob(&blobs, &serde_json::to_vec(&nested)?)?;
     let index = ImageIndex {
         schema_version: 2,
-        media_type: MEDIA_INDEX,
-        manifests,
+        media_type: MEDIA_INDEX.to_string(),
+        manifests: vec![Descriptor {
+            media_type: MEDIA_INDEX.to_string(),
+            digest: nested_digest,
+            size: nested_size,
+            platform: Some(PlatformObject {
+                architecture: "unknown".to_string(),
+                os: "unknown".to_string(),
+                variant: None,
+            }),
+            annotations: Some(BTreeMap::from([(
+                ANNOTATION_REF_NAME.to_string(),
+                image.version.clone(),
+            )])),
+        }],
     };
     util::write(
         &staging.path().join("index.json"),
@@ -70,7 +117,7 @@ pub fn build_with_config(
     util::write(
         &staging.path().join("oci-layout"),
         serde_json::to_vec(&OciLayout {
-            image_layout_version: "1.0.0",
+            image_layout_version: "1.0.0".to_string(),
         })?,
     )?;
     replace_dir(output, staging)
@@ -83,6 +130,7 @@ fn build_manifest(
     layer_dirs: &[PathBuf],
     zstd_level: ZstdLevel,
     exec: &ExecConfig,
+    extra_annotations: BTreeMap<String, String>,
 ) -> Result<Descriptor> {
     let mut layers = Vec::new();
     let mut diff_ids = Vec::new();
@@ -90,49 +138,61 @@ fn build_manifest(
         let layer = layer::build(blobs, dir, zstd_level)?;
         diff_ids.push(layer.diff_id);
         layers.push(Descriptor {
-            media_type: MEDIA_LAYER,
+            media_type: MEDIA_LAYER.to_string(),
             digest: layer.blob,
             size: layer.size,
             platform: None,
+            annotations: None,
         });
     }
     let config = ImageConfig {
         created: timestamp(),
-        architecture: target.architecture(),
-        os: "linux",
-        variant: target.variant(),
+        architecture: target.architecture().to_string(),
+        os: "linux".to_string(),
+        variant: Some(target.variant().to_string()),
         config: exec.clone(),
         rootfs: RootFs {
-            type_: "layers",
+            type_: "layers".to_string(),
             diff_ids,
         },
     };
     let (config_digest, config_size) = store_blob(blobs, &serde_json::to_vec(&config)?)?;
+    let mut annotations = BTreeMap::from([
+        (
+            "org.opencontainers.image.title".to_string(),
+            image.name.clone(),
+        ),
+        (
+            "org.opencontainers.image.version".to_string(),
+            image.version.clone(),
+        ),
+    ]);
+    annotations.extend(extra_annotations);
     let manifest = ImageManifest {
         schema_version: 2,
-        media_type: MEDIA_MANIFEST,
+        media_type: MEDIA_MANIFEST.to_string(),
+        artifact_type: None,
         config: Descriptor {
-            media_type: MEDIA_CONFIG,
+            media_type: MEDIA_CONFIG.to_string(),
             digest: config_digest,
             size: config_size,
             platform: None,
+            annotations: None,
         },
         layers,
-        annotations: Annotations {
-            title: image.name.clone(),
-            version: image.version.clone(),
-        },
+        annotations,
     };
     let (digest, size) = store_blob(blobs, &serde_json::to_vec(&manifest)?)?;
     Ok(Descriptor {
-        media_type: MEDIA_MANIFEST,
+        media_type: MEDIA_MANIFEST.to_string(),
         digest,
         size,
         platform: Some(PlatformObject::from(target)),
+        annotations: None,
     })
 }
 
-fn store_blob(blobs: &Path, data: &[u8]) -> Result<(Digest, u64)> {
+pub(crate) fn store_blob(blobs: &Path, data: &[u8]) -> Result<(Digest, u64)> {
     let digest = Digest::from_hex(crate::util::sha256_hex(data));
     let path = blobs.join(digest.encoded());
     util::write(&path, data)?;
@@ -151,7 +211,7 @@ fn backup_path(output: &Path) -> PathBuf {
     }
 }
 
-fn replace_dir(output: &Path, staging: tempfile::TempDir) -> Result<()> {
+pub(crate) fn replace_dir(output: &Path, staging: tempfile::TempDir) -> Result<()> {
     let backup = backup_path(output);
     if backup.exists() {
         fs::remove_dir_all(&backup).map_err(|source| Error::io(&backup, source))?;

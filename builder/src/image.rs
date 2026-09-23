@@ -35,19 +35,45 @@ pub fn build(package: &dyn Package, zstd_level: u8) -> Result<(PathBuf, Vec<Stri
         name: package.name().to_string(),
         version: package.version().to_string(),
     };
-    oci::build(&output, &image, &layers, zstd_level)?;
+    let annotate = |target: Target| manifest_annotations(package, target);
+    oci::build_annotated(
+        &output,
+        &image,
+        &layers,
+        zstd_level,
+        ExecConfig::default(),
+        &annotate,
+    )?;
     crate::util::write(&output.join("sbom.spdx.json"), &sbom::json(package)?)?;
     Ok((output, skipped))
 }
 
+/// manifest 単位の自己記述アノテーション。依存は platform 評価済みの
+/// 人間可読版（`name version` のカンマ区切り）で、index artifact 不在時の
+/// 保険として残す。機械的な解決は index が正本。
+fn manifest_annotations(
+    package: &dyn Package,
+    target: Target,
+) -> BTreeMap<String, String> {
+    let mut annotations = BTreeMap::from([(
+        "org.opencontainers.image.licenses".to_string(),
+        package.license().to_string(),
+    )]);
+    let deps = package
+        .dependencies(target)
+        .iter()
+        .map(|dependency| format!("{} {}", dependency.name, dependency.version))
+        .collect::<Vec<_>>()
+        .join(",");
+    if !deps.is_empty() {
+        annotations.insert("dev.containers.dependencies".to_string(), deps);
+    }
+    annotations
+}
+
 pub fn compose(root: &dyn Package, target: Target, zstd_level: u8) -> Result<(PathBuf, String)> {
     let packages = compose_packages(root, target)?;
-    let mut layers = compose_layer_dirs(&packages, target)?;
-    let usrmerge =
-        tempfile::tempdir().map_err(|source| Error::io(Path::new("usrmerge"), source))?;
-    write_usrmerge(usrmerge.path())?;
-    layers.push(("usrmerge", usrmerge.path().to_path_buf()));
-    check_path_conflicts(&layers)?;
+    let layers = compose_layer_dirs(&packages, target)?;
     let date = crate::util::utc_date();
     let arch = target.architecture();
     let revision = workspace::next_compose_revision(root.name(), arch, &date);
@@ -57,14 +83,7 @@ pub fn compose(root: &dyn Package, target: Target, zstd_level: u8) -> Result<(Pa
         name: format!("{}-{arch}", root.name()),
         version: format!("{date}-{revision}"),
     };
-    let dirs: Vec<PathBuf> = layers.iter().map(|(_, dir)| dir.clone()).collect();
-    oci::build_with_config(
-        &output,
-        &image,
-        &[(target, dirs)],
-        zstd_level,
-        ExecConfig::runnable(),
-    )?;
+    assemble(&output, &image, target, layers, zstd_level)?;
     crate::util::write(&output.join("sbom.spdx.json"), &sbom::json_many(&packages)?)?;
     let current = workspace::compose_current_link(root.name(), arch);
     if current.exists() {
@@ -79,8 +98,53 @@ pub fn compose(root: &dyn Package, target: Target, zstd_level: u8) -> Result<(Pa
         .file_name()
         .ok_or_else(|| Error::message("合成 Layout のパスが不正です"))?;
     symlink(file_name, &current).map_err(|source| Error::io(&current, source))?;
-    drop(usrmerge);
     Ok((output, tag))
+}
+
+/// 層ディレクトリ列から runnable な OCI イメージを合成する。
+/// {triple}-glibc は bin/sbin の usrmerge シンボリックリンクを同梱する。
+/// 閉包に libc が無い場合（ca-certificates 単独など）だけ合成側で足す。
+/// `compose` と消費側（registry::pull の mode B）の共通経路。
+pub fn assemble(
+    output: &Path,
+    image: &oci::Image,
+    target: Target,
+    mut layers: Vec<(&str, PathBuf)>,
+    zstd_level: u8,
+) -> Result<()> {
+    let usrmerge = if has_usrmerge(&layers) {
+        None
+    } else {
+        let dir =
+            tempfile::tempdir().map_err(|source| Error::io(Path::new("usrmerge"), source))?;
+        write_usrmerge(dir.path())?;
+        layers.push(("usrmerge", dir.path().to_path_buf()));
+        Some(dir)
+    };
+    check_path_conflicts(&layers)?;
+    let dirs: Vec<PathBuf> = layers.iter().map(|(_, dir)| dir.clone()).collect();
+    let result = oci::build_with_config(
+        output,
+        image,
+        &[(target, dirs)],
+        zstd_level,
+        ExecConfig::runnable(),
+    );
+    drop(usrmerge);
+    result
+}
+
+/// いずれかの層が `bin`/`sbin` の usrmerge シンボリックリンクを持つか。
+/// 実体が無くても symlink 自体の存在で判定する（ dangling を許容）。
+/// 実ディレクトリ・通常ファイルは usrmerge 済みとはみなさない。
+fn has_usrmerge(layers: &[(&str, PathBuf)]) -> bool {
+    layers.iter().any(|(_, dir)| {
+        ["bin", "sbin"].iter().all(|name| {
+            dir.join(name)
+                .symlink_metadata()
+                .is_ok_and(|metadata| metadata.file_type().is_symlink())
+        })
+    })
 }
 
 fn write_usrmerge(dir: &Path) -> Result<()> {

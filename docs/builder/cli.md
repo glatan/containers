@@ -59,7 +59,10 @@
 | `check {package\|--all}` | 宣言された依存関係と、パッケージ成果物内 ELF バイナリの動的リンク依存を静的に照合・検証する |
 | `pack {package\|--all}` | パッケージ成果物から OCI Image Layout を生成する（SPDX SBOM の出力を含む） |
 | `compose {package} -t {arch}/{variant}` | `dependencies` を再帰的に探索し、単一の出力イメージを合成する |
-| `clean {package\|--all} (-t ...\|--all-targets)` | 成果物・ビルド作業ツリー・個別ログを削除する（`--images` で `oci-layouts/{name}-{version}` も対象） |
+| `index [--registry {prefix}] [--check]` | `oci-layouts/` からレジストリ index artifact を生成する |
+| `push {package\|--all} [--registry {prefix}] [--dry-run]` | パッケージイメージをレジストリへ push する（`--all` は index artifact も公開） |
+| `sync {config} [--check] [--index {ref}] [--registry {prefix}] [--output {dir}] [--no-push]` | 消費側の設定ファイルに基づき Dockerfile の GENERATED ブロックを同期する |
+| `clean {package\|--all} (-t ...\|--all-targets)` | 成果物・ビルド作業ツリー・個別ログを削除する（`--images` で `oci-layouts/{name}-{version}` も対象。`--all --images` で `oci-layouts/index` も対象） |
 
 `--all` を取るコマンドは全件を処理し、失敗を集約して最後に非 0 で終了します（`build` は `--keep-going` 指定時のみ失敗後も継続し、未指定時は最初の失敗で終了します）。
 
@@ -115,6 +118,32 @@
 - `--profile` / `--zstd-level`: `pack` と同じです。
 
 `build-env` は `compose` / `pack` の対象外であり、`env compose` で合成します。
+
+#### index
+
+`index` は `oci-layouts/` に存在する全パッケージの layout を走査し、パッケージ名・バージョン・platform 別 manifest digest・依存関係・ライセンスを集約した index JSON を OCI artifact として `oci-layouts/index/` に生成します。`--check` は既存の生成物との差分のみを検査します。
+
+- layout が無いパッケージは `スキップ(layout なし)` を出して収録しません。
+- 依存エントリの `platform` は `artifact_target` 解決済みの成果物 platform です（例: `{triple}-gcc` の実行時依存は常に amd64 / v4）。
+- 収録したパッケージの依存先が index に存在しない、または依存が要求する platform の manifest を持たない場合はエラーです。
+- `build-env`（`compose_root`）は `env compose` の合成 layout を自己完結イメージ（依存空）として収録します。
+
+#### push
+
+`push` は `skopeo copy --all oci:{dir} docker://{ref}` でパッケージイメージを公開します。`--all` は index artifact を `{registry}/packages/index:{yyyymmdd}-{rev}`（同日タグの最大 rev + 1）で最後に公開します。レジストリ前置詞の既定は `ghcr.io` で、`--registry` または `CONTAINERS_REGISTRY` で上書きします。
+
+- タグはイミュータブルとして扱います。既存タグが同一 digest を指す場合は冪等にスキップし、別の digest を指す場合は上書きせずエラーにします。
+- push 前に `oci-layouts/index` のエントリとローカル layout の digest を照合し、世代ズレ（pack 後に index を再生成していない等）を拒否します。
+- push 後の digest は `--digestfile` で検証し、期待値と一致しない場合はエラーにします。
+- `--dry-run` は対象参照の一覧のみを表示します。
+
+#### sync
+
+`sync` は消費側リポジトリの設定ファイル（`containers.json`）を読み、各イメージ定義に対応する Dockerfile の `# BEGIN GENERATED:containers … # END GENERATED` ブロックを index 解決済みの pin 参照で書き換えます。解決結果は設定ファイルと同じディレクトリの `containers.lock.json` に記録します。詳細は [image/consume.md](../image/consume.md) を参照してください。
+
+- `--check`: 再解決・再生成した内容と差分があれば失敗します（CI 向け。書き込みません）。
+- `--index`: 使用する index 参照。`"auto"` は `skopeo list-tags` で最新の `{yyyymmdd}-{rev}` タグに解決します。既定は設定ファイルの `index` → `CONTAINERS_INDEX` → 内蔵 pin の順です。
+- `--no-push`: mode `compose` で合成イメージを push せずローカル layout のみ生成します。
 
 #### check
 

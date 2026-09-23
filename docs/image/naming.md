@@ -15,6 +15,17 @@ ghcr.io/{org}/packages/{package}:{version}
 
 無印の `glibc` というパッケージ名はありません。タグ名に architecture や variant は含めません。対象 CPU プラットフォームの差異は、マルチプラットフォーム Image Index 内の `platform` フィールドによって表現します。
 
+## 関連アーティファクト
+
+レジストリにはパッケージイメージのほか、以下を配置します。
+
+| パス | 内容 | タグ |
+|-|-|-|
+| `ghcr.io/{org}/packages/index` | 全パッケージの name→version→platform→manifest digest→依存関係を集約した index artifact（`artifactType: application/vnd.containers.index.v1+json`） | `{yyyymmdd}-{rev}`（イミュータブル） |
+| `ghcr.io/{org}/images/{name}` | `sync` の mode `compose` が生成する合成ベースイメージ | `{yyyymmdd}-{rev}` |
+
+`index` は `packages/` 名前空間の予約名であり、同名のパッケージは定義できません。
+
 ## タグポリシー
 
 - バージョン番号を表すタグのみを公開し、`latest` やメジャーバージョン追従のようなストリームタグは作成しません。

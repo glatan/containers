@@ -30,6 +30,8 @@ for _so in $(find ${SYSROOT} -type f -name "*.so"); do
   fi
 done
 ln -sfn lib ${SYSROOT}/lib64
+ln -s usr/bin ${OUT}/bin
+ln -s usr/sbin ${OUT}/sbin
 mkdir -p ${OUT}/lib64 ${OUT}/usr/lib64
 ln -sfn /usr/x86_64-linux-gnu/lib/ld-linux-x86-64.so.2 ${OUT}/lib64/ld-linux-x86-64.so.2 || true
 if [ -f ${SYSROOT}/lib/ld-linux-x86-64.so.2 ]; then

@@ -30,3 +30,5 @@ for _so in $(find ${SYSROOT} -type f -name "*.so"); do
   fi
 done
 ln -sfn lib ${SYSROOT}/lib64
+ln -s usr/bin ${OUT}/bin
+ln -s usr/sbin ${OUT}/sbin
