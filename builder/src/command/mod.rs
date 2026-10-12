@@ -140,7 +140,7 @@ enum Command {
         /// 差分のみ検査して書き込みません
         #[arg(long)]
         check: bool,
-        /// 使用する index 参照（既定: 設定の index / CONTAINERS_INDEX）
+        /// 使用する index 参照（既定: CONTAINERS_INDEX / 設定の index）
         #[arg(long)]
         index: Option<String>,
         /// レジストリ前置詞（既定: ghcr.io または CONTAINERS_REGISTRY）
