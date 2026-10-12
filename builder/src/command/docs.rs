@@ -1,4 +1,4 @@
-//! `docs` サブコマンド。`docs/package/definition/{name}.md` の
+//! `docs` サブコマンド。`docs/dev/package/definition/{name}.md` の
 //! 生成ブロック（`<!-- GENERATED -->` マーカーで囲まれた部分）を
 //! `PACKAGES` から再生成する。マーカー外の手書き記述は保持する。
 //!
@@ -20,7 +20,7 @@ const BEGIN: &str = "<!-- GENERATED -->";
 const END: &str = "<!-- /GENERATED -->";
 
 fn definition_docs_dir() -> PathBuf {
-    PathBuf::from("docs").join("package").join("definition")
+    PathBuf::from("docs").join("dev").join("package").join("definition")
 }
 
 /// `docs` コマンド。各定義文書の生成ブロックと索引表を `PACKAGES`
@@ -40,13 +40,13 @@ pub fn docs(check: bool) -> Result<()> {
     report(&index, &existing, &updated, check, &mut stale)?;
     // 周辺文書の名前つき生成ブロック
     splice_blocks(
-        &PathBuf::from("docs/package/README.md"),
+        &PathBuf::from("docs/dev/package/README.md"),
         check,
         &mut stale,
         &[("tool-flags", tool_flags_block()), ("pgo", pgo_block())],
     )?;
     splice_blocks(
-        &PathBuf::from("docs/package/host-tools.md"),
+        &PathBuf::from("docs/dev/package/host-tools.md"),
         check,
         &mut stale,
         &[
@@ -55,7 +55,7 @@ pub fn docs(check: bool) -> Result<()> {
         ],
     )?;
     splice_blocks(
-        &PathBuf::from("docs/package/toolchain.md"),
+        &PathBuf::from("docs/dev/package/toolchain.md"),
         check,
         &mut stale,
         &[
@@ -227,7 +227,7 @@ fn package_block(defined: &'static dyn Package) -> String {
     }
     writeln!(
         out,
-        "| 定義 | [`builder/src/package/definition/{module}.rs`](../../../builder/src/package/definition/{module}.rs) |"
+        "| 定義 | [`builder/src/package/definition/{module}.rs`](../../../../builder/src/package/definition/{module}.rs) |"
     )
     .unwrap();
     writeln!(out).unwrap();
@@ -649,7 +649,7 @@ fn md(text: &str) -> String {
     text.replace('|', "\\|")
 }
 
-/// `docs/package/README.md`・`host-tools.md` のように複数の
+/// `docs/dev/package/README.md`・`host-tools.md` のように複数の
 /// 名前つき生成ブロックを持つ文書へブロックをはめ込む。
 /// マーカー（`<!-- GENERATED:{name} -->` … `<!-- /GENERATED:{name} -->`）
 /// が無いブロックは stale 扱いにする。
@@ -698,7 +698,7 @@ fn splice_named(existing: &str, name: &str, block: &str) -> Option<String> {
     Some(spliced)
 }
 
-/// `docs/package/README.md` の `GENERATED:tool-flags` ブロック。
+/// `docs/dev/package/README.md` の `GENERATED:tool-flags` ブロック。
 /// `tool_cflags` / `tool_ldflags` を `Target::all()` で評価し、
 /// トークン × 出現対象の表を生成する。
 fn tool_flags_block() -> String {
@@ -744,7 +744,7 @@ fn tool_flags_block() -> String {
     out
 }
 
-/// `docs/package/README.md` の `GENERATED:pgo` ブロック。
+/// `docs/dev/package/README.md` の `GENERATED:pgo` ブロック。
 /// `Package::pgo()` で全パッケージを分類する。
 fn pgo_block() -> String {
     use crate::package::describe;
@@ -782,7 +782,7 @@ fn pgo_block() -> String {
     out
 }
 
-/// `docs/package/host-tools.md` の `GENERATED:env` ブロック。
+/// `docs/dev/package/host-tools.md` の `GENERATED:env` ブロック。
 /// 全パッケージを `Steps::env`（`BUILD_ENV` 評価）で分類する。
 fn host_env_block() -> String {
     use crate::package::describe;
@@ -815,7 +815,7 @@ fn host_env_block() -> String {
     out
 }
 
-/// `docs/package/host-tools.md` の `GENERATED:packages` ブロック。
+/// `docs/dev/package/host-tools.md` の `GENERATED:packages` ブロック。
 /// Host tools 集合の索引表（個別設定は各定義文書の生成表を参照）。
 fn host_packages_block() -> String {
     use crate::package::describe;
@@ -844,7 +844,7 @@ fn host_packages_block() -> String {
     out
 }
 
-/// `docs/package/toolchain.md` の `GENERATED:supports` ブロック。
+/// `docs/dev/package/toolchain.md` の `GENERATED:supports` ブロック。
 /// ステージ種別ごとの `supports` 評価結果。
 fn toolchain_supports_block() -> String {
     use crate::package::describe;
@@ -866,7 +866,7 @@ fn toolchain_supports_block() -> String {
     out
 }
 
-/// `docs/package/toolchain.md` の `GENERATED:upstream` ブロック。
+/// `docs/dev/package/toolchain.md` の `GENERATED:upstream` ブロック。
 /// 上流ソース（URL・バージョン・ハッシュ）は定義の `Source` が正本。
 fn toolchain_upstream_block() -> String {
     use crate::package::describe;
@@ -894,7 +894,7 @@ fn toolchain_upstream_block() -> String {
     out
 }
 
-/// `docs/package/toolchain.md` の `GENERATED:stages` ブロック。
+/// `docs/dev/package/toolchain.md` の `GENERATED:stages` ブロック。
 fn toolchain_stages_block() -> String {
     use crate::package::describe;
     let mut out = String::new();
@@ -912,7 +912,7 @@ fn toolchain_stages_block() -> String {
     out
 }
 
-/// `docs/package/toolchain.md` の `GENERATED:stage-args` /
+/// `docs/dev/package/toolchain.md` の `GENERATED:stage-args` /
 /// `GENERATED:gcc-args` ブロック。`{triple}-{suffix}` の主 configure
 /// 呼出引数を triple 集合でグルーピングして出す（各パッケージ文書の
 /// 生成 `## ビルドフラグ` の統合ビュー）。

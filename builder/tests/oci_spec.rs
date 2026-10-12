@@ -20,7 +20,7 @@ fn sample() -> Layout {
 }
 
 fn documented_platforms() -> Vec<(String, String)> {
-    let md = include_str!("../../docs/targets.md");
+    let md = include_str!("../../docs/user/targets.md");
     let mut rows = Vec::new();
     for line in md.lines() {
         let columns = line

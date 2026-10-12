@@ -32,7 +32,7 @@ use crate::target::Target;
 pub struct Config {
     #[serde(rename = "schemaVersion")]
     pub schema_version: u32,
-    /// index 参照。`--index` / `CONTAINERS_INDEX` / 内蔵 pin より後。
+    /// index 参照。`--index` / `CONTAINERS_INDEX` より後、内蔵 pin より前。
     /// `"auto"` で `list-tags` による最新タグ解決。
     #[serde(default)]
     pub index: Option<String>,

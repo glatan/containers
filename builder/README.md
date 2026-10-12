@@ -27,11 +27,11 @@ rustup target add x86_64-unknown-linux-musl
 cargo build --target x86_64-unknown-linux-musl
 ```
 
-musl 静的ビルドが無い場合はホストバイナリへフォールバックしますが、コンテナ側 glibc がホストより古いと runner が起動しません（詳細は [docs/builder/architecture.md](../docs/builder/architecture.md)）。
+musl 静的ビルドが無い場合はホストバイナリへフォールバックしますが、コンテナ側 glibc がホストより古いと runner が起動しません（詳細は [docs/dev/builder/architecture.md](../docs/dev/builder/architecture.md)）。
 
 ## ドキュメント
 
-- コマンド仕様: [docs/builder/cli.md](../docs/builder/cli.md)
-- 内部構成: [docs/builder/architecture.md](../docs/builder/architecture.md)
-- OCI 仕様準拠: [docs/oci.md](../docs/oci.md)
-- 用語の定義: [docs/README.md](../docs/README.md)
+- コマンド仕様: [docs/dev/builder/cli.md](../docs/dev/builder/cli.md)
+- 内部構成: [docs/dev/builder/architecture.md](../docs/dev/builder/architecture.md)
+- OCI 仕様準拠: [docs/dev/oci.md](../docs/dev/oci.md)
+- 用語の定義: [docs/dev/README.md](../docs/dev/README.md)
