@@ -79,7 +79,7 @@ enum Command {
         #[arg(long)]
         keep_going: bool,
         /// 依存をビルドせず対象パッケージのみビルドします
-        #[arg(long, conflicts_with_all = ["all", "keep_going"])]
+        #[arg(long, conflicts_with_all = ["all_packages", "keep_going"])]
         no_deps: bool,
         /// ビルドせず計画のみ表示します
         #[arg(long)]
@@ -94,11 +94,42 @@ enum Command {
     Pack {
         #[command(flatten)]
         selection: PackageSelection,
-        /// 封入前にパッケージをビルドします
+        /// 封入するターゲット <arch>/<variant>（複数回可。既定: 成果物が
+        /// 揃う全 platform。既存 layout の対象外 platform は保持します）
+        #[arg(short = 't', long, value_name = "ARCH/VARIANT")]
+        targets: Vec<String>,
+        /// 既存レイアウトを全再生成します（既定は他 platform を保持する
+        /// 増分 merge。全再生成には対象 platform 全ての成果物が必要です）
+        #[arg(long, conflicts_with_all = ["targets", "remove_platform"])]
+        replace: bool,
+        /// レイアウトから platform を除去します（複数回可）
+        #[arg(long, value_name = "ARCH/VARIANT")]
+        remove_platform: Vec<String>,
+        /// 封入前にパッケージをビルドします（-t 指定時はそのターゲットのみ）
         #[arg(long)]
         with_build: bool,
+        /// レイアウト生成の並列度（既定: min(コア数, 12)）
+        #[arg(long, value_name = "N")]
+        jobs: Option<usize>,
         #[command(flatten)]
         compression: Compression,
+    },
+    /// レイアウト（またはレジストリ）から成果物を packages/artifacts/ に復元します
+    Restore {
+        #[command(flatten)]
+        selection: PackageSelection,
+        /// 復元するターゲット <arch>/<variant>（複数回可。既定: layout 内の全 platform）
+        #[arg(short = 't', long, value_name = "ARCH/VARIANT")]
+        targets: Vec<String>,
+        /// ローカルに layout が無い場合にレジストリから復元します
+        #[arg(long)]
+        from_registry: bool,
+        /// レジストリ前置詞（送信先を決める操作では必須。CONTAINERS_REGISTRY でも指定可。既定値はありません）
+        #[arg(long)]
+        registry: Option<String>,
+        /// 既存の成果物を上書きします
+        #[arg(long)]
+        force: bool,
     },
     /// パッケージを合成して rootfs イメージを作成します
     Compose {
@@ -115,23 +146,56 @@ enum Command {
     },
     /// oci-layouts/ からレジストリ index を生成します
     Index {
-        /// レジストリ前置詞（既定: ghcr.io または CONTAINERS_REGISTRY）
+        /// レジストリ前置詞（送信先を決める操作では必須。CONTAINERS_REGISTRY でも指定可。既定値はありません）
         #[arg(long)]
         registry: Option<String>,
         /// 生成せず既存の生成物との差分のみ検査します
         #[arg(long)]
         check: bool,
+        /// 個別パッケージの失敗を集約して全件報告します
+        #[arg(long)]
+        all_issues: bool,
+    },
+    /// OCI layout の blob 実在と digest を検査します
+    Verify {
+        #[command(flatten)]
+        selection: PackageSelection,
+    },
+    /// パッケージごとの ローカル/index/レジストリ 状態を表示します
+    Status {
+        #[command(flatten)]
+        selection: PackageSelection,
+        /// レジストリ前置詞（送信先を決める操作では必須。CONTAINERS_REGISTRY でも指定可。既定値はありません）
+        #[arg(long)]
+        registry: Option<String>,
+        /// リモート問い合わせを省略しローカル状態のみ表示します
+        #[arg(long)]
+        local: bool,
     },
     /// パッケージイメージと index をレジストリへ push します
     Push {
         #[command(flatten)]
         selection: PackageSelection,
-        /// レジストリ前置詞（既定: ghcr.io または CONTAINERS_REGISTRY）
+        /// レジストリ前置詞（送信先を決める操作では必須。CONTAINERS_REGISTRY でも指定可。既定値はありません）
         #[arg(long)]
         registry: Option<String>,
         /// push せず対象のみ表示します
         #[arg(long)]
         dry_run: bool,
+        /// additive 判定をスキップして既存タグを強制置換します
+        /// （platform 削除や内容変更の公開用。既定は拒否）
+        #[arg(long)]
+        force_replace: bool,
+        /// 指定 platform のみ内容置換を許容します（複数回可。
+        /// 正当なリビルドで変わった platform の公開用。
+        /// 他 platform は通常どおり additive 判定で検証します）
+        #[arg(long, value_name = "ARCH/VARIANT", conflicts_with = "force_replace")]
+        replace_platform: Vec<String>,
+        /// push 成功後に index artifact も公開します
+        /// （--all-packages では常に公開。単一パッケージ push 後に
+        /// index に記録された digest と乖離が生じるのを防ぐために使います）
+        #[arg(long)]
+        with_index: bool,
     },
     /// 設定ファイルに基づき Dockerfile の GENERATED ブロックを同期します
     Sync {
@@ -143,7 +207,7 @@ enum Command {
         /// 使用する index 参照（既定: CONTAINERS_INDEX / 設定の index）
         #[arg(long)]
         index: Option<String>,
-        /// レジストリ前置詞（既定: ghcr.io または CONTAINERS_REGISTRY）
+        /// レジストリ前置詞（送信先を決める操作では必須。CONTAINERS_REGISTRY でも指定可。既定値はありません）
         #[arg(long)]
         registry: Option<String>,
         /// mode=compose の合成イメージの出力先
@@ -155,16 +219,22 @@ enum Command {
         #[command(flatten)]
         compression: Compression,
     },
-    /// 成果物・作業ツリー・ログを削除します
+    /// oci-layouts/ と packages/artifacts/ の管理外残骸を列挙します
+    /// （既知の命名規約に合わないエントリ。削除はしません）
+    Orphans,
+    /// 指定したディレクトリを削除します。削除フラグが一つ以上必要です
     Clean {
         #[command(flatten)]
         selection: PackageSelection,
+        /// ターゲット <arch>/<variant>（複数回可）。--packages-build、--packages-artifacts、--packages-logs のとき必須です
+        #[arg(short = 't', long = "target", value_name = "ARCH/VARIANT")]
+        targets: Vec<String>,
+        /// --packages-build、--packages-artifacts、--packages-logs の対象を、パッケージがサポートする全ターゲットにします
+        #[arg(long, conflicts_with = "targets")]
+        all_targets: bool,
         #[command(flatten)]
-        targets: TargetSelection,
-        /// OCI Image Layout（oci-layouts/）も削除対象にします
-        #[arg(long)]
-        images: bool,
-        /// 削除せず対象のみ表示します
+        paths: CleanPaths,
+        /// 削除せず、消えるパスを表示します
         #[arg(long)]
         dry_run: bool,
     },
@@ -182,15 +252,43 @@ enum Command {
     Env(env::EnvCommand),
 }
 
-/// `<name | --all>` のパッケージ選択。
+/// `<name | --all-packages>` のパッケージ選択。
 #[derive(Args)]
 #[group(required = true, multiple = false)]
 struct PackageSelection {
     /// パッケージ名
     package: Option<String>,
-    /// 全パッケージを対象にします
+    /// 全パッケージを対象にします。削除するディレクトリは増やしません
     #[arg(long)]
-    all: bool,
+    all_packages: bool,
+}
+
+/// `clean` が削除するディレクトリ。一つ以上が必須で、併用は和集合です。
+#[derive(Args)]
+#[group(required = true, multiple = true)]
+struct CleanPaths {
+    /// `packages/build/<arch>-<variant>/<name>-<version>` と
+    /// `packages/build/<arch>-<variant>/.gen/<name>-<version>`、
+    /// および成果物ディレクトリの兄弟 `.tmp` と `.restore-bak` を削除します。
+    /// 公開済みの成果物ディレクトリは削除しません
+    #[arg(long)]
+    packages_build: bool,
+    /// `packages/artifacts/<name>-<version>-<arch>-<variant>` を削除します。
+    /// `.locks`、`.tmp`、`.restore-bak` は削除しません
+    #[arg(long)]
+    packages_artifacts: bool,
+    /// `packages/logs/<name>-<version>-<arch>-<variant>.log` を削除します。
+    /// `packages/logs/bootstrap.log` は削除しません
+    #[arg(long)]
+    packages_logs: bool,
+    /// `oci-layouts/<name>-<version>` を削除します。
+    /// `oci-layouts/index`、compose layout、`oci-layouts/.locks`、`oci-layouts/.tmp` は削除しません。
+    /// `-t` では絞りません
+    #[arg(long)]
+    oci_layouts: bool,
+    /// `oci-layouts/index` を削除します。`--all-packages` と同時のときだけ指定できます
+    #[arg(long, requires = "all_packages")]
+    oci_layouts_index: bool,
 }
 
 /// `-t <arch>/<variant>`（複数回可）または `--all-targets` のターゲット選択。
@@ -225,10 +323,17 @@ enum Profile {
 }
 
 fn resolve_zstd_level(compression: &Compression) -> Result<u8> {
+    resolve_zstd_level_or(compression, ZstdLevel::DEFAULT)
+}
+
+/// `compression` の指定を解決し、未指定時は `default` に倒す。
+/// pack は配布用 layout を作るため release を既定にし、compose/sync は
+/// 従来通り dev（level 3）を既定にする。
+fn resolve_zstd_level_or(compression: &Compression, default: ZstdLevel) -> Result<u8> {
     let level = match (compression.profile, compression.zstd_level) {
         (Some(Profile::Release), _) => ZstdLevel::PUBLISH,
         (_, Some(level)) => ZstdLevel::new(level)?,
-        _ => ZstdLevel::DEFAULT,
+        _ => default,
     };
     Ok(level.get())
 }
@@ -256,9 +361,34 @@ pub fn run() -> Result<()> {
         Command::Check { selection } => work::check(&selection),
         Command::Pack {
             selection,
+            targets,
+            replace,
+            remove_platform,
             with_build,
+            jobs,
             compression,
-        } => work::pack(&selection, with_build, &compression),
+        } => work::pack(
+            &selection,
+            &parse_targets(&targets)?,
+            &parse_targets(&remove_platform)?,
+            replace,
+            with_build,
+            &compression,
+            jobs,
+        ),
+        Command::Restore {
+            selection,
+            targets,
+            from_registry,
+            registry,
+            force,
+        } => work::restore(
+            &selection,
+            &parse_targets(&targets)?,
+            from_registry,
+            registry.as_deref(),
+            force,
+        ),
         Command::Compose {
             package,
             target,
@@ -268,15 +398,36 @@ pub fn run() -> Result<()> {
         Command::Clean {
             selection,
             targets,
-            images,
+            all_targets,
+            paths,
             dry_run,
-        } => work::clean(&selection, &targets, images, dry_run),
-        Command::Index { registry, check } => registry::index(registry.as_deref(), check),
+        } => work::clean(&selection, &targets, all_targets, &paths, dry_run),
+        Command::Index {
+            registry,
+            check,
+            all_issues,
+        } => registry::index(registry.as_deref(), check, all_issues),
+        Command::Verify { selection } => registry::verify(&selection),
+        Command::Status {
+            selection,
+            registry,
+            local,
+        } => registry::status(&selection, registry.as_deref(), local),
         Command::Push {
             selection,
             registry,
             dry_run,
-        } => registry::push(&selection, registry.as_deref(), dry_run),
+            force_replace,
+            replace_platform,
+            with_index,
+        } => registry::push(
+            &selection,
+            registry.as_deref(),
+            dry_run,
+            force_replace,
+            &parse_targets(&replace_platform)?,
+            with_index,
+        ),
         Command::Sync {
             config,
             check,
@@ -294,6 +445,7 @@ pub fn run() -> Result<()> {
             no_push,
             &compression,
         ),
+        Command::Orphans => work::orphans(),
         Command::RunRecipe { plan, target } => run_recipe(&plan, parse_target(&target)?),
         Command::Env(command) => env::run(command),
     }
@@ -338,6 +490,19 @@ fn parse_target(text: &str) -> Result<Target> {
     })
 }
 
+/// `-t` の繰り返し指定を Target 列に解決する（重複は除去）。必須性は
+/// 持たせないため pack/restore の optional な絞り込みに使う。
+fn parse_targets(texts: &[String]) -> Result<Vec<Target>> {
+    let mut targets = Vec::new();
+    for text in texts {
+        let target = parse_target(text)?;
+        if !targets.contains(&target) {
+            targets.push(target);
+        }
+    }
+    Ok(targets)
+}
+
 /// `(Vec<Target>, skip_unsupported)` に解決する。重複した `-t` は除去する。
 fn resolve_targets(selection: &TargetSelection) -> Result<(Vec<Target>, bool)> {
     if selection.all_targets {
@@ -353,7 +518,7 @@ fn resolve_targets(selection: &TargetSelection) -> Result<(Vec<Target>, bool)> {
     Ok((targets, false))
 }
 
-/// 選択されたパッケージを返す。`--all` 時の集合はコマンドごとに `all` で定義する。
+/// 選択されたパッケージを返す。`--all-packages` 時の集合はコマンドごとに `all` で定義する。
 fn selected(
     selection: &PackageSelection,
     all: impl FnOnce() -> Vec<&'static dyn Package>,
@@ -364,7 +529,7 @@ fn selected(
     }
 }
 
-/// 全件を処理し、失敗を集約して最後に非 0 で終了する `--all` 系ポリシー。
+/// 全件を処理し、失敗を集約して最後に非 0 で終了する `--all-packages` 系ポリシー。
 fn run_aggregated(
     packages: Vec<&'static dyn Package>,
     mut run: impl FnMut(&'static dyn Package) -> Result<()>,

@@ -12,8 +12,8 @@ use std::process::Command;
 
 use crate::error::{Error, Result};
 use crate::oci::{self, Digest};
-use crate::registry::{cache, layout_io, skopeo};
 use crate::registry::resolve::Resolved;
+use crate::registry::{cache, layout_io, skopeo};
 use crate::target::Target;
 use crate::util;
 
@@ -74,7 +74,8 @@ pub fn ensure_tree(resolved: &Resolved) -> Result<PathBuf> {
 }
 
 /// 層 blob（`tar+zstd`）を `tree` に展開する。
-fn extract_layer(layout: &Path, digest: &Digest, tree: &Path) -> Result<()> {
+/// `layer.rs` の `tar --sort=name | zstd` の逆操作。`restore` でも使う。
+pub(crate) fn extract_layer(layout: &Path, digest: &Digest, tree: &Path) -> Result<()> {
     let blob = layout.join("blobs/sha256").join(digest.encoded());
     let status = Command::new("tar")
         .args(["--zstd", "-xf"])
@@ -120,13 +121,15 @@ pub fn compose_base(
     let image = oci::Image {
         name: format!("{name}-base"),
         version: tag.to_string(),
+        description: Some(format!("containers composed base image: {name}-base {tag}")),
     };
-    crate::image::assemble(&out, &image, target, layers, zstd_level)?;
+    crate::image::assemble(&out, &image, target, layers, zstd_level, Vec::new())?;
     if !push {
         return Ok((out.clone(), format!("oci:{}", out.display())));
     }
     // イミュータブルタグ運用: 既存タグが別 digest を指す場合は上書きしない。
-    // タグが指すのはネスト index blob だが、Dockerfile の pin は
+    // タグが指すのはトップ index（単一 platform の flat layout では
+    // manifest 直参照）だが、Dockerfile の pin は
     // 子 manifest の digest にする。index digest で pin すると
     // containerd/platforms の platform マッチングを通り、amd64/v4 等の
     // variant 付き単一 manifest が既定 platform で解決不能になるため。

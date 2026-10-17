@@ -21,7 +21,8 @@
 | [x86_64-linux-gnu-glibc](./x86_64-linux-gnu-glibc.md) | 2.44 | — |
 | [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | — |
 | [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | — |
-| [mold](./mold.md) | 2.42.1 | — |
+| [mold](./mold.md) | 3.0.0 | — |
+| [rust](./rust.md) | 1.99.0 | — |
 | [bash](./bash.md) | 5.3 | — |
 | [coreutils](./coreutils.md) | 9.12 | — |
 | [make](./make.md) | 4.4.1 | — |
@@ -30,7 +31,7 @@
 | [gawk](./gawk.md) | 5.4.1 | — |
 | [findutils](./findutils.md) | 4.11.0 | — |
 | [tar](./tar.md) | 1.35 | — |
-| [gzip](./gzip.md) | 1.14 | — |
+| [gzip](./gzip.md) | 1.15 | — |
 | [xz](./xz.md) | 5.8.4 | — |
 | [diffutils](./diffutils.md) | 3.12 | — |
 | [patch](./patch.md) | 2.8 | — |

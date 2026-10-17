@@ -45,7 +45,7 @@ pub const RUNTIME_LIBS: [Dependency; 6] = [
     dep("gmp", "6.3.0"),
     dep("mpfr", "4.2.2"),
     dep("mpc", "1.4.1"),
-    dep("isl", "0.26"),
+    dep("isl", "0.28"),
     dep("zlib", "1.3.2"),
     dep("zstd", "1.5.7"),
 ];
@@ -75,13 +75,17 @@ pub fn lib_flag_steps() -> Vec<Step> {
         }],
     }];
     for dep in ["zlib", "zstd"] {
+        // 環境由来のフラグは保持して末尾に足す。canadian wrap が
+        // ${CFLAGS:-} 等をラッパへ焼き込む際、プリリュード注入の
+        // --sysroot/-B/-idirafter が失われると target 側リンクで
+        // crt*.o 等を解決できない。
         steps.push(Step::If {
             cond: Cond::DirExists(dep_inc(dep)),
             then: vec![
                 Step::Export {
                     name: "CFLAGS",
                     value: Arg::quoted(Arg::Concat(vec![
-                        Arg::lit(" -I/dep/"),
+                        Arg::lit("${CFLAGS:-} -I/dep/"),
                         Arg::lit(dep),
                         Arg::lit("/usr/include"),
                     ])),
@@ -89,7 +93,7 @@ pub fn lib_flag_steps() -> Vec<Step> {
                 Step::Export {
                     name: "CXXFLAGS",
                     value: Arg::quoted(Arg::Concat(vec![
-                        Arg::lit(" -I/dep/"),
+                        Arg::lit("${CXXFLAGS:-} -I/dep/"),
                         Arg::lit(dep),
                         Arg::lit("/usr/include"),
                     ])),
@@ -97,7 +101,7 @@ pub fn lib_flag_steps() -> Vec<Step> {
                 Step::Export {
                     name: "LDFLAGS",
                     value: Arg::quoted(Arg::Concat(vec![
-                        Arg::lit(" -L/dep/"),
+                        Arg::lit("${LDFLAGS:-} -L/dep/"),
                         Arg::lit(dep),
                         Arg::lit("/usr/lib64 -L/dep/"),
                         Arg::lit(dep),
@@ -115,7 +119,7 @@ pub fn lib_flag_steps() -> Vec<Step> {
 const HOST_TOOLS: [Dependency; 5] = [
     dep("bison", "3.8.2"),
     dep("flex", "2.6.4"),
-    dep("perl", "5.42.3"),
+    dep("perl", "5.44.0"),
     dep("texinfo", "7.3"),
     dep("m4", "1.4.21"),
 ];
@@ -353,6 +357,22 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
                     rewrite("_cflags"),
                     rewrite("_cxxflags"),
                     rewrite("_ldflags"),
+                    // libcc1 の export_sym_check は host==target 時に
+                    // $gcc_cv_objdump を参照するが、これは gcc dir の
+                    // configure が設定する値で兄弟 subdir の configure
+                    // には届かない。空のままだと ` -T` が裸コマンド化
+                    // して plugin 検出が失敗する。gcc dir の検出結果と
+                    // 同じ cc binutils tooldir を env で供給する。
+                    Step::Export {
+                        name: "gcc_cv_objdump",
+                        value: Arg::quoted(concat(vec![
+                            Arg::lit("/dep/"),
+                            Arg::Var("PACKAGE_HOST"),
+                            Arg::lit("-binutils/usr/"),
+                            Arg::Var("PACKAGE_HOST"),
+                            Arg::lit("/bin/objdump"),
+                        ])),
+                    },
                 ],
                 else_: vec![],
             },
@@ -448,11 +468,22 @@ pub fn recipe(ctx: &BuildContext) -> Steps {
     let configure = |env: Vec<(&'static str, Arg)>| -> Step {
         let mut args = vec![
             Arg::Opt("build", Box::new(Arg::Var("HOST_TRIPLE"))),
-            // ツールはビルド機で動くクロスツール。--host=HOST_TRIPLE が正しい
-            //（=PACKAGE_HOST は host==target になる誤り）。prefixed 名は
-            // host!=target 時の自動付与に頼らず --program-prefix で明示する
+            // amd64 向けはビルド機で動くクロスツール（--host=$HOST_TRIPLE）。
+            // 非 amd64 向けは成果物ターゲットの arch で動くネイティブ
+            // コンパイラを canadian cross で組むため --host=$PACKAGE_HOST
+            // が正しい（canadian_steps が CC を PACKAGE_HOST 向け
+            // クロスコンパイラに差し替えるのと対応。HOST_TRIPLE のままでは
+            // configure が生成バイナリを実行しようとして失敗する）。
+            // prefixed 名は --program-prefix で明示する
             //（x86_64 は HOST_TRIPLE==TRIPLE で自動付与が効かない）。
-            Arg::Opt("host", Box::new(Arg::Var("HOST_TRIPLE"))),
+            Arg::Opt(
+                "host",
+                Box::new(if ctx.canadian() {
+                    Arg::Var("PACKAGE_HOST")
+                } else {
+                    Arg::Var("HOST_TRIPLE")
+                }),
+            ),
             Arg::Opt("target", Box::new(Arg::Var("TRIPLE"))),
             Arg::Opt(
                 "program-prefix",

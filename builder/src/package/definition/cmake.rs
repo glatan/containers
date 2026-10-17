@@ -11,7 +11,7 @@ impl Package for Cmake {
     }
 
     fn version(&self) -> &'static str {
-        "4.4.3"
+        "4.4.4"
     }
 
     fn license(&self) -> &'static str {
@@ -25,10 +25,10 @@ impl Package for Cmake {
 
     fn source(&self) -> Source {
         Source {
-            url: "https://github.com/Kitware/CMake/releases/download/v4.4.3/cmake-4.4.3.tar.gz",
-            sha3_512: "170e8771bffc5d56d42c1702320e5c4dafbe90982cc9bcb8d3e21a16be2bf86b76ca35cef468a0863cb65790b5f6bc4a0e5b30ea8b34a39e56f31fab78ac8162",
-            blake3: "347efe575e9f1c7daf9d5888de1c1f1070570d1c1e6beb62522c389b0a408a95be2fca9aaae2d2261a78e68b6777b5fbf08e6a3cce47d64bf12129a13d238f51",
-            subdir: "cmake-4.4.3",
+            url: "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4.tar.gz",
+            sha3_512: "b7174122a3702699030a6c2712c6b3b4730c5e8ec949837dcf1a6bf7d83a96075490ea6fcffb4faacc8216b6706f53f19cd9a84609482b677080f737f5513cfe",
+            blake3: "7552b5d0fe236d45d321d7a17d44d1a2d89a68ad11759fa63be905b74f0a33991634803482fb0074c11aabae172c88971326a21e20d2902f2e3dc85a9cf581c4",
+            subdir: "cmake-4.4.4",
         }
     }
 
@@ -83,7 +83,7 @@ impl Package for Cmake {
     fn host_dependencies(&self, target: Target) -> Vec<Dependency> {
         let mut deps = crate::package::cc_deps(self, target);
         if target.gnu_triple() != Target::HOST_GNU_TRIPLE {
-            deps.push(dep("cmake", "4.4.3").via(Via::Seed("cmake")));
+            deps.push(dep("cmake", "4.4.4").via(Via::Seed("cmake")));
         }
         deps
     }

@@ -10,7 +10,7 @@ ghcr.io/{org}/packages/{package}:{version}
 
 パス内の `packages` は、パッケージイメージを配置するための名前空間を表します。`{package}` は `PACKAGES` のパッケージ名です。
 
-- openssl: `ghcr.io/{org}/packages/openssl:4.0.2`
+- openssl: `ghcr.io/{org}/packages/openssl:4.0.3`
 - x86_64 の実行時 libc: `ghcr.io/{org}/packages/x86_64-linux-gnu-glibc:2.44`
 
 無印の `glibc` というパッケージ名はありません。タグ名に architecture や variant は含めません。対象 CPU プラットフォームの差異は、マルチプラットフォーム Image Index 内の `platform` フィールドによって表現します。

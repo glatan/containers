@@ -11,7 +11,7 @@
 | パッケージ名 | バージョン | ビルド設定 |
 |-|-|-|
 | ca-certificates | 2026.07.22 | [ca-certificates.md](../dev/package/definition/ca-certificates.md) |
-| openssl | 4.0.2 | [openssl.md](../dev/package/definition/openssl.md) |
+| openssl | 4.0.3 | [openssl.md](../dev/package/definition/openssl.md) |
 | zlib | 1.3.2 | [zlib.md](../dev/package/definition/zlib.md) |
 | zlib-ng | 2.3.3 | [zlib-ng.md](../dev/package/definition/zlib-ng.md) |
 
@@ -33,5 +33,5 @@ qemu 以外は `Target::all()` 向け成果物も出します。対象パッケ�
 
 | パッケージ名 | バージョン | ビルド設定 |
 |-|-|-|
-| qemu | 11.1.1 | [qemu.md](../dev/package/definition/qemu.md) |
+| qemu | 11.1.2 | [qemu.md](../dev/package/definition/qemu.md) |
 | build-env | 1 | [build-env.md](../dev/package/definition/build-env.md) |

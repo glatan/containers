@@ -61,6 +61,7 @@ mod riscv64_linux_gnu_gcc_stage1;
 mod riscv64_linux_gnu_gcc_stage2;
 mod riscv64_linux_gnu_glibc;
 mod riscv64_linux_gnu_glibc_headers;
+mod rust;
 mod s390x_linux_gnu_binutils;
 mod s390x_linux_gnu_gcc;
 mod s390x_linux_gnu_gcc_stage1;
@@ -157,6 +158,7 @@ pub static PACKAGES: &[&dyn Package] = &[
     &gzip::Gzip,
     &texinfo::Texinfo,
     &qemu::Qemu,
+    &rust::Rust,
     &build_env::BuildEnv,
 ];
 
@@ -296,6 +298,11 @@ mod tests {
                 );
                 let declared = find(dependency.name).unwrap();
                 assert_eq!(declared.version(), dependency.version);
+            }
+            if let Some(aux) = package.aux_source() {
+                assert_eq!(aux.sha3_512.len(), 128);
+                assert_eq!(aux.blake3.len(), 128);
+                assert!(!aux.subdir.is_empty());
             }
             assert!(!package.source().subdir.is_empty());
             assert!(!package.rendered_script(target).is_empty());
@@ -697,7 +704,7 @@ mod tests {
             .iter()
             .filter(|package| package.as_bootstrap().is_some())
             .count();
-        assert_eq!(bootstrap, 46);
+        assert_eq!(bootstrap, 47);
     }
 
     #[test]
@@ -714,8 +721,10 @@ mod tests {
                 let cc = crate::package::cc_deps(*package, target);
                 let host = package.host_dependencies(target);
                 if NO_CC.contains(&package.name()) {
+                    // C ツールチェーンを使わないが、python 等の非 cc な
+                    // HOST 依存は持ちうる。cc 辺を含まなければよい。
                     assert!(
-                        host.is_empty(),
+                        host.iter().all(|d| !cc.iter().any(|e| e.name == d.name)),
                         "{} は C ツールチェーンを使わないはず",
                         package.name()
                     );

@@ -156,6 +156,32 @@
     "std": "Gnu17",
     "steps": [
       {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "sed"
+                },
+                {
+                  "Lit": "-i"
+                },
+                {
+                  "Lit": "\"/gzip\\.h/i #include <signal.h>\""
+                },
+                {
+                  "Lit": "gzip.c"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
         "Configure": [
           "--prefix=/usr"
         ]
@@ -173,6 +199,6 @@
       }
     ],
     "sysroot": true,
-    "workdir": "Build"
+    "workdir": "InSource"
   }
 }

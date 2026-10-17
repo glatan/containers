@@ -33,7 +33,7 @@
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | — |
+| [linux-headers](./linux-headers.md) | 6.18.56 | — |
 | [powerpc64le-linux-gnu-binutils](./powerpc64le-linux-gnu-binutils.md) | 2.47 | — |
 | [powerpc64le-linux-gnu-glibc-headers](./powerpc64le-linux-gnu-glibc-headers.md) | 2.44 | — |
 
@@ -46,7 +46,7 @@
 | [gmp](./gmp.md) | 6.3.0 | seed:gmp |
 | [mpfr](./mpfr.md) | 4.2.2 | seed:mpfr |
 | [mpc](./mpc.md) | 1.4.1 | seed:libmpc |
-| [isl](./isl.md) | 0.26 | seed:libisl |
+| [isl](./isl.md) | 0.28 | seed:libisl |
 | [zlib](./zlib.md) | 1.3.2 | seed:zlib |
 | [zstd](./zstd.md) | 1.5.7 | seed:zstd |
 
@@ -139,14 +139,14 @@ else
   GCC_LIB_FLAGS=--with-isl
 fi
 if [ -d /dep/zlib/usr/include ]; then
-  export CFLAGS=" -I/dep/zlib/usr/include"
-  export CXXFLAGS=" -I/dep/zlib/usr/include"
-  export LDFLAGS=" -L/dep/zlib/usr/lib64 -L/dep/zlib/usr/lib"
+  export CFLAGS="${CFLAGS:-} -I/dep/zlib/usr/include"
+  export CXXFLAGS="${CXXFLAGS:-} -I/dep/zlib/usr/include"
+  export LDFLAGS="${LDFLAGS:-} -L/dep/zlib/usr/lib64 -L/dep/zlib/usr/lib"
 fi
 if [ -d /dep/zstd/usr/include ]; then
-  export CFLAGS=" -I/dep/zstd/usr/include"
-  export CXXFLAGS=" -I/dep/zstd/usr/include"
-  export LDFLAGS=" -L/dep/zstd/usr/lib64 -L/dep/zstd/usr/lib"
+  export CFLAGS="${CFLAGS:-} -I/dep/zstd/usr/include"
+  export CXXFLAGS="${CXXFLAGS:-} -I/dep/zstd/usr/include"
+  export LDFLAGS="${LDFLAGS:-} -L/dep/zstd/usr/lib64 -L/dep/zstd/usr/lib"
 fi
 cd ${BUILD}
 ${SOURCE}/configure --build=${HOST_TRIPLE} --host=${HOST_TRIPLE} --target=${TRIPLE} --program-prefix=${TRIPLE}- --prefix=/usr/lib/cross/${TRIPLE}/stage2 --with-sysroot=/usr/${TRIPLE} --with-build-sysroot=/usr/${TRIPLE} --with-native-system-header-dir=/include --with-as=/usr/bin/${TRIPLE}-as --with-ld=/usr/bin/${TRIPLE}-ld --infodir=/usr/share/info/${TRIPLE} --with-system-zlib ${GCC_LIB_FLAGS} --with-cpu=power8 --disable-nls --disable-multilib --disable-werror --disable-libatomic --disable-libsanitizer --disable-libssp --disable-libquadmath --disable-libgomp --disable-libstdcxx --disable-libvtv --disable-bootstrap --enable-shared --enable-threads=posix --enable-languages=c --enable-lto --enable-plugin --enable-checking=release --enable-default-pie --enable-default-ssp --with-linker-hash-style=gnu --enable-linker-build-id --enable-gnu-indirect-function --enable-gnu-unique-object --enable-initfini-array

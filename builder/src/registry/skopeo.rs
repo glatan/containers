@@ -63,13 +63,36 @@ pub fn pull_layout(reference: &str, dest: &Path) -> Result<()> {
     ])
 }
 
+/// `docker://{reference}`（tag または digest pin）が指す
+/// manifest/index の生バイト列を返す。digest 参照なら manifest blob
+/// の内容がそのまま返る。
+pub fn remote_raw(reference: &str) -> Result<Vec<u8>> {
+    capture(&[
+        "inspect".to_string(),
+        "--raw".to_string(),
+        reference.to_string(),
+    ])
+}
+
+/// `docker://{reference}`（manifest を指す digest pin/tag）の
+/// config JSON を返す。additive 判定で manifest digest が不一致の際、
+/// ペイロード同一性（diff_ids）を確認するために使う。
+pub fn remote_config(reference: &str) -> Result<Vec<u8>> {
+    capture(&[
+        "inspect".to_string(),
+        "--config".to_string(),
+        reference.to_string(),
+    ])
+}
+
 /// `docker://{reference}` が指す manifest/index の digest を返す。
 /// レジストリ未存在（404 等）や認証エラーは `Err` を返す。
 /// `inspect --raw` の出力バイト列の sha256 が manifest digest に等しい
 /// ため、ローカルで計算する（`skopeo manifest-digest` は stdin を読まない）。
 pub fn remote_digest(reference: &str) -> Result<Digest> {
-    let raw = capture(&["inspect".to_string(), "--raw".to_string(), reference.to_string()])?;
-    Ok(Digest::from_hex(crate::util::sha256_hex(&raw)))
+    Ok(Digest::from_hex(crate::util::sha256_hex(&remote_raw(
+        reference,
+    )?)))
 }
 
 /// 既存タグとの digest 照合を経て push する（イミュータブルタグ運用）。
@@ -106,14 +129,12 @@ pub fn push_immutable(layout: &Path, reference: &str, expected: &Digest) -> Resu
 
 /// `inspect --raw` の失敗が「参照なし」を示すか。
 /// 404 / manifest unknown / name unknown 等の既知パターンのみを真とする。
-fn is_not_found(error: &Error) -> bool {
+pub(crate) fn is_not_found(error: &Error) -> bool {
     let text = error.to_string();
     [
         "manifest unknown",
         "name unknown",
         "404",
-        "NotFound",
-        "not found",
         "no such manifest",
     ]
     .iter()
@@ -122,10 +143,7 @@ fn is_not_found(error: &Error) -> bool {
 
 /// `docker://{repository}` のタグ一覧（`list-tags`）。`{"Tags":[...]}` をパースする。
 pub fn list_tags(repository: &str) -> Result<Vec<String>> {
-    let bytes = capture(&[
-        "list-tags".to_string(),
-        format!("docker://{repository}"),
-    ])?;
+    let bytes = capture(&["list-tags".to_string(), format!("docker://{repository}")])?;
     #[derive(serde::Deserialize)]
     struct Tags {
         #[serde(rename = "Tags", default)]
@@ -137,8 +155,10 @@ pub fn list_tags(repository: &str) -> Result<Vec<String>> {
 }
 
 fn run(args: &[String]) -> Result<()> {
+    let tmp = crate::workspace::skopeo_tmp_dir()?;
     let status = Command::new("skopeo")
         .args(args)
+        .env("TMPDIR", &tmp)
         .status()
         .map_err(|source| Error::message(format!("skopeo の起動に失敗: {source}")))?;
     if !status.success() {
@@ -151,8 +171,10 @@ fn run(args: &[String]) -> Result<()> {
 }
 
 fn capture(args: &[String]) -> Result<Vec<u8>> {
+    let tmp = crate::workspace::skopeo_tmp_dir()?;
     let output = Command::new("skopeo")
         .args(args)
+        .env("TMPDIR", &tmp)
         .output()
         .map_err(|source| Error::message(format!("skopeo の起動に失敗: {source}")))?;
     if !output.status.success() {

@@ -122,8 +122,8 @@
 |-|-|
 | `Profiled（A（autotools））` | gmp / mpfr / mpc / isl / libffi / pcre2 / readline / expat / sqlite / libxcrypt / bash / coreutils / xz / flex / pkgconf / make / m4 / bison / findutils / sed / grep / gawk / diffutils / patch / tar / gzip / texinfo |
 | `Profiled（B（in-source make））` | zstd / bzip2 |
-| `Custom` | openssl / zlib / zlib-ng / mold / ninja / python / {triple}-binutils / {triple}-gcc |
-| `None` | ca-certificates / linux-headers / ncurses / glib / perl / meson / cmake / qemu / build-env / {triple}-gcc-stage1 / {triple}-glibc-headers / {triple}-gcc-stage2 / {triple}-glibc |
+| `Custom` | openssl / zlib / zlib-ng / ninja / python / {triple}-binutils / {triple}-gcc |
+| `None` | ca-certificates / linux-headers / mold / ncurses / glib / perl / meson / cmake / qemu / rust / build-env / {triple}-gcc-stage1 / {triple}-glibc-headers / {triple}-gcc-stage2 / {triple}-glibc |
 
 <!-- /GENERATED:pgo -->
 

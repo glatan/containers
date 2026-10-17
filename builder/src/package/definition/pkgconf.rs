@@ -8,7 +8,7 @@ impl Package for Pkgconf {
         "pkgconf"
     }
     fn version(&self) -> &'static str {
-        "2.5.1"
+        "3.0.8"
     }
     fn license(&self) -> &'static str {
         "ISC"
@@ -20,10 +20,10 @@ impl Package for Pkgconf {
 
     fn source(&self) -> Source {
         Source {
-            url: "https://distfiles.ariadne.space/pkgconf/pkgconf-2.5.1.tar.xz",
-            sha3_512: "9c27796bf156adec40eaf2a10be4f30c53ef8f99f810984116dfc77a2f8f0868a9c203337bbd6661ad08da58b6f192ce33a360476c181479062d804e25490974",
-            blake3: "c524d73c938e7382d3c12c9cfba16ed32ee092ab21b3e9659a095b5628ea2e8854d574e1591345eb70d3eeb5e08cd99af007751a488adc9b16ad9d6dd24c7081",
-            subdir: "pkgconf-2.5.1",
+            url: "https://distfiles.ariadne.space/pkgconf/pkgconf-3.0.8.tar.xz",
+            sha3_512: "c4fb2615c0508dfe6b5bc5d49cdb904c25dcc8eb57e874d4829a67b843f3fb5d650b7f2c89dba4c2713dc69bb7414d257137c9e9fb2a292addd321e8a897c2c8",
+            blake3: "778da292b878edf09b9d8c30d9491c51b70ca4f1b881a15fdb29b23f482e936b446d9ea6ca2825768b3e7c8f81e5cbe800212d8055d07e9aef7f949ddcad6aab",
+            subdir: "pkgconf-3.0.8",
         }
     }
     fn dependencies(&self, target: crate::target::Target) -> Vec<crate::package::Dependency> {

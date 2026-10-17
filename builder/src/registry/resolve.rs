@@ -32,11 +32,7 @@ pub struct Resolved {
 
 /// `roots`（トップレル依存名）から推移閉包を解決する。
 /// 返り値は依存→利用の順（COPY / 層の順序として使う）。
-pub fn closure(
-    index: &PackageIndex,
-    roots: &[String],
-    platform: Target,
-) -> Result<Vec<Resolved>> {
+pub fn closure(index: &PackageIndex, roots: &[String], platform: Target) -> Result<Vec<Resolved>> {
     let platform_key = format!("{}/{}", platform.architecture(), platform.variant());
     let mut order = Vec::new();
     let mut visiting = BTreeSet::new();
@@ -77,9 +73,9 @@ fn visit(
     if !visiting.insert(key.clone()) {
         return Err(Error::message(format!("依存が循環しています: {name}")));
     }
-    let entry = index.find(name).ok_or_else(|| {
-        Error::message(format!("{name} が index にありません"))
-    })?;
+    let entry = index
+        .find(name)
+        .ok_or_else(|| Error::message(format!("{name} が index にありません")))?;
     let platform_entry = entry.manifest_for(platform_key).ok_or_else(|| {
         Error::message(format!(
             "{name} に platform {platform_key} の manifest がありません"
@@ -197,11 +193,7 @@ mod tests {
     #[test]
     fn closure_is_dependencies_first() {
         let idx = index(vec![
-            entry(
-                "glibc",
-                vec![platform("amd64", "v4", 'a')],
-                BTreeMap::new(),
-            ),
+            entry("glibc", vec![platform("amd64", "v4", 'a')], BTreeMap::new()),
             entry(
                 "openssl",
                 vec![platform("amd64", "v4", 'b')],
@@ -255,7 +247,10 @@ mod tests {
             .collect();
         assert_eq!(
             names,
-            [("aarch64-linux-gnu-gcc", "amd64/v4"), ("openssl", "arm64/v8")]
+            [
+                ("aarch64-linux-gnu-gcc", "amd64/v4"),
+                ("openssl", "arm64/v8")
+            ]
         );
     }
 

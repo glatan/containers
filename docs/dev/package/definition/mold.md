@@ -4,21 +4,20 @@
 | 項目 | 値 |
 |-|-|
 | パッケージ名 | `mold` |
-| バージョン | 2.42.1 |
+| バージョン | 3.0.0 |
 | ライセンス | MIT |
 | 分類 | パッケージ（Bootstrap） |
 | 対象 Platform | amd64: v1 v2 v3 v4; arm64: v8 v8.1 v8.2 v8.3 v8.4 v8.5 v8.6 v8.7 v8.8 v8.9 v9 v9.1 v9.2 v9.3 v9.4 v9.5; ppc64le: power8 power9 power10 power11; riscv64: rva20u64 rva22u64 rva23u64; s390x: z900 z990 z9-ec z10 z196 zEC12 z13 z14 z15 z16 z17 |
-| PGO | amd64 で適用（`Pgo::Custom`、レシピ内の個別手順） |
 | 定義 | [`builder/src/package/definition/mold.rs`](../../../../builder/src/package/definition/mold.rs) |
 
 ## ソース
 
 | 項目 | 値 |
 |-|-|
-| URL | https://github.com/rui314/mold/archive/refs/tags/v2.42.1.tar.gz |
-| sha3-512 | `893446caeb9a904d3d796a8fc3f5c6f6361b7f2ea0d164ee56fcd48a8976857984e10faf51bb4610808faf43d87dd73bb4d02bd022dc6b93b42f80727e258ef4` |
-| blake3 | `ab64ef69b9c842942058e678423ce9fb3901f66725295fbd4f426f14af549f62d6f818fa4161ae6a6bdec58d4f27485f65b2ebfb3374e0f3714a81066555ceca` |
-| 展開ディレクトリ | `mold-2.42.1` |
+| URL | https://github.com/rui314/mold/archive/refs/tags/v3.0.0.tar.gz |
+| sha3-512 | `cd0ccfd5957fbc1329e1a8d0b829326a8a13d5b005e07a4d70a506e1bd775c0eb4b3cd46b3ecfbd78b7418c2e26981c7839fbd96991806d641ff9802229afd41` |
+| blake3 | `6a14f3ebf8e69e73d001b33add174f6b838af6e5557779c952ee74ebeb173a5026a8df100b7663614ffd3651807902e64b33075d052951adcdcbd92eea7f95a3` |
+| 展開ディレクトリ | `mold-3.0.0` |
 
 ## 依存
 
@@ -30,14 +29,12 @@
 |-|-|-|
 | [x86_64-linux-gnu-glibc](./x86_64-linux-gnu-glibc.md) | 2.44 | — |
 | [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | — |
-| [zlib](./zlib.md) | 1.3.2 | — |
-| [zstd](./zstd.md) | 1.5.7 | — |
 
 ### build-dependencies
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | — |
+| [linux-headers](./linux-headers.md) | 6.18.56 | — |
 
 ### host-dependencies
 
@@ -45,7 +42,7 @@
 |-|-|-|
 | [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | seed |
 | [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | seed |
-| [cmake](./cmake.md) | 4.4.3 | — |
+| [rust](./rust.md) | 1.99.0 | — |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
 ## ビルド設定
@@ -54,7 +51,7 @@ host-dependencies は `dep:false` でマウントされ、PATH には載りま�
 |-|-|
 | env プリリュード | `Env::None`（前処理なし） |
 | sysroot | あり（`--sysroot`/`-idirafter` は `wrap_script` が注入） |
-| ビルドディレクトリ | なし |
+| ビルドディレクトリ | `$BUILD`（`$SOURCE` をコピーして in-source） |
 
 ## ツールチェーンフラグ
 
@@ -67,77 +64,6 @@ host-dependencies は `dep:false` でマウントされ、PATH には載りま�
 
 `-march`/`-mcpu` の値は variant 依存です（上記は amd64/v4 で評価）。
 
-## ビルドフラグ
-
-対象 Platform 全件で `recipe()` を評価した configure 系呼出の引数です。条件列は引数が出現するターゲット集合です。
-
-### `cmake -S "${SOURCE}" -B "${BUILD}"`
-
-- 対象: arm64, ppc64le, riscv64, s390x
-
-| フラグ | 設定値 | 条件 |
-|-|-|-|
-| `-DCMAKE_SYSTEM_NAME` | `Linux` | arm64, ppc64le, riscv64, s390x |
-| `-DCMAKE_SYSTEM_PROCESSOR` | `aarch64` | arm64 |
-| `-DCMAKE_C_COMPILER_TARGET` | `aarch64-linux-gnu` | arm64 |
-| `-DCMAKE_CXX_COMPILER_TARGET` | `aarch64-linux-gnu` | arm64 |
-| `-DCMAKE_BUILD_TYPE` | `Release` | arm64, ppc64le, riscv64, s390x |
-| `-DCMAKE_INSTALL_PREFIX` | `/usr` | arm64, ppc64le, riscv64, s390x |
-| `-DCMAKE_C_COMPILER` | `"${CC}"` | arm64, ppc64le, riscv64, s390x |
-| `-DCMAKE_CXX_COMPILER` | `"${CXX}"` | arm64, ppc64le, riscv64, s390x |
-| `-DCMAKE_C_FLAGS` | `"${CFLAGS:-}"` | arm64, ppc64le, riscv64, s390x |
-| `-DCMAKE_CXX_FLAGS` | `"${CXXFLAGS:-}"` | arm64, ppc64le, riscv64, s390x |
-| `-DCMAKE_EXE_LINKER_FLAGS` | `"${LDFLAGS:-}"` | arm64, ppc64le, riscv64, s390x |
-| `-DCMAKE_SHARED_LINKER_FLAGS` | `"${LDFLAGS:-}"` | arm64, ppc64le, riscv64, s390x |
-| `-DMOLD_USE_MIMALLOC` | `ON` | arm64, ppc64le, riscv64, s390x |
-| `-DMOLD_USE_SYSTEM_MIMALLOC` | `OFF` | arm64, ppc64le, riscv64, s390x |
-| `-DMOLD_USE_SYSTEM_TBB` | `OFF` | arm64, ppc64le, riscv64, s390x |
-| `-DCMAKE_SYSTEM_PROCESSOR` | `powerpc64le` | ppc64le |
-| `-DCMAKE_C_COMPILER_TARGET` | `powerpc64le-linux-gnu` | ppc64le |
-| `-DCMAKE_CXX_COMPILER_TARGET` | `powerpc64le-linux-gnu` | ppc64le |
-| `-DCMAKE_SYSTEM_PROCESSOR` | `riscv64` | riscv64 |
-| `-DCMAKE_C_COMPILER_TARGET` | `riscv64-linux-gnu` | riscv64 |
-| `-DCMAKE_CXX_COMPILER_TARGET` | `riscv64-linux-gnu` | riscv64 |
-| `-DCMAKE_SYSTEM_PROCESSOR` | `s390x` | s390x |
-| `-DCMAKE_C_COMPILER_TARGET` | `s390x-linux-gnu` | s390x |
-| `-DCMAKE_CXX_COMPILER_TARGET` | `s390x-linux-gnu` | s390x |
-
-### `cmake -S "${SOURCE}" -B "${BUILD}/gen"`
-
-- 対象: amd64
-
-| フラグ | 設定値 | 条件 |
-|-|-|-|
-| `-DCMAKE_BUILD_TYPE` | `Release` | amd64 |
-| `-DCMAKE_INSTALL_PREFIX` | `/usr` | amd64 |
-| `-DCMAKE_C_COMPILER` | `"${CC}"` | amd64 |
-| `-DCMAKE_CXX_COMPILER` | `"${CXX}"` | amd64 |
-| `-DCMAKE_C_FLAGS` | `"${CFLAGS:-} -fprofile-generate=${PGODIR} -fprofile-update=atomic"` | amd64 |
-| `-DCMAKE_CXX_FLAGS` | `"${CXXFLAGS:-} -fprofile-generate=${PGODIR} -fprofile-update=atomic"` | amd64 |
-| `-DCMAKE_EXE_LINKER_FLAGS` | `"${LDFLAGS:-} -fprofile-generate"` | amd64 |
-| `-DCMAKE_SHARED_LINKER_FLAGS` | `"${LDFLAGS:-} -fprofile-generate"` | amd64 |
-| `-DMOLD_USE_MIMALLOC` | `ON` | amd64 |
-| `-DMOLD_USE_SYSTEM_MIMALLOC` | `OFF` | amd64 |
-| `-DMOLD_USE_SYSTEM_TBB` | `OFF` | amd64 |
-
-### `cmake -S "${SOURCE}" -B "${BUILD}/use"`
-
-- 対象: amd64
-
-| フラグ | 設定値 | 条件 |
-|-|-|-|
-| `-DCMAKE_BUILD_TYPE` | `Release` | amd64 |
-| `-DCMAKE_INSTALL_PREFIX` | `/usr` | amd64 |
-| `-DCMAKE_C_COMPILER` | `"${CC}"` | amd64 |
-| `-DCMAKE_CXX_COMPILER` | `"${CXX}"` | amd64 |
-| `-DCMAKE_C_FLAGS` | `"${CFLAGS:-} -fprofile-use=${PGODIR} -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"` | amd64 |
-| `-DCMAKE_CXX_FLAGS` | `"${CXXFLAGS:-} -fprofile-use=${PGODIR} -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"` | amd64 |
-| `-DCMAKE_EXE_LINKER_FLAGS` | `"${LDFLAGS:-} -fprofile-use"` | amd64 |
-| `-DCMAKE_SHARED_LINKER_FLAGS` | `"${LDFLAGS:-} -fprofile-use"` | amd64 |
-| `-DMOLD_USE_MIMALLOC` | `ON` | amd64 |
-| `-DMOLD_USE_SYSTEM_MIMALLOC` | `OFF` | amd64 |
-| `-DMOLD_USE_SYSTEM_TBB` | `OFF` | amd64 |
-
 ## ビルド手順
 
 `recipe()` が生成するスクリプトです（`builder` が runner へ渡す IR のレンダリング）。対象 Platform 間で 5 系統に分かれます。
@@ -147,37 +73,30 @@ host-dependencies は `dep:false` でマウントされ、PATH には載りま�
 
 ```bash
 set -euxo pipefail
-CMAKE_PREFIX=
-for _dep in zlib zstd; do
-  if [ -d /dep/${_dep}/usr ]; then
-    CMAKE_PREFIX="${CMAKE_PREFIX:+$CMAKE_PREFIX:}/dep/${_dep}/usr"
-  fi
-done
-if [ -n "${CMAKE_PREFIX:-}" ]; then
-  export CMAKE_PREFIX_PATH="${CMAKE_PREFIX}${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
-fi
-if [ -d /dep/cmake/usr/bin ]; then
-  export PATH="/dep/cmake/usr/bin:${PATH}"
-fi
-export PGODIR=/tmp/pgo
-rm -rf "${PGODIR}"
-mkdir -p "${PGODIR}"
-cmake -S "${SOURCE}" -B "${BUILD}/gen" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_C_COMPILER="${CC}" -DCMAKE_CXX_COMPILER="${CXX}" -DCMAKE_C_FLAGS="${CFLAGS:-} -fprofile-generate=${PGODIR} -fprofile-update=atomic" -DCMAKE_CXX_FLAGS="${CXXFLAGS:-} -fprofile-generate=${PGODIR} -fprofile-update=atomic" -DCMAKE_EXE_LINKER_FLAGS="${LDFLAGS:-} -fprofile-generate" -DCMAKE_SHARED_LINKER_FLAGS="${LDFLAGS:-} -fprofile-generate" -DMOLD_USE_MIMALLOC=ON -DMOLD_USE_SYSTEM_MIMALLOC=OFF -DMOLD_USE_SYSTEM_TBB=OFF
-cmake --build "${BUILD}/gen" -j$(nproc)
-(
-  mkdir -p /tmp/moldbin /tmp/moldwork
-  ln -sf "${BUILD}/gen/mold" /tmp/moldbin/ld.mold
-  for _i in 1 2 3 4 5; do
-    printf 'int fn%s(void){return %s;}\n' "${_i}" "${_i}" | "${CC}" -x c - -c -o "/tmp/moldwork/t${_i}.o"
-    "${CC}" -B/tmp/moldbin -fuse-ld=mold -shared -o "/tmp/moldwork/t${_i}.so" "/tmp/moldwork/t${_i}.o"
-  done
-  printf 'int main(void){return fn1();}\nextern int fn1(void);\n' | "${CC}" -x c - -c -o "/tmp/moldwork/main.o"
-  "${CC}" -B/tmp/moldbin -fuse-ld=mold -o "/tmp/moldwork/prog" "/tmp/moldwork/main.o" "/tmp/moldwork/t1.o"
-  "${CC}" -B/tmp/moldbin -fuse-ld=mold -pie -o "/tmp/moldwork/prog-pie" "/tmp/moldwork/main.o" "/tmp/moldwork/t1.o"
-) || true
-cmake -S "${SOURCE}" -B "${BUILD}/use" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_C_COMPILER="${CC}" -DCMAKE_CXX_COMPILER="${CXX}" -DCMAKE_C_FLAGS="${CFLAGS:-} -fprofile-use=${PGODIR} -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch" -DCMAKE_CXX_FLAGS="${CXXFLAGS:-} -fprofile-use=${PGODIR} -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch" -DCMAKE_EXE_LINKER_FLAGS="${LDFLAGS:-} -fprofile-use" -DCMAKE_SHARED_LINKER_FLAGS="${LDFLAGS:-} -fprofile-use" -DMOLD_USE_MIMALLOC=ON -DMOLD_USE_SYSTEM_MIMALLOC=OFF -DMOLD_USE_SYSTEM_TBB=OFF
-cmake --build "${BUILD}/use" -j$(nproc)
-cmake --install "${BUILD}/use" --prefix "${OUT}/usr"
+mkdir -p "$BUILD"
+cp -a "$SOURCE"/. "$BUILD"/
+cd "$BUILD"
+mkdir -p "$BUILD/.cargo"
+mkdir -p /build/ccw
+cat > /build/ccw/mold-link <<'EOF'
+#!/bin/sh
+exec "$CC" --sysroot=/tmp/sysroot -L/tmp/sysroot/lib -L/tmp/sysroot/lib64 "$@"
+EOF
+chmod +x /build/ccw/mold-link
+cat > $BUILD/.cargo/config.toml <<'EOF'
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/rui314/mimalloc_rust?rev=3979460494f1cd1e7f936cb8e10f41e927c9f698"]
+git = "https://github.com/rui314/mimalloc_rust"
+rev = "3979460494f1cd1e7f936cb8e10f41e927c9f698"
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "/src/vendor"
+EOF
+CARGO_HOME="${BUILD}/cargo-home" CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=/build/ccw/mold-link CC_x86_64_unknown_linux_gnu=${CC} CXX_x86_64_unknown_linux_gnu=${CXX} AR_x86_64_unknown_linux_gnu=${AR} CFLAGS_x86_64_unknown_linux_gnu=${CFLAGS} cargo build --release --locked --offline
+DESTDIR="${OUT}" PREFIX=/usr MOLD_LIBDIR=/usr/lib sh "$BUILD/install-mold.sh"
 ```
 
 </details>
@@ -187,21 +106,30 @@ cmake --install "${BUILD}/use" --prefix "${OUT}/usr"
 
 ```bash
 set -euxo pipefail
-CMAKE_PREFIX=
-for _dep in zlib zstd; do
-  if [ -d /dep/${_dep}/usr ]; then
-    CMAKE_PREFIX="${CMAKE_PREFIX:+$CMAKE_PREFIX:}/dep/${_dep}/usr"
-  fi
-done
-if [ -n "${CMAKE_PREFIX:-}" ]; then
-  export CMAKE_PREFIX_PATH="${CMAKE_PREFIX}${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
-fi
-if [ -d /dep/cmake/usr/bin ]; then
-  export PATH="/dep/cmake/usr/bin:${PATH}"
-fi
-cmake -S "${SOURCE}" -B "${BUILD}" -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64 -DCMAKE_C_COMPILER_TARGET=aarch64-linux-gnu -DCMAKE_CXX_COMPILER_TARGET=aarch64-linux-gnu -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_C_COMPILER="${CC}" -DCMAKE_CXX_COMPILER="${CXX}" -DCMAKE_C_FLAGS="${CFLAGS:-}" -DCMAKE_CXX_FLAGS="${CXXFLAGS:-}" -DCMAKE_EXE_LINKER_FLAGS="${LDFLAGS:-}" -DCMAKE_SHARED_LINKER_FLAGS="${LDFLAGS:-}" -DMOLD_USE_MIMALLOC=ON -DMOLD_USE_SYSTEM_MIMALLOC=OFF -DMOLD_USE_SYSTEM_TBB=OFF
-cmake --build "${BUILD}" -j$(nproc)
-cmake --install "${BUILD}" --prefix "${OUT}/usr"
+mkdir -p "$BUILD"
+cp -a "$SOURCE"/. "$BUILD"/
+cd "$BUILD"
+mkdir -p "$BUILD/.cargo"
+mkdir -p /build/ccw
+cat > /build/ccw/mold-link <<'EOF'
+#!/bin/sh
+exec "$CC" --sysroot=/tmp/sysroot -L/tmp/sysroot/lib -L/tmp/sysroot/lib64 "$@"
+EOF
+chmod +x /build/ccw/mold-link
+cat > $BUILD/.cargo/config.toml <<'EOF'
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/rui314/mimalloc_rust?rev=3979460494f1cd1e7f936cb8e10f41e927c9f698"]
+git = "https://github.com/rui314/mimalloc_rust"
+rev = "3979460494f1cd1e7f936cb8e10f41e927c9f698"
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "/src/vendor"
+EOF
+CARGO_HOME="${BUILD}/cargo-home" CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=/build/ccw/mold-link CC_aarch64_unknown_linux_gnu=${CC} CXX_aarch64_unknown_linux_gnu=${CXX} AR_aarch64_unknown_linux_gnu=${AR} CFLAGS_aarch64_unknown_linux_gnu=${CFLAGS} CC_x86_64_unknown_linux_gnu="${HOST_TRIPLE}-gcc" CXX_x86_64_unknown_linux_gnu="${HOST_TRIPLE}-g++" AR_x86_64_unknown_linux_gnu="${HOST_TRIPLE}-ar" HOST_CC="${HOST_TRIPLE}-gcc" HOST_CXX="${HOST_TRIPLE}-g++" CFLAGS_x86_64_unknown_linux_gnu= CXXFLAGS_x86_64_unknown_linux_gnu= LDFLAGS_x86_64_unknown_linux_gnu= cargo build --release --locked --offline --target aarch64-unknown-linux-gnu
+DESTDIR="${OUT}" PREFIX=/usr MOLD_LIBDIR=/usr/lib CARGO_TARGET_DIR="$BUILD/target/aarch64-unknown-linux-gnu" sh "$BUILD/install-mold.sh"
 ```
 
 </details>
@@ -211,21 +139,30 @@ cmake --install "${BUILD}" --prefix "${OUT}/usr"
 
 ```bash
 set -euxo pipefail
-CMAKE_PREFIX=
-for _dep in zlib zstd; do
-  if [ -d /dep/${_dep}/usr ]; then
-    CMAKE_PREFIX="${CMAKE_PREFIX:+$CMAKE_PREFIX:}/dep/${_dep}/usr"
-  fi
-done
-if [ -n "${CMAKE_PREFIX:-}" ]; then
-  export CMAKE_PREFIX_PATH="${CMAKE_PREFIX}${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
-fi
-if [ -d /dep/cmake/usr/bin ]; then
-  export PATH="/dep/cmake/usr/bin:${PATH}"
-fi
-cmake -S "${SOURCE}" -B "${BUILD}" -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=powerpc64le -DCMAKE_C_COMPILER_TARGET=powerpc64le-linux-gnu -DCMAKE_CXX_COMPILER_TARGET=powerpc64le-linux-gnu -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_C_COMPILER="${CC}" -DCMAKE_CXX_COMPILER="${CXX}" -DCMAKE_C_FLAGS="${CFLAGS:-}" -DCMAKE_CXX_FLAGS="${CXXFLAGS:-}" -DCMAKE_EXE_LINKER_FLAGS="${LDFLAGS:-}" -DCMAKE_SHARED_LINKER_FLAGS="${LDFLAGS:-}" -DMOLD_USE_MIMALLOC=ON -DMOLD_USE_SYSTEM_MIMALLOC=OFF -DMOLD_USE_SYSTEM_TBB=OFF
-cmake --build "${BUILD}" -j$(nproc)
-cmake --install "${BUILD}" --prefix "${OUT}/usr"
+mkdir -p "$BUILD"
+cp -a "$SOURCE"/. "$BUILD"/
+cd "$BUILD"
+mkdir -p "$BUILD/.cargo"
+mkdir -p /build/ccw
+cat > /build/ccw/mold-link <<'EOF'
+#!/bin/sh
+exec "$CC" --sysroot=/tmp/sysroot -L/tmp/sysroot/lib -L/tmp/sysroot/lib64 "$@"
+EOF
+chmod +x /build/ccw/mold-link
+cat > $BUILD/.cargo/config.toml <<'EOF'
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/rui314/mimalloc_rust?rev=3979460494f1cd1e7f936cb8e10f41e927c9f698"]
+git = "https://github.com/rui314/mimalloc_rust"
+rev = "3979460494f1cd1e7f936cb8e10f41e927c9f698"
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "/src/vendor"
+EOF
+CARGO_HOME="${BUILD}/cargo-home" CARGO_TARGET_POWERPC64LE_UNKNOWN_LINUX_GNU_LINKER=/build/ccw/mold-link CC_powerpc64le_unknown_linux_gnu=${CC} CXX_powerpc64le_unknown_linux_gnu=${CXX} AR_powerpc64le_unknown_linux_gnu=${AR} CFLAGS_powerpc64le_unknown_linux_gnu=${CFLAGS} CC_x86_64_unknown_linux_gnu="${HOST_TRIPLE}-gcc" CXX_x86_64_unknown_linux_gnu="${HOST_TRIPLE}-g++" AR_x86_64_unknown_linux_gnu="${HOST_TRIPLE}-ar" HOST_CC="${HOST_TRIPLE}-gcc" HOST_CXX="${HOST_TRIPLE}-g++" CFLAGS_x86_64_unknown_linux_gnu= CXXFLAGS_x86_64_unknown_linux_gnu= LDFLAGS_x86_64_unknown_linux_gnu= cargo build --release --locked --offline --target powerpc64le-unknown-linux-gnu
+DESTDIR="${OUT}" PREFIX=/usr MOLD_LIBDIR=/usr/lib CARGO_TARGET_DIR="$BUILD/target/powerpc64le-unknown-linux-gnu" sh "$BUILD/install-mold.sh"
 ```
 
 </details>
@@ -235,21 +172,30 @@ cmake --install "${BUILD}" --prefix "${OUT}/usr"
 
 ```bash
 set -euxo pipefail
-CMAKE_PREFIX=
-for _dep in zlib zstd; do
-  if [ -d /dep/${_dep}/usr ]; then
-    CMAKE_PREFIX="${CMAKE_PREFIX:+$CMAKE_PREFIX:}/dep/${_dep}/usr"
-  fi
-done
-if [ -n "${CMAKE_PREFIX:-}" ]; then
-  export CMAKE_PREFIX_PATH="${CMAKE_PREFIX}${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
-fi
-if [ -d /dep/cmake/usr/bin ]; then
-  export PATH="/dep/cmake/usr/bin:${PATH}"
-fi
-cmake -S "${SOURCE}" -B "${BUILD}" -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=riscv64 -DCMAKE_C_COMPILER_TARGET=riscv64-linux-gnu -DCMAKE_CXX_COMPILER_TARGET=riscv64-linux-gnu -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_C_COMPILER="${CC}" -DCMAKE_CXX_COMPILER="${CXX}" -DCMAKE_C_FLAGS="${CFLAGS:-}" -DCMAKE_CXX_FLAGS="${CXXFLAGS:-}" -DCMAKE_EXE_LINKER_FLAGS="${LDFLAGS:-}" -DCMAKE_SHARED_LINKER_FLAGS="${LDFLAGS:-}" -DMOLD_USE_MIMALLOC=ON -DMOLD_USE_SYSTEM_MIMALLOC=OFF -DMOLD_USE_SYSTEM_TBB=OFF
-cmake --build "${BUILD}" -j$(nproc)
-cmake --install "${BUILD}" --prefix "${OUT}/usr"
+mkdir -p "$BUILD"
+cp -a "$SOURCE"/. "$BUILD"/
+cd "$BUILD"
+mkdir -p "$BUILD/.cargo"
+mkdir -p /build/ccw
+cat > /build/ccw/mold-link <<'EOF'
+#!/bin/sh
+exec "$CC" --sysroot=/tmp/sysroot -L/tmp/sysroot/lib -L/tmp/sysroot/lib64 "$@"
+EOF
+chmod +x /build/ccw/mold-link
+cat > $BUILD/.cargo/config.toml <<'EOF'
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/rui314/mimalloc_rust?rev=3979460494f1cd1e7f936cb8e10f41e927c9f698"]
+git = "https://github.com/rui314/mimalloc_rust"
+rev = "3979460494f1cd1e7f936cb8e10f41e927c9f698"
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "/src/vendor"
+EOF
+CARGO_HOME="${BUILD}/cargo-home" CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_LINKER=/build/ccw/mold-link CC_riscv64gc_unknown_linux_gnu=${CC} CXX_riscv64gc_unknown_linux_gnu=${CXX} AR_riscv64gc_unknown_linux_gnu=${AR} CFLAGS_riscv64gc_unknown_linux_gnu=${CFLAGS} CC_x86_64_unknown_linux_gnu="${HOST_TRIPLE}-gcc" CXX_x86_64_unknown_linux_gnu="${HOST_TRIPLE}-g++" AR_x86_64_unknown_linux_gnu="${HOST_TRIPLE}-ar" HOST_CC="${HOST_TRIPLE}-gcc" HOST_CXX="${HOST_TRIPLE}-g++" CFLAGS_x86_64_unknown_linux_gnu= CXXFLAGS_x86_64_unknown_linux_gnu= LDFLAGS_x86_64_unknown_linux_gnu= cargo build --release --locked --offline --target riscv64gc-unknown-linux-gnu
+DESTDIR="${OUT}" PREFIX=/usr MOLD_LIBDIR=/usr/lib CARGO_TARGET_DIR="$BUILD/target/riscv64gc-unknown-linux-gnu" sh "$BUILD/install-mold.sh"
 ```
 
 </details>
@@ -259,21 +205,30 @@ cmake --install "${BUILD}" --prefix "${OUT}/usr"
 
 ```bash
 set -euxo pipefail
-CMAKE_PREFIX=
-for _dep in zlib zstd; do
-  if [ -d /dep/${_dep}/usr ]; then
-    CMAKE_PREFIX="${CMAKE_PREFIX:+$CMAKE_PREFIX:}/dep/${_dep}/usr"
-  fi
-done
-if [ -n "${CMAKE_PREFIX:-}" ]; then
-  export CMAKE_PREFIX_PATH="${CMAKE_PREFIX}${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
-fi
-if [ -d /dep/cmake/usr/bin ]; then
-  export PATH="/dep/cmake/usr/bin:${PATH}"
-fi
-cmake -S "${SOURCE}" -B "${BUILD}" -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=s390x -DCMAKE_C_COMPILER_TARGET=s390x-linux-gnu -DCMAKE_CXX_COMPILER_TARGET=s390x-linux-gnu -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_C_COMPILER="${CC}" -DCMAKE_CXX_COMPILER="${CXX}" -DCMAKE_C_FLAGS="${CFLAGS:-}" -DCMAKE_CXX_FLAGS="${CXXFLAGS:-}" -DCMAKE_EXE_LINKER_FLAGS="${LDFLAGS:-}" -DCMAKE_SHARED_LINKER_FLAGS="${LDFLAGS:-}" -DMOLD_USE_MIMALLOC=ON -DMOLD_USE_SYSTEM_MIMALLOC=OFF -DMOLD_USE_SYSTEM_TBB=OFF
-cmake --build "${BUILD}" -j$(nproc)
-cmake --install "${BUILD}" --prefix "${OUT}/usr"
+mkdir -p "$BUILD"
+cp -a "$SOURCE"/. "$BUILD"/
+cd "$BUILD"
+mkdir -p "$BUILD/.cargo"
+mkdir -p /build/ccw
+cat > /build/ccw/mold-link <<'EOF'
+#!/bin/sh
+exec "$CC" --sysroot=/tmp/sysroot -L/tmp/sysroot/lib -L/tmp/sysroot/lib64 "$@"
+EOF
+chmod +x /build/ccw/mold-link
+cat > $BUILD/.cargo/config.toml <<'EOF'
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/rui314/mimalloc_rust?rev=3979460494f1cd1e7f936cb8e10f41e927c9f698"]
+git = "https://github.com/rui314/mimalloc_rust"
+rev = "3979460494f1cd1e7f936cb8e10f41e927c9f698"
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "/src/vendor"
+EOF
+CARGO_HOME="${BUILD}/cargo-home" CARGO_TARGET_S390X_UNKNOWN_LINUX_GNU_LINKER=/build/ccw/mold-link CC_s390x_unknown_linux_gnu=${CC} CXX_s390x_unknown_linux_gnu=${CXX} AR_s390x_unknown_linux_gnu=${AR} CFLAGS_s390x_unknown_linux_gnu=${CFLAGS} CC_x86_64_unknown_linux_gnu="${HOST_TRIPLE}-gcc" CXX_x86_64_unknown_linux_gnu="${HOST_TRIPLE}-g++" AR_x86_64_unknown_linux_gnu="${HOST_TRIPLE}-ar" HOST_CC="${HOST_TRIPLE}-gcc" HOST_CXX="${HOST_TRIPLE}-g++" CFLAGS_x86_64_unknown_linux_gnu= CXXFLAGS_x86_64_unknown_linux_gnu= LDFLAGS_x86_64_unknown_linux_gnu= cargo build --release --locked --offline --target s390x-unknown-linux-gnu
+DESTDIR="${OUT}" PREFIX=/usr MOLD_LIBDIR=/usr/lib CARGO_TARGET_DIR="$BUILD/target/s390x-unknown-linux-gnu" sh "$BUILD/install-mold.sh"
 ```
 
 </details>

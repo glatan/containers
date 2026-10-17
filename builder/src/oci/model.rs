@@ -38,7 +38,7 @@ pub fn parse_zstd_level(level: u8) -> Result<u8> {
     Ok(ZstdLevel::new(level)?.get())
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Digest {
     hex: String,
 }
@@ -50,9 +50,7 @@ impl Digest {
 
     /// `sha256:{64桁の小文字hex}` をパースする。
     pub fn parse(text: &str) -> Result<Self> {
-        let valid = text
-            .strip_prefix("sha256:")
-            .is_some_and(Self::valid_hex);
+        let valid = text.strip_prefix("sha256:").is_some_and(Self::valid_hex);
         if valid {
             Ok(Self {
                 hex: text[7..].to_string(),
@@ -91,9 +89,13 @@ impl<'de> Deserialize<'de> for Digest {
     }
 }
 
+#[derive(Clone)]
 pub struct Image {
     pub name: String,
     pub version: String,
+    /// `org.opencontainers.image.description`。GHCR のパッケージページ
+    /// に表示される説明文。省略可能。
+    pub description: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -108,10 +110,13 @@ pub(crate) struct Descriptor {
     pub media_type: String,
     pub digest: Digest,
     pub size: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub platform: Option<PlatformObject>,
+    // containers/image が push 時に付与する descriptor アノテーションの
+    // シリアライズ順に合わせるため platform より先に置く
+    // （index blob とリモート manifest list の digest 一致が前提）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub annotations: Option<BTreeMap<String, String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub platform: Option<PlatformObject>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -139,6 +144,11 @@ pub(crate) struct ImageIndex {
     #[serde(rename = "mediaType")]
     pub media_type: String,
     pub manifests: Vec<Descriptor>,
+    // GHCR は multi-arch イメージの description 等を index の
+    // annotations から読む。Go の Index marshal 順（artifactType/subject
+    // は omitempty で欠落）に合わせ manifests の後に置く。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -147,7 +157,11 @@ pub(crate) struct ImageManifest {
     pub schema_version: u32,
     #[serde(rename = "mediaType")]
     pub media_type: String,
-    #[serde(rename = "artifactType", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "artifactType",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub artifact_type: Option<String>,
     pub config: Descriptor,
     pub layers: Vec<Descriptor>,
@@ -162,15 +176,20 @@ pub(crate) struct ImageConfig {
     pub os: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub variant: Option<String>,
+    // skopeo pull した外部 config は config フィールドを持たない
+    // 場合があるため欠落を許容する（platform 復元には不要）。
+    #[serde(default)]
     pub config: ExecConfig,
     pub rootfs: RootFs,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExecConfig {
-    #[serde(rename = "Env", skip_serializing_if = "Vec::is_empty")]
+    // 書き出しでは空を省略し、読み取りでは欠落を空として許容する
+    // （pack が書いた config を restore/merge で読み戻すため）。
+    #[serde(rename = "Env", default, skip_serializing_if = "Vec::is_empty")]
     pub env: Vec<String>,
-    #[serde(rename = "Cmd", skip_serializing_if = "Vec::is_empty")]
+    #[serde(rename = "Cmd", default, skip_serializing_if = "Vec::is_empty")]
     pub cmd: Vec<String>,
     #[serde(rename = "WorkingDir", skip_serializing_if = "Option::is_none")]
     pub working_dir: Option<String>,

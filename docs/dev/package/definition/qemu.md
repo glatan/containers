@@ -4,7 +4,7 @@
 | 項目 | 値 |
 |-|-|
 | パッケージ名 | `qemu` |
-| バージョン | 11.1.1 |
+| バージョン | 11.1.2 |
 | ライセンス | GPL-2.0-only |
 | 分類 | パッケージ |
 | 対象 Platform | amd64: v4 |
@@ -15,10 +15,10 @@
 
 | 項目 | 値 |
 |-|-|
-| URL | https://download.qemu.org/qemu-11.1.1.tar.xz |
-| sha3-512 | `8b53993040fe8ce2e6c69e2d616a952fcd3da00ddcd114b64dea2d5b1cc0a4f6df03bc899ba12437b6166559be8f2379b97a737608659f6b2c6ab56605bd20a2` |
-| blake3 | `9cda9512c997d0ec176add30ff4f4531d4882681eb12e98ba5c7d11cb4cf610ca079689e5def5ae36c1c1a173dee7eb001ce8fffeba77f418048e4b4773dff67` |
-| 展開ディレクトリ | `qemu-11.1.1` |
+| URL | https://download.qemu.org/qemu-11.1.2.tar.xz |
+| sha3-512 | `58b4c78200e2bd35640e33bd36be28688919ab12c102e5cd2e69fa3359b55f53678080b9dec2fba2b9a73692664f09b8d69bc4be99384624acc967e03c464b41` |
+| blake3 | `0c0ce4290270c88ae4fb419bbbec191fda6608850e3d80dea4294341004fc5ea77dadd7c6cf628b4218fd3e9acba90e183a2a1389dd4f115ef333124d7f80d90` |
+| 展開ディレクトリ | `qemu-11.1.2` |
 
 ## 依存
 
@@ -29,7 +29,7 @@
 | パッケージ | バージョン | via |
 |-|-|-|
 | [x86_64-linux-gnu-glibc](./x86_64-linux-gnu-glibc.md) | 2.44 | — |
-| [glib](./glib.md) | 2.90.0 | — |
+| [glib](./glib.md) | 2.90.1 | — |
 | [zlib](./zlib.md) | 1.3.2 | — |
 | [zstd](./zstd.md) | 1.5.7 | — |
 
@@ -37,8 +37,8 @@
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | — |
-| [pcre2](./pcre2.md) | 10.48 | — |
+| [linux-headers](./linux-headers.md) | 6.18.56 | — |
+| [pcre2](./pcre2.md) | 10.49 | — |
 | [libffi](./libffi.md) | 3.8.0 | — |
 
 ### host-dependencies
@@ -47,10 +47,10 @@
 |-|-|-|
 | [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | seed |
 | [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | seed |
-| [python](./python.md) | 3.14.7 | — |
-| [meson](./meson.md) | 1.12.0 | — |
+| [python](./python.md) | 3.15.0 | — |
+| [meson](./meson.md) | 1.12.1 | — |
 | [ninja](./ninja.md) | 1.13.2 | — |
-| [pkgconf](./pkgconf.md) | 2.5.1 | — |
+| [pkgconf](./pkgconf.md) | 3.0.8 | — |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
 ## ビルド設定

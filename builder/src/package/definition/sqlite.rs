@@ -8,17 +8,17 @@ impl Package for Sqlite {
         "sqlite"
     }
     fn version(&self) -> &'static str {
-        "3.53.4"
+        "3.54.0"
     }
     fn license(&self) -> &'static str {
         "blessing"
     }
     fn source(&self) -> Source {
         Source {
-            url: "https://www.sqlite.org/2026/sqlite-autoconf-3530400.tar.gz",
-            sha3_512: "2b9595cc6142a529462577b1d120d20a06390402efe97fd88f0a49ec915835853339775a8ff2eaee25c3d46b372724fb77a11cf4490d34439d10b198e59d3380",
-            blake3: "e74b1d27f5053bd29ee7e930ad71d99126b59e4f1a45493440c72d2228e32412adad771dccb35bc3ed5990e3412e7bb9e50539bfd7805d978fbdb7e84259b2a6",
-            subdir: "sqlite-autoconf-3530400",
+            url: "https://www.sqlite.org/2026/sqlite-autoconf-3540000.tar.gz",
+            sha3_512: "27da7c186cd32c4812b2d30f54124c94483c13f6205fee2dfead17ab767907cf0428337aa228125ce60d818320132f63c962522183443fe2da6f921ca9863f8d",
+            blake3: "d96be8c27a8f43b1905531d7f03bd7cfe9c9461eb9561ed6d63d66dbd364d6edfac5f1e7400b4b5993e2005d1b359acdfe66559cf9d42f060416e1ab784ad991",
+            subdir: "sqlite-autoconf-3540000",
         }
     }
     fn dependencies(&self, target: crate::target::Target) -> Vec<crate::package::Dependency> {

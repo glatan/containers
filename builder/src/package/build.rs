@@ -41,7 +41,7 @@ pub fn build_package(
 
 /// 複数ルートを `(name, target)` キーで重複排除しながら単一トポロジカル順に
 /// ビルドする。`skip_unsupported` は supports 偽のルートをエラーにせずスキップする
-/// （`--all` / `--all-targets` 時）。
+/// （`--all-packages` / `--all-targets` 時）。
 pub fn build_packages(
     roots: &[&'static dyn Package],
     targets: &[Target],
@@ -119,6 +119,7 @@ pub fn build_packages(
             options.keep_going,
             &forced,
             None,
+            None,
             &mut report,
         )?);
     }
@@ -165,6 +166,10 @@ fn report_plan(
 }
 
 pub fn build_bootstrap(mut report: impl FnMut(String)) -> Result<()> {
+    let active = workspace::active_lock()?;
+    let _active = active
+        .read()
+        .map_err(|source| Error::io(workspace::active_lock_path(), source))?;
     let log_path = workspace::bootstrap_log_path();
     if let Some(parent) = log_path.parent() {
         fs::create_dir_all(parent).map_err(|source| Error::io(parent, source))?;
@@ -185,6 +190,10 @@ pub fn build_bootstrap(mut report: impl FnMut(String)) -> Result<()> {
         true,
         &BTreeSet::new(),
         Some(combined.clone()),
+        // bootstrap は常にシード相。合成済み env が残っていても
+        // `Via::Seed` 辺を distro 担保として扱い、自身の成果物を
+        // 要求しない（rust の self-edge は初回 bootstrap で必ず未達）。
+        Some(false),
         &mut report,
     )?;
     report(summarize_bootstrap(&failed, &log_path));
@@ -231,9 +240,10 @@ fn run_order(
     continue_on_error: bool,
     force_roots: &BTreeSet<&'static str>,
     combined: Option<Arc<Mutex<File>>>,
+    own: Option<bool>,
     report: &mut dyn FnMut(String),
 ) -> Result<Vec<String>> {
-    let own = build_env_ready();
+    let own = own.unwrap_or_else(build_env_ready);
     walk_nodes(
         order,
         &WalkOpts {
@@ -241,6 +251,7 @@ fn run_order(
             continue_on_error,
             fetch: true,
             force_roots,
+            own,
         },
         report,
         &mut |defined, target| {
@@ -290,6 +301,7 @@ fn build_package_with<'a>(
             skip_unsupported,
             false,
             &BTreeSet::new(),
+            None,
             None,
             report,
         )?;
@@ -501,6 +513,7 @@ struct WalkOpts<'a> {
     continue_on_error: bool,
     fetch: bool,
     force_roots: &'a BTreeSet<&'static str>,
+    own: bool,
 }
 
 fn walk_nodes<'a>(
@@ -515,8 +528,8 @@ fn walk_nodes<'a>(
         continue_on_error,
         fetch,
         force_roots,
+        own,
     } = *opts;
-    let own = build_env_ready();
     let mut blocked = BTreeSet::new();
     let mut failed = Vec::new();
     for (defined, target) in order {
@@ -655,13 +668,74 @@ fn blocked_reason<'a>(
 #[cfg(test)]
 mod tests {
     use super::container::{
-        Mount, Prep, allow_network, build_plan, compiler_cc, dep_paths, resolve_runner,
-        stage_generated, wrap_script,
+        Mount, Prep, allow_network, build_plan, compiler_cc, dep_paths, mount_dependency,
+        resolve_runner, stage_generated, wrap_script,
     };
     use super::*;
     use crate::package::{Dependency, Source, dep};
     use crate::target::{Amd64Variant, Arm64Variant, Target};
     use std::path::{Path, PathBuf};
+
+    /// 同一成果物が dep:true / dep:false の両辺で要求されても、環境効果が
+    /// 異なる（dep:true は -I/-L、dep:false は LD_LIBRARY_PATH）ため両方
+    /// マウントされる。runs_on_host パッケージを両辺で宣言する meson の
+    /// python で、dep:false 側が dedupe に潰されて libpython が解決
+    /// できなかった回帰の防止。
+    #[test]
+    fn same_artifact_is_mounted_as_dep_and_host() {
+        let (_keep, _source, artifacts) = empty_dirs();
+        let python = fake("python", vec![], vec![], PathBuf::new(), artifacts);
+        let target = Target::BUILD_ENV;
+        let dir = python.artifact_dir(target);
+        fs::create_dir_all(dir.join("usr/bin")).unwrap();
+
+        let mut command = std::process::Command::new("true");
+        let mut mounts = Vec::new();
+        let mut mounted = Vec::new();
+        let edge = dep("python", "1");
+        // meson が宣言する順序: dep 辺 → host 辺
+        mount_dependency(
+            &edge,
+            &python,
+            target,
+            true,
+            true,
+            &mut command,
+            &mut mounts,
+            &mut mounted,
+        )
+        .unwrap();
+        mount_dependency(
+            &edge,
+            &python,
+            target,
+            false,
+            true,
+            &mut command,
+            &mut mounts,
+            &mut mounted,
+        )
+        .unwrap();
+        assert_eq!(mounts.len(), 2);
+        assert_eq!(mounts[0].name, "python");
+        assert!(mounts[0].dep);
+        assert_eq!(mounts[1].name, "python-host");
+        assert!(!mounts[1].dep);
+
+        // 同一フラグの重複辺のみ省略される
+        mount_dependency(
+            &edge,
+            &python,
+            target,
+            true,
+            true,
+            &mut command,
+            &mut mounts,
+            &mut mounted,
+        )
+        .unwrap();
+        assert_eq!(mounts.len(), 2);
+    }
 
     const ZERO_512: &str = "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
 
@@ -920,6 +994,7 @@ mod tests {
                 continue_on_error: false,
                 fetch: false,
                 force_roots: &BTreeSet::new(),
+                own: true,
             },
             &mut |line| log.push(line),
             &mut |_, target| {
@@ -1358,6 +1433,7 @@ libdir=/usr/lib
                 continue_on_error: true,
                 fetch: false,
                 force_roots: &BTreeSet::new(),
+                own: true,
             },
             &mut |line| log.push(line),
             &mut |package, _target| {
@@ -1414,6 +1490,7 @@ libdir=/usr/lib
                 continue_on_error: true,
                 fetch: false,
                 force_roots: &BTreeSet::new(),
+                own: true,
             },
             &mut |line| log.push(line),
             &mut |package, target| {

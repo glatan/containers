@@ -38,7 +38,7 @@
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | — |
+| [linux-headers](./linux-headers.md) | 6.18.56 | — |
 
 ### host-dependencies
 
@@ -46,7 +46,7 @@
 |-|-|-|
 | [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | seed |
 | [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | seed |
-| [mold](./mold.md) | 2.42.1 | optional |
+| [mold](./mold.md) | 3.0.0 | optional |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
 ## ビルド設定
@@ -72,7 +72,7 @@ host-dependencies は `dep:false` でマウントされ、PATH には載りま�
 | フラグ | 設定値 | 条件 |
 |-|-|-|
 | `--build` | `${HOST_TRIPLE}` | 常時 |
-| `--host` | `${HOST_TRIPLE}` | 常時 |
+| `--host` | `${PACKAGE_HOST}` | arm64, ppc64le, riscv64, s390x |
 | `--target` | `${TRIPLE}` | 常時 |
 | `--program-prefix` | `${TRIPLE}-` | 常時 |
 | `--prefix` | `/usr` | 常時 |
@@ -87,13 +87,14 @@ host-dependencies は `dep:false` でマウントされ、PATH には載りま�
 | `--enable-relro` |  | 常時 |
 | `--enable-default-execstack` | `no` | 常時 |
 | `--enable-default-hash-style` | `gnu` | 常時 |
+| `--host` | `${HOST_TRIPLE}` | amd64 |
 
 ## ビルド手順
 
-`recipe()` が生成するスクリプトです（`builder` が runner へ渡す IR のレンダリング）。対象 Platform 間で差分はありません。
+`recipe()` が生成するスクリプトです（`builder` が runner へ渡す IR のレンダリング）。対象 Platform 間で 2 系統に分かれます。
 
 <details>
-<summary>常時（クロス・Canadian 混在）</summary>
+<summary>amd64（クロス）</summary>
 
 ```bash
 set -euxo pipefail
@@ -102,6 +103,22 @@ export CXX_FOR_BUILD=${HOST_TRIPLE}-g++
 mkdir -p ${BUILD}
 cd ${BUILD}
 ${SOURCE}/configure --build=${HOST_TRIPLE} --host=${HOST_TRIPLE} --target=${TRIPLE} --program-prefix=${TRIPLE}- --prefix=/usr --infodir=/usr/share/info/${TRIPLE} --disable-nls --disable-werror --enable-plugins --with-system-zlib --without-debuginfod --disable-gprofng --enable-new-dtags --enable-relro --enable-default-execstack=no --enable-default-hash-style=gnu
+make -j"$(nproc)"
+make install DESTDIR="$OUT"
+```
+
+</details>
+
+<details>
+<summary>arm64, ppc64le, riscv64, s390x（クロス・Canadian）</summary>
+
+```bash
+set -euxo pipefail
+export CC_FOR_BUILD=${HOST_TRIPLE}-gcc
+export CXX_FOR_BUILD=${HOST_TRIPLE}-g++
+mkdir -p ${BUILD}
+cd ${BUILD}
+${SOURCE}/configure --build=${HOST_TRIPLE} --host=${PACKAGE_HOST} --target=${TRIPLE} --program-prefix=${TRIPLE}- --prefix=/usr --infodir=/usr/share/info/${TRIPLE} --disable-nls --disable-werror --enable-plugins --with-system-zlib --without-debuginfod --disable-gprofng --enable-new-dtags --enable-relro --enable-default-execstack=no --enable-default-hash-style=gnu
 make -j"$(nproc)"
 make install DESTDIR="$OUT"
 ```

@@ -1,6 +1,6 @@
 //! OCI Image Layout の読み取り側。`oci::model` の Deserialize 型を使い、
-//! ネスト index（トップレベル index.json → 単一 descriptor →
-//! ネストした Image Index blob）を解決する。
+//! トップレベル index.json を解決する（単一 platform は manifest 直参照の
+//! flat 形式、複数 platform はネストした Image Index blob を辿る）。
 
 use std::fs;
 use std::path::Path;
@@ -8,7 +8,9 @@ use std::path::Path;
 use serde::de::DeserializeOwned;
 
 use crate::error::{Error, Result};
-use crate::oci::{Descriptor, Digest, ImageIndex, ImageManifest, MEDIA_INDEX, MEDIA_MANIFEST};
+use crate::oci::{
+    Descriptor, Digest, ImageConfig, ImageIndex, ImageManifest, MEDIA_INDEX, MEDIA_MANIFEST,
+};
 use crate::target::Target;
 
 /// ネスト index の1要素: platform 別 manifest の参照。
@@ -38,11 +40,7 @@ pub fn read_json<T: DeserializeOwned>(path: &Path) -> Result<T> {
 
 /// `blobs/sha256/{hex}` を JSON として読む。
 pub fn read_blob<T: DeserializeOwned>(layout: &Path, digest: &Digest) -> Result<T> {
-    read_json(
-        &layout
-            .join("blobs/sha256")
-            .join(digest.encoded()),
-    )
+    read_json(&layout.join("blobs/sha256").join(digest.encoded()))
 }
 
 /// トップレベルの index.json を読む。
@@ -112,23 +110,8 @@ pub fn published(layout: &Path) -> Result<PublishedImage> {
                 descriptor.media_type
             )));
         }
-        let platform = descriptor.platform.as_ref().ok_or_else(|| {
-            Error::message(format!(
-                "{} の manifest に platform がありません",
-                layout.display()
-            ))
-        })?;
-        let variant = platform.variant.as_deref().unwrap_or_default();
-        let target = Target::lookup(&platform.architecture, variant).ok_or_else(|| {
-            Error::message(format!(
-                "{} の manifest に未知の platform があります: {}/{}",
-                layout.display(),
-                platform.architecture,
-                variant
-            ))
-        })?;
         manifests.push(PlatformManifest {
-            target,
+            target: resolve_target(layout, descriptor)?,
             digest: descriptor.digest.clone(),
             size: descriptor.size,
         });
@@ -140,23 +123,37 @@ pub fn published(layout: &Path) -> Result<PublishedImage> {
     })
 }
 
-/// index.json が manifest を直接指す旧形式の単一 platform layout。
-fn single_manifest(layout: &Path, entry: &Descriptor) -> Result<PublishedImage> {
-    let platform = entry.platform.as_ref().ok_or_else(|| {
+/// descriptor の platform から `Target` を解決する。
+/// skopeo pull した flat layout は descriptor に platform が欠落
+/// （または variant 欠落）し得るため、その場合は manifest blob の
+/// config（architecture/variant を保持）から復元する。
+fn resolve_target(layout: &Path, descriptor: &Descriptor) -> Result<Target> {
+    if let Some(platform) = &descriptor.platform
+        && let Some(target) = Target::lookup(
+            &platform.architecture,
+            platform.variant.as_deref().unwrap_or_default(),
+        )
+    {
+        return Ok(target);
+    }
+    let manifest: ImageManifest = read_blob(layout, &descriptor.digest)?;
+    let config: ImageConfig = read_blob(layout, &manifest.config.digest)?;
+    Target::lookup(
+        &config.architecture,
+        config.variant.as_deref().unwrap_or_default(),
+    )
+    .ok_or_else(|| {
         Error::message(format!(
-            "{} の manifest descriptor に platform がありません",
-            layout.display()
-        ))
-    })?;
-    let variant = platform.variant.as_deref().unwrap_or_default();
-    let target = Target::lookup(&platform.architecture, variant).ok_or_else(|| {
-        Error::message(format!(
-            "{} の manifest に未知の platform があります: {}/{}",
+            "{} の manifest に platform を特定できません: {}",
             layout.display(),
-            platform.architecture,
-            variant
+            descriptor.digest.prefixed()
         ))
-    })?;
+    })
+}
+
+/// index.json が manifest を直接指す単一 platform の flat layout。
+fn single_manifest(layout: &Path, entry: &Descriptor) -> Result<PublishedImage> {
+    let target = resolve_target(layout, entry)?;
     let ref_name = entry
         .annotations
         .as_ref()
@@ -171,6 +168,84 @@ fn single_manifest(layout: &Path, entry: &Descriptor) -> Result<PublishedImage> 
             size: entry.size,
         }],
     })
+}
+
+/// layout が参照する全 blob の実在と digest を検査する。
+/// index.json 自体の構造不良は `Err`、参照先 blob の問題は検出した
+/// 全件を返す（空なら健全）。push 前の健全性検査に使う。
+pub fn verify(layout: &Path) -> Result<Vec<String>> {
+    let entry = single_entry(layout)?;
+    let mut issues = Vec::new();
+    match entry.media_type.as_str() {
+        MEDIA_INDEX => {
+            if check_blob(layout, &entry.digest, "index", &mut issues) {
+                match read_blob::<ImageIndex>(layout, &entry.digest) {
+                    Ok(nested) => {
+                        for descriptor in &nested.manifests {
+                            let label = descriptor
+                                .platform
+                                .as_ref()
+                                .map(|platform| {
+                                    format!(
+                                        "{}/{}",
+                                        platform.architecture,
+                                        platform.variant.as_deref().unwrap_or_default()
+                                    )
+                                })
+                                .unwrap_or_else(|| descriptor.digest.encoded()[..12].to_string());
+                            verify_manifest(layout, &descriptor.digest, &label, &mut issues);
+                        }
+                    }
+                    Err(error) => issues.push(format!("ネスト index のパースに失敗: {error}")),
+                }
+            }
+        }
+        MEDIA_MANIFEST => verify_manifest(layout, &entry.digest, "manifest", &mut issues),
+        other => issues.push(format!(
+            "index.json が未知の mediaType を指しています: {other}"
+        )),
+    }
+    Ok(issues)
+}
+
+/// blob が存在し digest と一致するか。問題があれば `issues` に追記する。
+fn check_blob(layout: &Path, digest: &Digest, label: &str, issues: &mut Vec<String>) -> bool {
+    let path = layout.join("blobs/sha256").join(digest.encoded());
+    match fs::read(&path) {
+        Err(_) => {
+            issues.push(format!("{label}: blob がありません: {}", digest.prefixed()));
+            false
+        }
+        Ok(bytes) => {
+            if crate::util::sha256_hex(&bytes) == digest.encoded() {
+                true
+            } else {
+                issues.push(format!(
+                    "{label}: digest が一致しません: {}",
+                    digest.prefixed()
+                ));
+                false
+            }
+        }
+    }
+}
+
+/// manifest blob とその config・layer 参照を検査する。
+fn verify_manifest(layout: &Path, digest: &Digest, label: &str, issues: &mut Vec<String>) {
+    if !check_blob(layout, digest, label, issues) {
+        return;
+    }
+    let manifest: ImageManifest = match read_blob(layout, digest) {
+        Ok(manifest) => manifest,
+        Err(error) => {
+            issues.push(format!("{label}: manifest のパースに失敗: {error}"));
+            return;
+        }
+    };
+    check_blob(layout, &manifest.config.digest, label, issues);
+    for layer in &manifest.layers {
+        check_blob(layout, &layer.digest, label, issues);
+    }
 }
 
 /// pull した単一 manifest の layout（index.json → manifest）を読む。

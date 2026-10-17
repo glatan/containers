@@ -1,11 +1,69 @@
-use crate::flags::{Flag, Ldflag};
-use crate::package::recipe::{
-    Arg, BuildContext, Cond, Env, Pipe, Recipe, Step, Steps, Workdir, argv,
-};
-use crate::package::{Bootstrap, Dependency, Package, Source, dep};
+use crate::flags::{Cflag, Flag, Ldflag};
+use crate::package::recipe::{Arg, BuildContext, Env, Pipe, Recipe, Step, Steps, Workdir, argv};
+use crate::package::{AuxSource, Bootstrap, Dependency, Package, Source, dep};
 use crate::target::Target;
 
 pub struct Mold;
+
+/// GNU triple → cargo クロスビルド用の環境変数名対応表。
+/// linker は cargo の `CARGO_TARGET_{TRIPLE}_LINKER`、cc crate は
+/// `CC_{triple}`（アンダースコア区切り）で target 側コンパイラを解決する。
+/// x86_64（ネイティブ）は ambient cc でよいため含まない。
+struct CrossEnv {
+    gnu: &'static str,
+    rust: &'static str,
+    linker_env: &'static str,
+    cc_env: &'static str,
+    cxx_env: &'static str,
+    ar_env: &'static str,
+    cflags_env: &'static str,
+}
+
+/// ホスト triple（x86_64）側のツールチェーン参照。cargo の
+/// build-dependencies（build.rs / proc-macro 内の cc-rs）がホスト向けに
+/// C を組むときに使う。
+fn host_tool(suffix: &'static str) -> Arg {
+    Arg::quoted(Arg::Concat(vec![Arg::Var("HOST_TRIPLE"), Arg::lit(suffix)]))
+}
+
+const CROSS_ENVS: &[CrossEnv] = &[
+    CrossEnv {
+        gnu: "aarch64-linux-gnu",
+        rust: "aarch64-unknown-linux-gnu",
+        linker_env: "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER",
+        cc_env: "CC_aarch64_unknown_linux_gnu",
+        cxx_env: "CXX_aarch64_unknown_linux_gnu",
+        ar_env: "AR_aarch64_unknown_linux_gnu",
+        cflags_env: "CFLAGS_aarch64_unknown_linux_gnu",
+    },
+    CrossEnv {
+        gnu: "riscv64-linux-gnu",
+        rust: "riscv64gc-unknown-linux-gnu",
+        linker_env: "CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_LINKER",
+        cc_env: "CC_riscv64gc_unknown_linux_gnu",
+        cxx_env: "CXX_riscv64gc_unknown_linux_gnu",
+        ar_env: "AR_riscv64gc_unknown_linux_gnu",
+        cflags_env: "CFLAGS_riscv64gc_unknown_linux_gnu",
+    },
+    CrossEnv {
+        gnu: "powerpc64le-linux-gnu",
+        rust: "powerpc64le-unknown-linux-gnu",
+        linker_env: "CARGO_TARGET_POWERPC64LE_UNKNOWN_LINUX_GNU_LINKER",
+        cc_env: "CC_powerpc64le_unknown_linux_gnu",
+        cxx_env: "CXX_powerpc64le_unknown_linux_gnu",
+        ar_env: "AR_powerpc64le_unknown_linux_gnu",
+        cflags_env: "CFLAGS_powerpc64le_unknown_linux_gnu",
+    },
+    CrossEnv {
+        gnu: "s390x-linux-gnu",
+        rust: "s390x-unknown-linux-gnu",
+        linker_env: "CARGO_TARGET_S390X_UNKNOWN_LINUX_GNU_LINKER",
+        cc_env: "CC_s390x_unknown_linux_gnu",
+        cxx_env: "CXX_s390x_unknown_linux_gnu",
+        ar_env: "AR_s390x_unknown_linux_gnu",
+        cflags_env: "CFLAGS_s390x_unknown_linux_gnu",
+    },
+];
 
 impl Package for Mold {
     fn name(&self) -> &'static str {
@@ -13,7 +71,7 @@ impl Package for Mold {
     }
 
     fn version(&self) -> &'static str {
-        "2.42.1"
+        "3.0.0"
     }
 
     fn license(&self) -> &'static str {
@@ -22,43 +80,50 @@ impl Package for Mold {
 
     fn source(&self) -> Source {
         Source {
-            url: "https://github.com/rui314/mold/archive/refs/tags/v2.42.1.tar.gz",
-            sha3_512: "893446caeb9a904d3d796a8fc3f5c6f6361b7f2ea0d164ee56fcd48a8976857984e10faf51bb4610808faf43d87dd73bb4d02bd022dc6b93b42f80727e258ef4",
-            blake3: "ab64ef69b9c842942058e678423ce9fb3901f66725295fbd4f426f14af549f62d6f818fa4161ae6a6bdec58d4f27485f65b2ebfb3374e0f3714a81066555ceca",
-            subdir: "mold-2.42.1",
+            url: "https://github.com/rui314/mold/archive/refs/tags/v3.0.0.tar.gz",
+            sha3_512: "cd0ccfd5957fbc1329e1a8d0b829326a8a13d5b005e07a4d70a506e1bd775c0eb4b3cd46b3ecfbd78b7418c2e26981c7839fbd96991806d641ff9802229afd41",
+            blake3: "6a14f3ebf8e69e73d001b33add174f6b838af6e5557779c952ee74ebeb173a5026a8df100b7663614ffd3651807902e64b33075d052951adcdcbd92eea7f95a3",
+            subdir: "mold-3.0.0",
         }
     }
 
+    /// `cargo vendor` 成果物。crates.io 依存に加え git 固定の
+    /// `rui314/mimalloc_rust`（submodule の mimalloc C ソース込み）を
+    /// 内包し、ネットワーク隔離されたビルドコンテナへ /src/vendor
+    /// として供給する。`cargo vendor` 生成物には .cargo-checksum.json が
+    /// 付くためファイル単位の完全性も cargo が検証する。
+    fn aux_source(&self) -> Option<AuxSource> {
+        Some(AuxSource {
+            file: "mold-3.0.0-vendor.tar.xz",
+            sha3_512: "8604f5847bee09e928d2f7ccdf565d6d02dab2bc3709eeb0efa695dca066e053afe02d3d728e139e437c5e7470faaccce96b5a07eeb3567d785f591cbbf59e2e",
+            blake3: "d1d6814932014737cc992315a6c57554411793bd6ea7d98ddf89f011fd4897d85acd07201ce931bc31dcf1754496952f6eb8f8146bfa0faa9418fc9afe44dda9",
+            subdir: "vendor",
+        })
+    }
+
+    /// 3.x は Rust 製。zlib / zstd は libz-sys / zstd-sys が vendored の
+    /// C ソースを静的に組むため実行時依存は不要。
     fn dependencies(&self, target: Target) -> Vec<Dependency> {
-        crate::package::with_libc(
-            target,
-            &[
-                crate::package::gcc_dep(target),
-                dep("zlib", "1.3.2"),
-                dep("zstd", "1.5.7"),
-            ],
-        )
+        crate::package::with_libc(target, &[crate::package::gcc_dep(target)])
     }
 
     fn build_dependencies(&self, _target: Target) -> Vec<Dependency> {
         vec![crate::package::LINUX_HEADERS]
     }
 
-    /// cmake ビルド系で cmake を実行するため必須の HOST 依存。
+    /// cargo を実行するため rust が必須の HOST 依存（Ordered: mold より先に
+    /// ビルドする必要がある。seed 相では distro rust ではなく rust 成果物を
+    /// 使う）。cc_deps は cc crate / mimalloc の C コンパイル用。
     fn host_dependencies(&self, target: Target) -> Vec<Dependency> {
         let mut deps = crate::package::cc_deps(self, target);
-        deps.push(dep("cmake", "4.4.3"));
+        deps.push(dep("rust", "1.99.0"));
         deps
     }
 
     fn flags(&self, target: Target) -> Flag {
         // mold 自身は -fuse-ld=mold でリンクできないため除外する。
-        // また bundled TBB が enum の値数違い等の実際の ODR 違反を持ち、
-        // さらに LTO オブジェクトのリンクではドライバ内部で `-r` が
-        // 使われ spec 由来の `-fhardened` が抑止不可の警告を出す
-        // （cmake の cm_cxx_features.cmake が "warning" を機能なしと
-        // 誤判定する）。mold は cmake ビルドなので LTO を外す。
-        use crate::flags::Cflag;
+        // cargo のリリースプロファイルには LTO 設定がなく、LLVM 規模の
+        // ビルドでもないため LTO 系フラグも外す。
         Flag::new(
             crate::flags::tool_cflags(target)
                 .into_iter()
@@ -84,325 +149,157 @@ impl Package for Mold {
         )
     }
 
-    fn pgo(&self) -> crate::flags::Pgo {
-        crate::flags::Pgo::Custom
-    }
-
     fn recipe(&self, ctx: &BuildContext) -> Recipe {
-        // CMAKE_CROSS の実行時判定は ctx.cross() で静的に解決する。
-        let mut cross_args: Vec<Arg> = Vec::new();
-        if ctx.cross() {
-            let arch = ctx.triple.split('-').next().unwrap_or(&ctx.triple);
-            cross_args = vec![
-                Arg::lit("-DCMAKE_SYSTEM_NAME=Linux"),
-                Arg::owned(format!("-DCMAKE_SYSTEM_PROCESSOR={arch}")),
-                Arg::owned(format!("-DCMAKE_C_COMPILER_TARGET={}", ctx.triple)),
-                Arg::owned(format!("-DCMAKE_CXX_COMPILER_TARGET={}", ctx.triple)),
-            ];
-        }
-        // configure_mold() シェル関数を Rust 側の呼び出しへ展開。
-        let configure_mold =
-            |dir: Arg, cflags: Vec<Arg>, cxxflags: Vec<Arg>, ldflags: Vec<Arg>| -> Step {
-                let mut args = cross_args.clone();
-                args.extend(argv(&[
-                    "-DCMAKE_BUILD_TYPE=Release",
-                    "-DCMAKE_INSTALL_PREFIX=/usr",
-                ]));
-                for (flag, var) in [
-                    ("-DCMAKE_C_COMPILER=", "CC"),
-                    ("-DCMAKE_CXX_COMPILER=", "CXX"),
-                ] {
-                    args.push(Arg::Concat(vec![
-                        Arg::lit(flag),
-                        Arg::quoted(Arg::Var(var)),
-                    ]));
-                }
-                args.push(Arg::Concat(vec![
-                    Arg::lit("-DCMAKE_C_FLAGS="),
-                    Arg::quoted(Arg::Concat(cflags)),
-                ]));
-                args.push(Arg::Concat(vec![
-                    Arg::lit("-DCMAKE_CXX_FLAGS="),
-                    Arg::quoted(Arg::Concat(cxxflags)),
-                ]));
-                for flag in ["-DCMAKE_EXE_LINKER_FLAGS=", "-DCMAKE_SHARED_LINKER_FLAGS="] {
-                    args.push(Arg::Concat(vec![
-                        Arg::lit(flag),
-                        Arg::quoted(Arg::Concat(ldflags.clone())),
-                    ]));
-                }
-                args.extend(argv(&[
-                    "-DMOLD_USE_MIMALLOC=ON",
-                    "-DMOLD_USE_SYSTEM_MIMALLOC=OFF",
-                    "-DMOLD_USE_SYSTEM_TBB=OFF",
-                ]));
-                Step::Cmake {
-                    source_dir: Arg::quoted(Arg::Var("SOURCE")),
-                    build_dir: dir,
-                    args,
-                    env: vec![],
-                }
-            };
-        let gen_dir = || Arg::quoted(Arg::Concat(vec![Arg::Var("BUILD"), Arg::lit("/gen")]));
-        let use_dir = || Arg::quoted(Arg::Concat(vec![Arg::Var("BUILD"), Arg::lit("/use")]));
-        let build_dir = || Arg::quoted(Arg::Var("BUILD"));
-        let cmake_build = |dir: Arg| Step::Exec {
-            env: vec![],
-            pipe: Pipe::cmd(vec![
-                Arg::lit("cmake"),
-                Arg::lit("--build"),
-                dir,
-                Arg::nproc_jobs("-j"),
-            ]),
-        };
-        let cmake_install = |dir: Arg| Step::Exec {
-            env: vec![],
-            pipe: Pipe::cmd(vec![
-                Arg::lit("cmake"),
-                Arg::lit("--install"),
-                dir,
-                Arg::lit("--prefix"),
-                Arg::quoted(Arg::Concat(vec![Arg::Var("OUT"), Arg::lit("/usr")])),
-            ]),
-        };
-        // 依存の /dep/{zlib,zstd}/usr を CMAKE_PREFIX_PATH へ連結する。
+        // vendor 設定: crates.io と git 固定の mimalloc_rust を
+        // /src/vendor へ向ける。$SOURCE は読み取り専用のため
+        // Workdir::InSource で $BUILD へコピーした上で .cargo/config.toml
+        // を書く（cargo は cwd から上方へ config を探索する）。
         let mut steps = Steps::new(Env::None)
-            .workdir(Workdir::None)
-            .step(Step::Set {
-                name: "CMAKE_PREFIX",
-                value: Arg::lit(""),
+            .workdir(Workdir::InSource)
+            .step(Step::Exec {
+                env: vec![],
+                pipe: Pipe::cmd(argv(&["mkdir", "-p", "\"$BUILD/.cargo\""])),
             })
-            .step(Step::ForEach {
-                var: "_dep",
-                items: argv(&["zlib", "zstd"]),
-                body: vec![Step::If {
-                    cond: Cond::DirExists(Arg::Concat(vec![
-                        Arg::lit("/dep/"),
-                        Arg::Var("_dep"),
-                        Arg::lit("/usr"),
-                    ])),
-                    then: vec![Step::Set {
-                        name: "CMAKE_PREFIX",
-                        value: Arg::quoted(Arg::Concat(vec![
-                            Arg::lit("${CMAKE_PREFIX:+$CMAKE_PREFIX:}/dep/"),
-                            Arg::Var("_dep"),
-                            Arg::lit("/usr"),
-                        ])),
-                    }],
-                    else_: vec![],
-                }],
-                stdout: None,
+            // cargo の -C linker は単一プログラムしか取れず
+            // CFLAGS/LDFLAGS 経由の --sysroot が載らないため、
+            // prelude の /tmp/sysroot を焼いたリンカーラッパーを
+            // 生成し CARGO_TARGET_*_LINKER に指定する。$CC は
+            // コンテナごとのターゲット cc に解決される。
+            .step(Step::Exec {
+                env: vec![],
+                pipe: Pipe::cmd(argv(&["mkdir", "-p", "/build/ccw"])),
             })
-            .step(Step::If {
-                cond: Cond::EnvSet("CMAKE_PREFIX"),
-                then: vec![Step::Export {
-                    name: "CMAKE_PREFIX_PATH",
-                    value: Arg::quoted(Arg::Concat(vec![
-                        Arg::Var("CMAKE_PREFIX"),
-                        Arg::lit("${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"),
-                    ])),
-                }],
-                else_: vec![],
+            .step(Step::WriteFile {
+                path: Arg::lit("/build/ccw/mold-link"),
+                lines: argv(&[
+                    "#!/bin/sh",
+                    "exec \"$CC\" --sysroot=/tmp/sysroot -L/tmp/sysroot/lib -L/tmp/sysroot/lib64 \"$@\"",
+                ]),
+                append: false,
+                expand: false,
             })
-            .step(Step::If {
-                cond: Cond::DirExists(Arg::lit("/dep/cmake/usr/bin")),
-                then: vec![Step::Export {
-                    name: "PATH",
-                    value: Arg::quoted(Arg::Concat(vec![
-                        Arg::lit("/dep/cmake/usr/bin:"),
-                        Arg::Var("PATH"),
-                    ])),
-                }],
-                else_: vec![],
+            .step(Step::Exec {
+                env: vec![],
+                pipe: Pipe::cmd(argv(&["chmod", "+x", "/build/ccw/mold-link"])),
+            })
+            .step(Step::WriteFile {
+                path: Arg::lit("$BUILD/.cargo/config.toml"),
+                lines: argv(&[
+                    "[source.crates-io]",
+                    "replace-with = \"vendored-sources\"",
+                    "",
+                    "[source.\"git+https://github.com/rui314/mimalloc_rust?rev=3979460494f1cd1e7f936cb8e10f41e927c9f698\"]",
+                    "git = \"https://github.com/rui314/mimalloc_rust\"",
+                    "rev = \"3979460494f1cd1e7f936cb8e10f41e927c9f698\"",
+                    "replace-with = \"vendored-sources\"",
+                    "",
+                    "[source.vendored-sources]",
+                    "directory = \"/src/vendor\"",
+                ]),
+                append: false,
+                expand: false,
             });
+
         if !ctx.cross() {
-            // ネイティブのみ PGO。instrumented mold でリンクを実行して
-            // プロファイルを集め、別ツリーで -fprofile-use の成果物を作る。
-            let cc = || Arg::quoted(Arg::Var("CC"));
-            let moldwork = |suffix: &'static str| {
-                Arg::quoted(Arg::Concat(vec![
-                    Arg::lit("/tmp/moldwork/"),
-                    Arg::lit(suffix),
-                ]))
-            };
-            let moldwork_i = |suffix: &'static str| {
-                Arg::quoted(Arg::Concat(vec![
-                    Arg::lit("/tmp/moldwork/t"),
-                    Arg::Var("_i"),
-                    Arg::lit(suffix),
-                ]))
-            };
-            let mold_link = |output: Arg, inputs: Vec<Arg>, extra: Vec<Arg>| {
-                let mut a = vec![cc(), Arg::lit("-B/tmp/moldbin"), Arg::lit("-fuse-ld=mold")];
-                a.extend(extra);
-                a.push(Arg::lit("-o"));
-                a.push(output);
-                a.extend(inputs);
-                Step::Exec {
-                    env: vec![],
-                    pipe: Pipe::cmd(a),
-                }
-            };
+            // ネイティブ（x86_64-unknown-linux-gnu）。cargo は build
+            // script のリンクに PATH 上の `cc` を使い、/dep の生 gcc が
+            // sysroot 無しで選ばれて crt ファイルを見失うため、host
+            // triple の linker / cc を prelude のラップ済み $CC に
+            // 固定する。
             steps = steps
-                .step(Step::Export {
-                    name: "PGODIR",
-                    value: Arg::lit("/tmp/pgo"),
-                })
                 .step(Step::Exec {
-                    env: vec![],
-                    pipe: Pipe::cmd(vec![
-                        Arg::lit("rm"),
-                        Arg::lit("-rf"),
-                        Arg::quoted(Arg::Var("PGODIR")),
-                    ]),
-                })
-                .step(Step::Exec {
-                    env: vec![],
-                    pipe: Pipe::cmd(vec![
-                        Arg::lit("mkdir"),
-                        Arg::lit("-p"),
-                        Arg::quoted(Arg::Var("PGODIR")),
-                    ]),
-                })
-                .step(configure_mold(
-                    gen_dir(),
-                    vec![
-                        Arg::lit("${CFLAGS:-} -fprofile-generate="),
-                        Arg::Var("PGODIR"),
-                        Arg::lit(" -fprofile-update=atomic"),
-                    ],
-                    vec![
-                        Arg::lit("${CXXFLAGS:-} -fprofile-generate="),
-                        Arg::Var("PGODIR"),
-                        Arg::lit(" -fprofile-update=atomic"),
-                    ],
-                    vec![Arg::lit("${LDFLAGS:-} -fprofile-generate")],
-                ))
-                .step(cmake_build(gen_dir()))
-                .step(Step::Or {
-                    lhs: vec![
-                        Step::Exec {
-                            env: vec![],
-                            pipe: Pipe::cmd(argv(&[
-                                "mkdir",
-                                "-p",
-                                "/tmp/moldbin",
-                                "/tmp/moldwork",
+                    env: vec![
+                        (
+                            "CARGO_HOME",
+                            Arg::quoted(Arg::Concat(vec![
+                                Arg::Var("BUILD"),
+                                Arg::lit("/cargo-home"),
                             ])),
-                        },
-                        Step::Exec {
-                            env: vec![],
-                            pipe: Pipe::cmd(vec![
-                                Arg::lit("ln"),
-                                Arg::lit("-sf"),
-                                Arg::quoted(Arg::Concat(vec![
-                                    Arg::Var("BUILD"),
-                                    Arg::lit("/gen/mold"),
-                                ])),
-                                Arg::lit("/tmp/moldbin/ld.mold"),
-                            ]),
-                        },
-                        Step::ForEach {
-                            var: "_i",
-                            items: argv(&["1", "2", "3", "4", "5"]),
-                            body: vec![
-                                Step::Exec {
-                                    env: vec![],
-                                    pipe: Pipe::new(vec![
-                                        vec![
-                                            Arg::lit("printf"),
-                                            Arg::lit("'int fn%s(void){return %s;}\\n'"),
-                                            Arg::quoted(Arg::Var("_i")),
-                                            Arg::quoted(Arg::Var("_i")),
-                                        ],
-                                        vec![
-                                            cc(),
-                                            Arg::lit("-x"),
-                                            Arg::lit("c"),
-                                            Arg::lit("-"),
-                                            Arg::lit("-c"),
-                                            Arg::lit("-o"),
-                                            moldwork_i(".o"),
-                                        ],
-                                    ]),
-                                },
-                                mold_link(
-                                    moldwork_i(".so"),
-                                    vec![moldwork_i(".o")],
-                                    vec![Arg::lit("-shared")],
-                                ),
-                            ],
-                            stdout: None,
-                        },
-                        Step::Exec {
-                            env: vec![],
-                            pipe: Pipe::new(vec![
-                                vec![
-                                    Arg::lit("printf"),
-                                    Arg::lit(
-                                        "'int main(void){return fn1();}\\nextern int fn1(void);\\n'",
-                                    ),
-                                ],
-                                vec![
-                                    cc(),
-                                    Arg::lit("-x"),
-                                    Arg::lit("c"),
-                                    Arg::lit("-"),
-                                    Arg::lit("-c"),
-                                    Arg::lit("-o"),
-                                    moldwork("main.o"),
-                                ],
-                            ]),
-                        },
-                        mold_link(
-                            moldwork("prog"),
-                            vec![moldwork("main.o"), moldwork("t1.o")],
-                            vec![],
                         ),
-                        mold_link(
-                            moldwork("prog-pie"),
-                            vec![moldwork("main.o"), moldwork("t1.o")],
-                            vec![Arg::lit("-pie")],
+                        (
+                            "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER",
+                            Arg::lit("/build/ccw/mold-link"),
                         ),
+                        ("CC_x86_64_unknown_linux_gnu", Arg::Var("CC")),
+                        ("CXX_x86_64_unknown_linux_gnu", Arg::Var("CXX")),
+                        ("AR_x86_64_unknown_linux_gnu", Arg::Var("AR")),
+                        ("CFLAGS_x86_64_unknown_linux_gnu", Arg::Var("CFLAGS")),
                     ],
-                    rhs: vec![Step::Exec {
-                        env: vec![],
-                        pipe: Pipe::cmd(argv(&["true"])),
-                    }],
+                    pipe: Pipe::cmd(argv(&[
+                        "cargo",
+                        "build",
+                        "--release",
+                        "--locked",
+                        "--offline",
+                    ])),
                 })
-                .step(configure_mold(
-                    use_dir(),
-                    vec![
-                        Arg::lit("${CFLAGS:-} -fprofile-use="),
-                        Arg::Var("PGODIR"),
-                        Arg::lit(
-                            " -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch",
-                        ),
+                .step(Step::Exec {
+                    env: vec![
+                        ("DESTDIR", Arg::quoted(Arg::Var("OUT"))),
+                        ("PREFIX", Arg::lit("/usr")),
+                        ("MOLD_LIBDIR", Arg::lit("/usr/lib")),
                     ],
-                    vec![
-                        Arg::lit("${CXXFLAGS:-} -fprofile-use="),
-                        Arg::Var("PGODIR"),
-                        Arg::lit(
-                            " -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch",
-                        ),
-                    ],
-                    vec![Arg::lit("${LDFLAGS:-} -fprofile-use")],
-                ))
-                .step(cmake_build(use_dir()))
-                .step(cmake_install(use_dir()));
+                    pipe: Pipe::cmd(argv(&["sh", "\"$BUILD/install-mold.sh\""])),
+                });
         } else {
+            let cross = CROSS_ENVS
+                .iter()
+                .find(|cross| cross.gnu == ctx.triple)
+                .unwrap_or_else(|| panic!("mold: 未対応のクロス triple: {}", ctx.triple));
             steps = steps
-                .step(configure_mold(
-                    build_dir(),
-                    vec![Arg::lit("${CFLAGS:-}")],
-                    vec![Arg::lit("${CXXFLAGS:-}")],
-                    vec![Arg::lit("${LDFLAGS:-}")],
-                ))
-                .step(cmake_build(build_dir()))
-                .step(cmake_install(build_dir()));
+                .step(Step::Exec {
+                    env: vec![
+                        (
+                            "CARGO_HOME",
+                            Arg::quoted(Arg::Concat(vec![
+                                Arg::Var("BUILD"),
+                                Arg::lit("/cargo-home"),
+                            ])),
+                        ),
+                        (cross.linker_env, Arg::lit("/build/ccw/mold-link")),
+                        (cross.cc_env, Arg::Var("CC")),
+                        (cross.cxx_env, Arg::Var("CXX")),
+                        (cross.ar_env, Arg::Var("AR")),
+                        (cross.cflags_env, Arg::Var("CFLAGS")),
+                        // cargo build-dependencies は HOST triple 向けに
+                        // コンパイルされる。ambient の CC/CFLAGS はターゲット
+                        // 向け（クロス gcc + sysroot フラグ）なので、cc-rs が
+                        // 参照するホスト側変数を固定して分離する。
+                        ("CC_x86_64_unknown_linux_gnu", host_tool("-gcc")),
+                        ("CXX_x86_64_unknown_linux_gnu", host_tool("-g++")),
+                        ("AR_x86_64_unknown_linux_gnu", host_tool("-ar")),
+                        ("HOST_CC", host_tool("-gcc")),
+                        ("HOST_CXX", host_tool("-g++")),
+                        ("CFLAGS_x86_64_unknown_linux_gnu", Arg::lit("")),
+                        ("CXXFLAGS_x86_64_unknown_linux_gnu", Arg::lit("")),
+                        ("LDFLAGS_x86_64_unknown_linux_gnu", Arg::lit("")),
+                    ],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("cargo"),
+                        Arg::lit("build"),
+                        Arg::lit("--release"),
+                        Arg::lit("--locked"),
+                        Arg::lit("--offline"),
+                        Arg::lit("--target"),
+                        Arg::lit(cross.rust),
+                    ]),
+                })
+                .step(Step::Exec {
+                    env: vec![
+                        ("DESTDIR", Arg::quoted(Arg::Var("OUT"))),
+                        ("PREFIX", Arg::lit("/usr")),
+                        ("MOLD_LIBDIR", Arg::lit("/usr/lib")),
+                        (
+                            "CARGO_TARGET_DIR",
+                            Arg::owned(format!("\"$BUILD/target/{}\"", cross.rust)),
+                        ),
+                    ],
+                    pipe: Pipe::cmd(argv(&["sh", "\"$BUILD/install-mold.sh\""])),
+                });
         }
         Recipe::Steps(steps)
     }
+
     /// `Bootstrap` を実装（bootstrap パッケージ）。
     fn as_bootstrap(&self) -> Option<&dyn Bootstrap> {
         Some(self)

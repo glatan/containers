@@ -49,23 +49,34 @@ pub fn build_deps() -> Vec<Dependency> {
 
 /// `--enable-cet` は x86_64 のみ。PGO も x86_64 triple のみ:
 /// instrumented な as/ld/objdump をビルドホスト上で実行して
-/// プロファイルを採取するため、生成コードが HOST で動かせる
-/// （= `$TRIPLE` = `$HOST_TRIPLE`）ことが前提。HOST とずれる triple では
-/// プロファイル生成の保証が難しいため適用しない。
-/// x86_64 triple の binutils は常にホスト triple と一致するため全対象で
-/// 発火する。
+/// プロファイルを採取するため、生成バイナリがビルドホストで動かせる
+/// ことが前提。Canadian（`$PACKAGE_HOST` != `$HOST_TRIPLE`）では
+/// 生成バイナリが別 arch のため実行できず適用しない。
+/// x86_64 triple の binutils は amd64 向けでのみ発火する。
 pub fn recipe(ctx: &BuildContext) -> Steps {
     let cet = ctx.triple == "x86_64-linux-gnu";
-    let pgo = cet && !ctx.cross();
+    let pgo = cet && !ctx.cross() && !ctx.canadian();
 
     let configure = |env: Vec<(&'static str, Arg)>| -> Step {
         let mut args = vec![
             Arg::Opt("build", Box::new(Arg::Var("HOST_TRIPLE"))),
-            // ツールはビルド機で動くクロスツール。--host=HOST_TRIPLE が正しい
-            //（=PACKAGE_HOST は host==target になる誤り）。prefixed 名は
-            // host!=target 時の自動付与に頼らず --program-prefix で明示する
-            //（x86_64 は HOST_TRIPLE==TRIPLE で自動付与が効かない）。
-            Arg::Opt("host", Box::new(Arg::Var("HOST_TRIPLE"))),
+            // amd64 向けはビルド機で動くクロスツール（--host=$HOST_TRIPLE）。
+            // 非 amd64 向けは成果物ターゲットの arch で動くバイナリを
+            // canadian cross で組むため --host=$PACKAGE_HOST が正しい
+            //（dep:true 依存が成果物ターゲットの glibc/zlib/zstd を供給
+            // しており、プリリュードの CC も PACKAGE_HOST 向けクロス
+            // コンパイラを指す。HOST_TRIPLE のままでは生成バイナリと
+            // --host が不整合になる）。prefixed 名は --program-prefix
+            // で明示する（x86_64 は HOST_TRIPLE==TRIPLE で自動付与が
+            // 効かない）。
+            Arg::Opt(
+                "host",
+                Box::new(if ctx.canadian() {
+                    Arg::Var("PACKAGE_HOST")
+                } else {
+                    Arg::Var("HOST_TRIPLE")
+                }),
+            ),
             Arg::Opt("target", Box::new(Arg::Var("TRIPLE"))),
             Arg::Opt(
                 "program-prefix",

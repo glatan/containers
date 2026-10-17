@@ -40,10 +40,9 @@ fn nested_manifest_digests(layout_dir: &std::path::Path) -> Vec<String> {
     assert_eq!(entries.len(), 1, "index.json は単一 descriptor のはずです");
     let nested_digest = entries[0]["digest"].as_str().unwrap();
     let hex = nested_digest.strip_prefix("sha256:").unwrap();
-    let nested: Value = serde_json::from_slice(
-        &std::fs::read(layout_dir.join("blobs/sha256").join(hex)).unwrap(),
-    )
-    .unwrap();
+    let nested: Value =
+        serde_json::from_slice(&std::fs::read(layout_dir.join("blobs/sha256").join(hex)).unwrap())
+            .unwrap();
     nested["manifests"]
         .as_array()
         .unwrap()
@@ -88,10 +87,7 @@ fn skopeo_push_pull_roundtrip_via_registry() {
     };
     let layout = build(&[amd64("v1"), amd64("v4")]);
     let reference = format!("docker://{registry}/e2e/containers-builder:test");
-    skopeo_copy(
-        &format!("oci:{}", layout.output.display()),
-        &reference,
-    );
+    skopeo_copy(&format!("oci:{}", layout.output.display()), &reference);
     // push 後にタグが指す digest（ネスト index blob）を raw inspect で取得。
     let raw = Command::new("skopeo")
         .args(["inspect", "--raw", &reference])
@@ -100,8 +96,7 @@ fn skopeo_push_pull_roundtrip_via_registry() {
     assert!(raw.status.success(), "inspect --raw が失敗しました");
     let index: Value = serde_json::from_slice(&raw.stdout).unwrap();
     assert_eq!(
-        index["mediaType"],
-        "application/vnd.oci.image.index.v1+json",
+        index["mediaType"], "application/vnd.oci.image.index.v1+json",
         "index として push されているはずです"
     );
     assert_eq!(index["manifests"].as_array().unwrap().len(), 2);

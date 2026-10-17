@@ -4,7 +4,7 @@
 | 項目 | 値 |
 |-|-|
 | パッケージ名 | `isl` |
-| バージョン | 0.26 |
+| バージョン | 0.28 |
 | ライセンス | MIT |
 | 分類 | パッケージ |
 | 対象 Platform | amd64: v1 v2 v3 v4; arm64: v8 v8.1 v8.2 v8.3 v8.4 v8.5 v8.6 v8.7 v8.8 v8.9 v9 v9.1 v9.2 v9.3 v9.4 v9.5; ppc64le: power8 power9 power10 power11; riscv64: rva20u64 rva22u64 rva23u64; s390x: z900 z990 z9-ec z10 z196 zEC12 z13 z14 z15 z16 z17 |
@@ -15,10 +15,10 @@
 
 | 項目 | 値 |
 |-|-|
-| URL | https://libisl.sourceforge.io/isl-0.26.tar.xz |
-| sha3-512 | `4b31f4a9a343cc15319359ad41ef8d4176bcf2f713ea1fb3b2e5a275a6bc6d109943521ef181fab5c21f0ba581f08e753b4e7c71f9a296a559dc71f77754f1aa` |
-| blake3 | `a27da5d097f4e105d3a63c5e81d26c2b00cc35a4a3bf62dd2a49335a0f20ce7f57a3e1152dac76aa4b16d8a4205040f108562aa9647e2d6d27717ed533af673f` |
-| 展開ディレクトリ | `isl-0.26` |
+| URL | https://libisl.sourceforge.io/isl-0.28.tar.xz |
+| sha3-512 | `c99c4c44b8d026d42d781f950560754b4d9288cfed4a0e35ddf097f5c948a6445f751aec1b38166fe48684deec2a080c3e4f1d30b1b28a2c1e92ef96bd02fd30` |
+| blake3 | `8a4c2423d60a79fd6ac3ff6942181d74d4c47a157a3113e880de4707d7ac75678673ce356a77d1834e1a8390e297cb75579002c6bf4c25624f3c44a6452b10d0` |
+| 展開ディレクトリ | `isl-0.28` |
 
 ## 依存
 
@@ -35,7 +35,7 @@
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | — |
+| [linux-headers](./linux-headers.md) | 6.18.56 | — |
 
 ### host-dependencies
 
@@ -43,7 +43,7 @@
 |-|-|-|
 | [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | seed |
 | [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | seed |
-| [mold](./mold.md) | 2.42.1 | optional |
+| [mold](./mold.md) | 3.0.0 | optional |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
 ## ビルド設定

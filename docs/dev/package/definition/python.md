@@ -4,7 +4,7 @@
 | 項目 | 値 |
 |-|-|
 | パッケージ名 | `python` |
-| バージョン | 3.14.7 |
+| バージョン | 3.15.0 |
 | ライセンス | Python-2.0 |
 | 分類 | パッケージ |
 | 対象 Platform | amd64: v1 v2 v3 v4; arm64: v8 v8.1 v8.2 v8.3 v8.4 v8.5 v8.6 v8.7 v8.8 v8.9 v9 v9.1 v9.2 v9.3 v9.4 v9.5; ppc64le: power8 power9 power10 power11; riscv64: rva20u64 rva22u64 rva23u64; s390x: z900 z990 z9-ec z10 z196 zEC12 z13 z14 z15 z16 z17 |
@@ -16,10 +16,10 @@
 
 | 項目 | 値 |
 |-|-|
-| URL | https://www.python.org/ftp/python/3.14.7/Python-3.14.7.tar.xz |
-| sha3-512 | `2da7cc048103dfd9f3681848e13fd3dfa06f25cc9afd76f89f772c1e3a8f14410ba44546754ee177672d0f86fac551bbd26685335830e316ca0e917629934420` |
-| blake3 | `4406a4956bb3265c370b011383004cc2dcc94ed2c99b5f3ed67338eeab9e5eaceedabc538098da6772b361383e84ccf0274451296970e8d7c9b4261e9a30de59` |
-| 展開ディレクトリ | `Python-3.14.7` |
+| URL | https://www.python.org/ftp/python/3.15.0/Python-3.15.0.tar.xz |
+| sha3-512 | `b9ec570f6e23d402f5b445a2dbda7c71611aa217c41c086fe2e2a4ace36e972e65c97d54f6387b8dd0857c4e8fdc35bd1fbc57f3de3db54b3dc49698f4641e5d` |
+| blake3 | `1254fe6e327eaba1572549b1f8d1a1a4cf07d87733411542868cf9bebce6199572072a521e6f261f96f6b054ebac934a88237b955efc7548a8343c4e1d68a574` |
+| 展開ディレクトリ | `Python-3.15.0` |
 
 ## 依存
 
@@ -32,9 +32,9 @@
 | [x86_64-linux-gnu-glibc](./x86_64-linux-gnu-glibc.md) | 2.44 | — |
 | [libffi](./libffi.md) | 3.8.0 | — |
 | [zlib](./zlib.md) | 1.3.2 | — |
-| [openssl](./openssl.md) | 4.0.2 | — |
-| [expat](./expat.md) | 2.8.4 | — |
-| [sqlite](./sqlite.md) | 3.53.4 | — |
+| [openssl](./openssl.md) | 4.0.3 | — |
+| [expat](./expat.md) | 2.9.0 | — |
+| [sqlite](./sqlite.md) | 3.54.0 | — |
 | [ncurses](./ncurses.md) | 6.6 | — |
 | [readline](./readline.md) | 8.3 | — |
 | [xz](./xz.md) | 5.8.4 | — |
@@ -46,7 +46,7 @@
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | — |
+| [linux-headers](./linux-headers.md) | 6.18.56 | — |
 
 ### host-dependencies
 
@@ -54,8 +54,8 @@
 |-|-|-|
 | [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | seed |
 | [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | seed |
-| [pkgconf](./pkgconf.md) | 2.5.1 | — |
-| [mold](./mold.md) | 2.42.1 | optional |
+| [pkgconf](./pkgconf.md) | 3.0.8 | — |
+| [mold](./mold.md) | 3.0.0 | optional |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
 ## ビルド設定
@@ -204,12 +204,10 @@ for _dep in libffi zlib openssl expat sqlite ncurses readline xz bzip2 zstd; do
   if [ -d /dep/${_dep}/usr/lib64 ]; then
     export LDFLAGS="${LDFLAGS} -L/dep/${_dep}/usr/lib64"
     export PKG_CONFIG_PATH="/dep/${_dep}/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
-    export LD_LIBRARY_PATH="/dep/${_dep}/usr/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
   else
     if [ -d /dep/${_dep}/usr/lib ]; then
       export LDFLAGS="${LDFLAGS} -L/dep/${_dep}/usr/lib"
       export PKG_CONFIG_PATH="/dep/${_dep}/usr/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
-      export LD_LIBRARY_PATH="/dep/${_dep}/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
     fi
   fi
 done
@@ -218,8 +216,9 @@ export ac_cv_buggy_getaddrinfo=no
 export ac_cv_file__dev_ptmx=yes
 export ac_cv_file__dev_ptc=no
 autotools_configure --prefix=/usr --enable-shared --without-ensurepip --with-build-python=/dep/python/usr/bin/python3
-make -j"$(nproc)" CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}"
-make install CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}" DESTDIR="$OUT"
+sed -i "s|check_extension_modules.py|check_extension_modules.py --cross-compiling|g" Makefile
+make -j"$(nproc)" RUNSHARED= CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}"
+make install RUNSHARED= CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}" DESTDIR="$OUT"
 ln -sf python3 "$OUT"/usr/bin/python
 ```
 

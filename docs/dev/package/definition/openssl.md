@@ -4,7 +4,7 @@
 | 項目 | 値 |
 |-|-|
 | パッケージ名 | `openssl` |
-| バージョン | 4.0.2 |
+| バージョン | 4.0.3 |
 | ライセンス | Apache-2.0 |
 | 分類 | カタログ |
 | 対象 Platform | amd64: v1 v2 v3 v4; arm64: v8 v8.1 v8.2 v8.3 v8.4 v8.5 v8.6 v8.7 v8.8 v8.9 v9 v9.1 v9.2 v9.3 v9.4 v9.5; ppc64le: power8 power9 power10 power11; riscv64: rva20u64 rva22u64 rva23u64; s390x: z900 z990 z9-ec z10 z196 zEC12 z13 z14 z15 z16 z17 |
@@ -15,10 +15,10 @@
 
 | 項目 | 値 |
 |-|-|
-| URL | https://github.com/openssl/openssl/releases/download/openssl-4.0.2/openssl-4.0.2.tar.gz |
-| sha3-512 | `a7d86c8609e98dea12cab18f22724439a1fda43ef9a45a6440a201a6d9e616fe29dcf83dbffbc5c303cc5f43a1c92f5d222adb29f03a30b1e0b578af0a47dc4b` |
-| blake3 | `ef5af5011e1ee875521ed63331cf35d16e82167042b37f361a630b10f5bf2f999fad90fcc972bc02a0d83e2972af48040140d4e78279311b46a7c1557c206d7a` |
-| 展開ディレクトリ | `openssl-4.0.2` |
+| URL | https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz |
+| sha3-512 | `11583faf5718638acdca493ca593d382302fab032db7ec1c6adedb07d073394e891ddf236591070f3fb5d48fe7fad149ee990d87397c4c3a6f95748db80d20cc` |
+| blake3 | `92a6d5e2e74a989c1405de8a7770c7fb469ddcf9c9ed74b768d51c274af6487b5816f7dd05f15714baf55b17bb948175891ecfc24da8117fb5527462795abe2b` |
+| 展開ディレクトリ | `openssl-4.0.3` |
 
 ## 依存
 
@@ -34,7 +34,7 @@
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | — |
+| [linux-headers](./linux-headers.md) | 6.18.56 | — |
 
 ### host-dependencies
 
@@ -42,8 +42,8 @@
 |-|-|-|
 | [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | seed |
 | [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | seed |
-| [perl](./perl.md) | 5.42.3 | — |
-| [mold](./mold.md) | 2.42.1 | optional |
+| [perl](./perl.md) | 5.44.0 | — |
+| [mold](./mold.md) | 3.0.0 | optional |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
 ## ビルド設定

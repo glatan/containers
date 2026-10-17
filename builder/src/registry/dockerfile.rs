@@ -108,7 +108,9 @@ pub fn block_lines(
         if docker_platform.is_empty() {
             lines.push(format!("FROM {reference} AS {stage}"));
         } else {
-            lines.push(format!("FROM --platform={docker_platform} {reference} AS {stage}"));
+            lines.push(format!(
+                "FROM --platform={docker_platform} {reference} AS {stage}"
+            ));
         }
     }
     lines.push("FROM scratch AS containers-packages".to_string());
@@ -144,7 +146,8 @@ mod tests {
 
     #[test]
     fn splice_replaces_existing_block() {
-        let existing = "FROM a\n# BEGIN GENERATED:containers x\nFROM old AS old\n# END GENERATED\nRUN true\n";
+        let existing =
+            "FROM a\n# BEGIN GENERATED:containers x\nFROM old AS old\n# END GENERATED\nRUN true\n";
         let block = "# BEGIN GENERATED:containers y\nFROM new AS new\n# END GENERATED";
         let out = splice(existing, block, false).unwrap();
         assert!(out.contains("FROM new AS new"));
@@ -155,8 +158,12 @@ mod tests {
     #[test]
     fn splice_rejects_block_after_from_when_requires_before() {
         let existing = "FROM a\n# BEGIN GENERATED:containers\nARG X\n# END GENERATED\n";
-        let error = splice(existing, "# BEGIN GENERATED:containers\nARG Y\n# END GENERATED", true)
-            .unwrap_err();
+        let error = splice(
+            existing,
+            "# BEGIN GENERATED:containers\nARG Y\n# END GENERATED",
+            true,
+        )
+        .unwrap_err();
         assert!(error.to_string().contains("FROM より前"));
     }
 
@@ -178,7 +185,9 @@ mod tests {
                 "linux/amd64/v4".to_string(),
             )],
         );
-        assert!(block.contains("FROM --platform=linux/amd64/v4 ghcr.io/o/packages/zlib@sha256:ff AS pkg-zlib"));
+        assert!(block.contains(
+            "FROM --platform=linux/amd64/v4 ghcr.io/o/packages/zlib@sha256:ff AS pkg-zlib"
+        ));
         assert!(block.contains("COPY --from=pkg-zlib / /"));
         assert!(block.contains("index=sha256:aa"));
     }

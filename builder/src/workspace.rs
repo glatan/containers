@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::error::{Error, Result};
 use crate::target::Target;
 
 pub fn source_dir(name: &str) -> PathBuf {
@@ -73,6 +74,122 @@ pub fn compose_current_link(name: &str, arch: &str) -> PathBuf {
 /// index artifact の生成先。`{name}-{version}` 規約とは別の固定パス。
 pub fn index_layout_dir() -> PathBuf {
     PathBuf::from("oci-layouts/index")
+}
+
+/// skopeo 等の外部ツールが push 中に大きな一時 blob を書く先。
+/// `oci-layouts/` と同一 FS（監視対象の VHDX）に固定し、既定の
+/// /tmp や別ドライブへの散逸を防ぐ。
+pub fn skopeo_tmp_dir() -> Result<PathBuf> {
+    let dir = PathBuf::from("oci-layouts/.tmp");
+    std::fs::create_dir_all(&dir).map_err(|source| Error::io(&dir, source))?;
+    // TMPDIR は相対だと spawn 先の解釈が不安定になるため絶対化する
+    std::fs::canonicalize(&dir).map_err(|source| Error::io(&dir, source))
+}
+
+/// build、bootstrap、pack、restore、compose がコマンド全期間共有で持つロック。
+/// `clean` の成果物・layout 削除はこれを排他で取れないとき、何も消さず拒否する。
+pub fn active_lock_path() -> PathBuf {
+    PathBuf::from("packages/artifacts/.locks/active.lock")
+}
+
+pub fn active_lock() -> Result<fd_lock::RwLock<std::fs::File>> {
+    open_lock(&active_lock_path())
+}
+
+/// 成果物 `{name}-{version}-{arch}-{variant}` 単位の flock のパス。
+/// build の atomic publish と `restore` の展開、`clean` のセル単位スキップが共有する。
+pub fn artifact_lock_path(name: &str, version: &str, target: Target) -> PathBuf {
+    PathBuf::from("packages/artifacts/.locks").join(format!(
+        "{name}-{version}-{}-{}.lock",
+        target.architecture(),
+        target.variant()
+    ))
+}
+
+/// 成果物 `{name}-{version}-{arch}-{variant}` 単位の flock。
+/// build の atomic publish と `restore` の展開を直列化するため、
+/// `package/build/container.rs` のロック規約と同じ場所・命名を使う。
+pub fn artifact_lock(
+    name: &str,
+    version: &str,
+    target: Target,
+) -> Result<fd_lock::RwLock<std::fs::File>> {
+    open_lock(&artifact_lock_path(name, version, target))
+}
+
+/// 排他ロックを、ガードがロック本体より先に解放される形で所有する。
+/// 複数セルを削除前にまとめて押さえるときに使う。
+pub struct ExclusiveLock {
+    // フィールドは宣言順に drop される。ガードを先に解放し、その後で実体を捨てる。
+    _guard: fd_lock::RwLockWriteGuard<'static, std::fs::File>,
+    _lock: Box<fd_lock::RwLock<std::fs::File>>,
+}
+
+impl ExclusiveLock {
+    /// 取れれば所有する。他プロセスが共有または排他で持っていれば `Ok(None)`。
+    pub fn try_acquire(path: &Path) -> Result<Option<Self>> {
+        let mut lock = Box::new(open_lock(path)?);
+        let guard = match lock.try_write() {
+            Ok(guard) => guard,
+            Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => return Ok(None),
+            Err(source) => return Err(Error::io(path, source)),
+        };
+        // ガードはヒープ上の `RwLock` を指す。`Box` の移動は実体の番地を変えない。
+        let _guard = unsafe {
+            std::mem::transmute::<
+                fd_lock::RwLockWriteGuard<'_, std::fs::File>,
+                fd_lock::RwLockWriteGuard<'static, std::fs::File>,
+            >(guard)
+        };
+        Ok(Some(Self {
+            _guard,
+            _lock: lock,
+        }))
+    }
+}
+
+fn open_lock(path: &Path) -> Result<fd_lock::RwLock<std::fs::File>> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|source| Error::io(parent, source))?;
+    }
+    let file = std::fs::File::create(path).map_err(|source| Error::io(path, source))?;
+    Ok(fd_lock::RwLock::new(file))
+}
+
+/// 成果物ディレクトリ単位の flock（dir の basename をロック名に使う）。
+/// `packages/artifacts/{name}-{version}-{arch}-{variant}` の basename は
+/// `artifact_lock` のロック名と一致するため同じロックを共有する。
+/// pack/compose が層の tar 読み取り中に restore --force の rename と
+/// 競合しないよう、読み取り側が read で取得する。
+pub fn artifact_dir_lock(dir: &Path) -> Result<fd_lock::RwLock<std::fs::File>> {
+    let parent = dir.parent().unwrap_or_else(|| Path::new("."));
+    let lock_dir = parent.join(".locks");
+    std::fs::create_dir_all(&lock_dir).map_err(|source| Error::io(&lock_dir, source))?;
+    let name = dir
+        .file_name()
+        .unwrap_or_else(|| std::ffi::OsStr::new("artifact"));
+    let path = lock_dir.join(format!("{}.lock", name.to_string_lossy()));
+    let file = std::fs::File::create(&path).map_err(|source| Error::io(&path, source))?;
+    Ok(fd_lock::RwLock::new(file))
+}
+
+/// `output`（レイアウト等の確定先ディレクトリ）単位の flock。
+/// ロックファイルは `{output.parent}/.locks/{name}.lock` に置く。
+/// 呼び出し側は返した RwLock の `write()`/`read()` で排他する
+/// （プロセス終了で自動解放。merge 読み取り〜確定 rename の
+/// 競合防止が目的）。
+pub fn output_lock_path(output: &Path) -> PathBuf {
+    let parent = output.parent().unwrap_or_else(|| Path::new("."));
+    let name = output
+        .file_name()
+        .unwrap_or_else(|| std::ffi::OsStr::new("output"));
+    parent
+        .join(".locks")
+        .join(format!("{}.lock", name.to_string_lossy()))
+}
+
+pub fn output_lock(output: &Path) -> Result<fd_lock::RwLock<std::fs::File>> {
+    open_lock(&output_lock_path(output))
 }
 
 pub fn next_compose_revision(name: &str, arch: &str, date: &str) -> u32 {

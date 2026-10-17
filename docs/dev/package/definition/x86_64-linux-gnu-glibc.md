@@ -35,7 +35,7 @@
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | — |
+| [linux-headers](./linux-headers.md) | 6.18.56 | — |
 | [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | — |
 | [x86_64-linux-gnu-gcc-stage2](./x86_64-linux-gnu-gcc-stage2.md) | 16.2.0 | — |
 
@@ -43,7 +43,7 @@
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [python](./python.md) | 3.14.7 | seed:python |
+| [python](./python.md) | 3.15.0 | seed:python |
 | [bison](./bison.md) | 3.8.2 | seed:bison |
 | [m4](./m4.md) | 1.4.21 | seed:m4 |
 

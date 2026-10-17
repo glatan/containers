@@ -222,151 +222,19 @@
       "std": "Gnu17",
       "steps": [
         {
-          "Set": {
-            "name": "CMAKE_PREFIX",
-            "value": {
-              "Lit": ""
-            }
-          }
-        },
-        {
-          "ForEach": {
-            "body": [
-              {
-                "If": {
-                  "cond": {
-                    "DirExists": {
-                      "Concat": [
-                        {
-                          "Lit": "/dep/"
-                        },
-                        {
-                          "Var": "_dep"
-                        },
-                        {
-                          "Lit": "/usr"
-                        }
-                      ]
-                    }
-                  },
-                  "else_": [],
-                  "then": [
-                    {
-                      "Set": {
-                        "name": "CMAKE_PREFIX",
-                        "value": {
-                          "Quoted": {
-                            "Concat": [
-                              {
-                                "Lit": "${CMAKE_PREFIX:+$CMAKE_PREFIX:}/dep/"
-                              },
-                              {
-                                "Var": "_dep"
-                              },
-                              {
-                                "Lit": "/usr"
-                              }
-                            ]
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            ],
-            "items": [
-              {
-                "Lit": "zlib"
-              },
-              {
-                "Lit": "zstd"
-              }
-            ],
-            "stdout": null,
-            "var": "_dep"
-          }
-        },
-        {
-          "If": {
-            "cond": {
-              "EnvSet": "CMAKE_PREFIX"
-            },
-            "else_": [],
-            "then": [
-              {
-                "Export": {
-                  "name": "CMAKE_PREFIX_PATH",
-                  "value": {
-                    "Quoted": {
-                      "Concat": [
-                        {
-                          "Var": "CMAKE_PREFIX"
-                        },
-                        {
-                          "Lit": "${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            ]
-          }
-        },
-        {
-          "If": {
-            "cond": {
-              "DirExists": {
-                "Lit": "/dep/cmake/usr/bin"
-              }
-            },
-            "else_": [],
-            "then": [
-              {
-                "Export": {
-                  "name": "PATH",
-                  "value": {
-                    "Quoted": {
-                      "Concat": [
-                        {
-                          "Lit": "/dep/cmake/usr/bin:"
-                        },
-                        {
-                          "Var": "PATH"
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            ]
-          }
-        },
-        {
-          "Export": {
-            "name": "PGODIR",
-            "value": {
-              "Lit": "/tmp/pgo"
-            }
-          }
-        },
-        {
           "Exec": {
             "env": [],
             "pipe": {
               "stages": [
                 [
                   {
-                    "Lit": "rm"
+                    "Lit": "mkdir"
                   },
                   {
-                    "Lit": "-rf"
+                    "Lit": "-p"
                   },
                   {
-                    "Quoted": {
-                      "Var": "PGODIR"
-                    }
+                    "Lit": "\"$BUILD/.cargo\""
                   }
                 ]
               ],
@@ -389,9 +257,7 @@
                     "Lit": "-p"
                   },
                   {
-                    "Quoted": {
-                      "Var": "PGODIR"
-                    }
+                    "Lit": "/build/ccw"
                   }
                 ]
               ],
@@ -402,141 +268,19 @@
           }
         },
         {
-          "Cmake": {
-            "args": [
+          "WriteFile": {
+            "append": false,
+            "expand": false,
+            "lines": [
               {
-                "Lit": "-DCMAKE_BUILD_TYPE=Release"
+                "Lit": "#!/bin/sh"
               },
               {
-                "Lit": "-DCMAKE_INSTALL_PREFIX=/usr"
-              },
-              {
-                "Concat": [
-                  {
-                    "Lit": "-DCMAKE_C_COMPILER="
-                  },
-                  {
-                    "Quoted": {
-                      "Var": "CC"
-                    }
-                  }
-                ]
-              },
-              {
-                "Concat": [
-                  {
-                    "Lit": "-DCMAKE_CXX_COMPILER="
-                  },
-                  {
-                    "Quoted": {
-                      "Var": "CXX"
-                    }
-                  }
-                ]
-              },
-              {
-                "Concat": [
-                  {
-                    "Lit": "-DCMAKE_C_FLAGS="
-                  },
-                  {
-                    "Quoted": {
-                      "Concat": [
-                        {
-                          "Lit": "${CFLAGS:-} -fprofile-generate="
-                        },
-                        {
-                          "Var": "PGODIR"
-                        },
-                        {
-                          "Lit": " -fprofile-update=atomic"
-                        }
-                      ]
-                    }
-                  }
-                ]
-              },
-              {
-                "Concat": [
-                  {
-                    "Lit": "-DCMAKE_CXX_FLAGS="
-                  },
-                  {
-                    "Quoted": {
-                      "Concat": [
-                        {
-                          "Lit": "${CXXFLAGS:-} -fprofile-generate="
-                        },
-                        {
-                          "Var": "PGODIR"
-                        },
-                        {
-                          "Lit": " -fprofile-update=atomic"
-                        }
-                      ]
-                    }
-                  }
-                ]
-              },
-              {
-                "Concat": [
-                  {
-                    "Lit": "-DCMAKE_EXE_LINKER_FLAGS="
-                  },
-                  {
-                    "Quoted": {
-                      "Concat": [
-                        {
-                          "Lit": "${LDFLAGS:-} -fprofile-generate"
-                        }
-                      ]
-                    }
-                  }
-                ]
-              },
-              {
-                "Concat": [
-                  {
-                    "Lit": "-DCMAKE_SHARED_LINKER_FLAGS="
-                  },
-                  {
-                    "Quoted": {
-                      "Concat": [
-                        {
-                          "Lit": "${LDFLAGS:-} -fprofile-generate"
-                        }
-                      ]
-                    }
-                  }
-                ]
-              },
-              {
-                "Lit": "-DMOLD_USE_MIMALLOC=ON"
-              },
-              {
-                "Lit": "-DMOLD_USE_SYSTEM_MIMALLOC=OFF"
-              },
-              {
-                "Lit": "-DMOLD_USE_SYSTEM_TBB=OFF"
+                "Lit": "exec \"$CC\" --sysroot=/tmp/sysroot -L/tmp/sysroot/lib -L/tmp/sysroot/lib64 \"$@\""
               }
             ],
-            "build_dir": {
-              "Quoted": {
-                "Concat": [
-                  {
-                    "Var": "BUILD"
-                  },
-                  {
-                    "Lit": "/gen"
-                  }
-                ]
-              }
-            },
-            "env": [],
-            "source_dir": {
-              "Quoted": {
-                "Var": "SOURCE"
-              }
+            "path": {
+              "Lit": "/build/ccw/mold-link"
             }
           }
         },
@@ -547,659 +291,129 @@
               "stages": [
                 [
                   {
-                    "Lit": "cmake"
+                    "Lit": "chmod"
                   },
                   {
-                    "Lit": "--build"
+                    "Lit": "+x"
                   },
                   {
-                    "Quoted": {
-                      "Concat": [
-                        {
-                          "Var": "BUILD"
-                        },
-                        {
-                          "Lit": "/gen"
-                        }
-                      ]
-                    }
-                  },
-                  {
+                    "Lit": "/build/ccw/mold-link"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "WriteFile": {
+            "append": false,
+            "expand": false,
+            "lines": [
+              {
+                "Lit": "[source.crates-io]"
+              },
+              {
+                "Lit": "replace-with = \"vendored-sources\""
+              },
+              {
+                "Lit": ""
+              },
+              {
+                "Lit": "[source.\"git+https://github.com/rui314/mimalloc_rust?rev=3979460494f1cd1e7f936cb8e10f41e927c9f698\"]"
+              },
+              {
+                "Lit": "git = \"https://github.com/rui314/mimalloc_rust\""
+              },
+              {
+                "Lit": "rev = \"3979460494f1cd1e7f936cb8e10f41e927c9f698\""
+              },
+              {
+                "Lit": "replace-with = \"vendored-sources\""
+              },
+              {
+                "Lit": ""
+              },
+              {
+                "Lit": "[source.vendored-sources]"
+              },
+              {
+                "Lit": "directory = \"/src/vendor\""
+              }
+            ],
+            "path": {
+              "Lit": "$BUILD/.cargo/config.toml"
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [
+              [
+                "CARGO_HOME",
+                {
+                  "Quoted": {
                     "Concat": [
                       {
-                        "Lit": "-j"
+                        "Var": "BUILD"
                       },
                       {
-                        "Subst": {
-                          "stages": [
-                            [
-                              {
-                                "Lit": "nproc"
-                              }
-                            ]
-                          ],
-                          "stderr": null,
-                          "stdin": null,
-                          "stdout": null
-                        }
+                        "Lit": "/cargo-home"
                       }
                     ]
                   }
-                ]
+                }
               ],
-              "stderr": null,
-              "stdin": null,
-              "stdout": null
-            }
-          }
-        },
-        {
-          "Or": {
-            "lhs": [
-              {
-                "Exec": {
-                  "env": [],
-                  "pipe": {
-                    "stages": [
-                      [
-                        {
-                          "Lit": "mkdir"
-                        },
-                        {
-                          "Lit": "-p"
-                        },
-                        {
-                          "Lit": "/tmp/moldbin"
-                        },
-                        {
-                          "Lit": "/tmp/moldwork"
-                        }
-                      ]
-                    ],
-                    "stderr": null,
-                    "stdin": null,
-                    "stdout": null
-                  }
+              [
+                "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER",
+                {
+                  "Lit": "/build/ccw/mold-link"
                 }
-              },
-              {
-                "Exec": {
-                  "env": [],
-                  "pipe": {
-                    "stages": [
-                      [
-                        {
-                          "Lit": "ln"
-                        },
-                        {
-                          "Lit": "-sf"
-                        },
-                        {
-                          "Quoted": {
-                            "Concat": [
-                              {
-                                "Var": "BUILD"
-                              },
-                              {
-                                "Lit": "/gen/mold"
-                              }
-                            ]
-                          }
-                        },
-                        {
-                          "Lit": "/tmp/moldbin/ld.mold"
-                        }
-                      ]
-                    ],
-                    "stderr": null,
-                    "stdin": null,
-                    "stdout": null
-                  }
+              ],
+              [
+                "CC_x86_64_unknown_linux_gnu",
+                {
+                  "Var": "CC"
                 }
-              },
-              {
-                "ForEach": {
-                  "body": [
-                    {
-                      "Exec": {
-                        "env": [],
-                        "pipe": {
-                          "stages": [
-                            [
-                              {
-                                "Lit": "printf"
-                              },
-                              {
-                                "Lit": "'int fn%s(void){return %s;}\\n'"
-                              },
-                              {
-                                "Quoted": {
-                                  "Var": "_i"
-                                }
-                              },
-                              {
-                                "Quoted": {
-                                  "Var": "_i"
-                                }
-                              }
-                            ],
-                            [
-                              {
-                                "Quoted": {
-                                  "Var": "CC"
-                                }
-                              },
-                              {
-                                "Lit": "-x"
-                              },
-                              {
-                                "Lit": "c"
-                              },
-                              {
-                                "Lit": "-"
-                              },
-                              {
-                                "Lit": "-c"
-                              },
-                              {
-                                "Lit": "-o"
-                              },
-                              {
-                                "Quoted": {
-                                  "Concat": [
-                                    {
-                                      "Lit": "/tmp/moldwork/t"
-                                    },
-                                    {
-                                      "Var": "_i"
-                                    },
-                                    {
-                                      "Lit": ".o"
-                                    }
-                                  ]
-                                }
-                              }
-                            ]
-                          ],
-                          "stderr": null,
-                          "stdin": null,
-                          "stdout": null
-                        }
-                      }
-                    },
-                    {
-                      "Exec": {
-                        "env": [],
-                        "pipe": {
-                          "stages": [
-                            [
-                              {
-                                "Quoted": {
-                                  "Var": "CC"
-                                }
-                              },
-                              {
-                                "Lit": "-B/tmp/moldbin"
-                              },
-                              {
-                                "Lit": "-fuse-ld=mold"
-                              },
-                              {
-                                "Lit": "-shared"
-                              },
-                              {
-                                "Lit": "-o"
-                              },
-                              {
-                                "Quoted": {
-                                  "Concat": [
-                                    {
-                                      "Lit": "/tmp/moldwork/t"
-                                    },
-                                    {
-                                      "Var": "_i"
-                                    },
-                                    {
-                                      "Lit": ".so"
-                                    }
-                                  ]
-                                }
-                              },
-                              {
-                                "Quoted": {
-                                  "Concat": [
-                                    {
-                                      "Lit": "/tmp/moldwork/t"
-                                    },
-                                    {
-                                      "Var": "_i"
-                                    },
-                                    {
-                                      "Lit": ".o"
-                                    }
-                                  ]
-                                }
-                              }
-                            ]
-                          ],
-                          "stderr": null,
-                          "stdin": null,
-                          "stdout": null
-                        }
-                      }
-                    }
-                  ],
-                  "items": [
-                    {
-                      "Lit": "1"
-                    },
-                    {
-                      "Lit": "2"
-                    },
-                    {
-                      "Lit": "3"
-                    },
-                    {
-                      "Lit": "4"
-                    },
-                    {
-                      "Lit": "5"
-                    }
-                  ],
-                  "stdout": null,
-                  "var": "_i"
+              ],
+              [
+                "CXX_x86_64_unknown_linux_gnu",
+                {
+                  "Var": "CXX"
                 }
-              },
-              {
-                "Exec": {
-                  "env": [],
-                  "pipe": {
-                    "stages": [
-                      [
-                        {
-                          "Lit": "printf"
-                        },
-                        {
-                          "Lit": "'int main(void){return fn1();}\\nextern int fn1(void);\\n'"
-                        }
-                      ],
-                      [
-                        {
-                          "Quoted": {
-                            "Var": "CC"
-                          }
-                        },
-                        {
-                          "Lit": "-x"
-                        },
-                        {
-                          "Lit": "c"
-                        },
-                        {
-                          "Lit": "-"
-                        },
-                        {
-                          "Lit": "-c"
-                        },
-                        {
-                          "Lit": "-o"
-                        },
-                        {
-                          "Quoted": {
-                            "Concat": [
-                              {
-                                "Lit": "/tmp/moldwork/"
-                              },
-                              {
-                                "Lit": "main.o"
-                              }
-                            ]
-                          }
-                        }
-                      ]
-                    ],
-                    "stderr": null,
-                    "stdin": null,
-                    "stdout": null
-                  }
+              ],
+              [
+                "AR_x86_64_unknown_linux_gnu",
+                {
+                  "Var": "AR"
                 }
-              },
-              {
-                "Exec": {
-                  "env": [],
-                  "pipe": {
-                    "stages": [
-                      [
-                        {
-                          "Quoted": {
-                            "Var": "CC"
-                          }
-                        },
-                        {
-                          "Lit": "-B/tmp/moldbin"
-                        },
-                        {
-                          "Lit": "-fuse-ld=mold"
-                        },
-                        {
-                          "Lit": "-o"
-                        },
-                        {
-                          "Quoted": {
-                            "Concat": [
-                              {
-                                "Lit": "/tmp/moldwork/"
-                              },
-                              {
-                                "Lit": "prog"
-                              }
-                            ]
-                          }
-                        },
-                        {
-                          "Quoted": {
-                            "Concat": [
-                              {
-                                "Lit": "/tmp/moldwork/"
-                              },
-                              {
-                                "Lit": "main.o"
-                              }
-                            ]
-                          }
-                        },
-                        {
-                          "Quoted": {
-                            "Concat": [
-                              {
-                                "Lit": "/tmp/moldwork/"
-                              },
-                              {
-                                "Lit": "t1.o"
-                              }
-                            ]
-                          }
-                        }
-                      ]
-                    ],
-                    "stderr": null,
-                    "stdin": null,
-                    "stdout": null
-                  }
+              ],
+              [
+                "CFLAGS_x86_64_unknown_linux_gnu",
+                {
+                  "Var": "CFLAGS"
                 }
-              },
-              {
-                "Exec": {
-                  "env": [],
-                  "pipe": {
-                    "stages": [
-                      [
-                        {
-                          "Quoted": {
-                            "Var": "CC"
-                          }
-                        },
-                        {
-                          "Lit": "-B/tmp/moldbin"
-                        },
-                        {
-                          "Lit": "-fuse-ld=mold"
-                        },
-                        {
-                          "Lit": "-pie"
-                        },
-                        {
-                          "Lit": "-o"
-                        },
-                        {
-                          "Quoted": {
-                            "Concat": [
-                              {
-                                "Lit": "/tmp/moldwork/"
-                              },
-                              {
-                                "Lit": "prog-pie"
-                              }
-                            ]
-                          }
-                        },
-                        {
-                          "Quoted": {
-                            "Concat": [
-                              {
-                                "Lit": "/tmp/moldwork/"
-                              },
-                              {
-                                "Lit": "main.o"
-                              }
-                            ]
-                          }
-                        },
-                        {
-                          "Quoted": {
-                            "Concat": [
-                              {
-                                "Lit": "/tmp/moldwork/"
-                              },
-                              {
-                                "Lit": "t1.o"
-                              }
-                            ]
-                          }
-                        }
-                      ]
-                    ],
-                    "stderr": null,
-                    "stdin": null,
-                    "stdout": null
-                  }
-                }
-              }
+              ]
             ],
-            "rhs": [
-              {
-                "Exec": {
-                  "env": [],
-                  "pipe": {
-                    "stages": [
-                      [
-                        {
-                          "Lit": "true"
-                        }
-                      ]
-                    ],
-                    "stderr": null,
-                    "stdin": null,
-                    "stdout": null
-                  }
-                }
-              }
-            ]
-          }
-        },
-        {
-          "Cmake": {
-            "args": [
-              {
-                "Lit": "-DCMAKE_BUILD_TYPE=Release"
-              },
-              {
-                "Lit": "-DCMAKE_INSTALL_PREFIX=/usr"
-              },
-              {
-                "Concat": [
-                  {
-                    "Lit": "-DCMAKE_C_COMPILER="
-                  },
-                  {
-                    "Quoted": {
-                      "Var": "CC"
-                    }
-                  }
-                ]
-              },
-              {
-                "Concat": [
-                  {
-                    "Lit": "-DCMAKE_CXX_COMPILER="
-                  },
-                  {
-                    "Quoted": {
-                      "Var": "CXX"
-                    }
-                  }
-                ]
-              },
-              {
-                "Concat": [
-                  {
-                    "Lit": "-DCMAKE_C_FLAGS="
-                  },
-                  {
-                    "Quoted": {
-                      "Concat": [
-                        {
-                          "Lit": "${CFLAGS:-} -fprofile-use="
-                        },
-                        {
-                          "Var": "PGODIR"
-                        },
-                        {
-                          "Lit": " -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"
-                        }
-                      ]
-                    }
-                  }
-                ]
-              },
-              {
-                "Concat": [
-                  {
-                    "Lit": "-DCMAKE_CXX_FLAGS="
-                  },
-                  {
-                    "Quoted": {
-                      "Concat": [
-                        {
-                          "Lit": "${CXXFLAGS:-} -fprofile-use="
-                        },
-                        {
-                          "Var": "PGODIR"
-                        },
-                        {
-                          "Lit": " -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"
-                        }
-                      ]
-                    }
-                  }
-                ]
-              },
-              {
-                "Concat": [
-                  {
-                    "Lit": "-DCMAKE_EXE_LINKER_FLAGS="
-                  },
-                  {
-                    "Quoted": {
-                      "Concat": [
-                        {
-                          "Lit": "${LDFLAGS:-} -fprofile-use"
-                        }
-                      ]
-                    }
-                  }
-                ]
-              },
-              {
-                "Concat": [
-                  {
-                    "Lit": "-DCMAKE_SHARED_LINKER_FLAGS="
-                  },
-                  {
-                    "Quoted": {
-                      "Concat": [
-                        {
-                          "Lit": "${LDFLAGS:-} -fprofile-use"
-                        }
-                      ]
-                    }
-                  }
-                ]
-              },
-              {
-                "Lit": "-DMOLD_USE_MIMALLOC=ON"
-              },
-              {
-                "Lit": "-DMOLD_USE_SYSTEM_MIMALLOC=OFF"
-              },
-              {
-                "Lit": "-DMOLD_USE_SYSTEM_TBB=OFF"
-              }
-            ],
-            "build_dir": {
-              "Quoted": {
-                "Concat": [
-                  {
-                    "Var": "BUILD"
-                  },
-                  {
-                    "Lit": "/use"
-                  }
-                ]
-              }
-            },
-            "env": [],
-            "source_dir": {
-              "Quoted": {
-                "Var": "SOURCE"
-              }
-            }
-          }
-        },
-        {
-          "Exec": {
-            "env": [],
             "pipe": {
               "stages": [
                 [
                   {
-                    "Lit": "cmake"
+                    "Lit": "cargo"
                   },
                   {
-                    "Lit": "--build"
+                    "Lit": "build"
                   },
                   {
-                    "Quoted": {
-                      "Concat": [
-                        {
-                          "Var": "BUILD"
-                        },
-                        {
-                          "Lit": "/use"
-                        }
-                      ]
-                    }
+                    "Lit": "--release"
                   },
                   {
-                    "Concat": [
-                      {
-                        "Lit": "-j"
-                      },
-                      {
-                        "Subst": {
-                          "stages": [
-                            [
-                              {
-                                "Lit": "nproc"
-                              }
-                            ]
-                          ],
-                          "stderr": null,
-                          "stdin": null,
-                          "stdout": null
-                        }
-                      }
-                    ]
+                    "Lit": "--locked"
+                  },
+                  {
+                    "Lit": "--offline"
                   }
                 ]
               ],
@@ -1211,42 +425,36 @@
         },
         {
           "Exec": {
-            "env": [],
+            "env": [
+              [
+                "DESTDIR",
+                {
+                  "Quoted": {
+                    "Var": "OUT"
+                  }
+                }
+              ],
+              [
+                "PREFIX",
+                {
+                  "Lit": "/usr"
+                }
+              ],
+              [
+                "MOLD_LIBDIR",
+                {
+                  "Lit": "/usr/lib"
+                }
+              ]
+            ],
             "pipe": {
               "stages": [
                 [
                   {
-                    "Lit": "cmake"
+                    "Lit": "sh"
                   },
                   {
-                    "Lit": "--install"
-                  },
-                  {
-                    "Quoted": {
-                      "Concat": [
-                        {
-                          "Var": "BUILD"
-                        },
-                        {
-                          "Lit": "/use"
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "Lit": "--prefix"
-                  },
-                  {
-                    "Quoted": {
-                      "Concat": [
-                        {
-                          "Var": "OUT"
-                        },
-                        {
-                          "Lit": "/usr"
-                        }
-                      ]
-                    }
+                    "Lit": "\"$BUILD/install-mold.sh\""
                   }
                 ]
               ],
@@ -1258,7 +466,7 @@
         }
       ],
       "sysroot": true,
-      "workdir": "None"
+      "workdir": "InSource"
     }
   }
 }

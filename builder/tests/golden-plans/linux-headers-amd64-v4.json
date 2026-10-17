@@ -41,6 +41,7 @@
             "\"$SOURCE\"",
             "O=\"$BUILD/x86_64\"",
             "ARCH=\"x86_64\"",
+            "HOSTCC=\"$CC\"",
             "headers"
           ],
           "jobs": false
@@ -113,6 +114,7 @@
             "\"$SOURCE\"",
             "O=\"$BUILD/arm64\"",
             "ARCH=\"arm64\"",
+            "HOSTCC=\"$CC\"",
             "headers"
           ],
           "jobs": false
@@ -185,6 +187,7 @@
             "\"$SOURCE\"",
             "O=\"$BUILD/riscv\"",
             "ARCH=\"riscv\"",
+            "HOSTCC=\"$CC\"",
             "headers"
           ],
           "jobs": false
@@ -257,6 +260,7 @@
             "\"$SOURCE\"",
             "O=\"$BUILD/powerpc\"",
             "ARCH=\"powerpc\"",
+            "HOSTCC=\"$CC\"",
             "headers"
           ],
           "jobs": false
@@ -329,6 +333,7 @@
             "\"$SOURCE\"",
             "O=\"$BUILD/s390\"",
             "ARCH=\"s390\"",
+            "HOSTCC=\"$CC\"",
             "headers"
           ],
           "jobs": false

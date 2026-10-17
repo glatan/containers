@@ -35,7 +35,7 @@
 | [gmp](./gmp.md) | 6.3.0 | — |
 | [mpfr](./mpfr.md) | 4.2.2 | — |
 | [mpc](./mpc.md) | 1.4.1 | — |
-| [isl](./isl.md) | 0.26 | — |
+| [isl](./isl.md) | 0.28 | — |
 | [zlib](./zlib.md) | 1.3.2 | — |
 | [zstd](./zstd.md) | 1.5.7 | — |
 
@@ -43,7 +43,7 @@
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | — |
+| [linux-headers](./linux-headers.md) | 6.18.56 | — |
 | [s390x-linux-gnu-binutils](./s390x-linux-gnu-binutils.md) | 2.47 | — |
 | [s390x-linux-gnu-glibc](./s390x-linux-gnu-glibc.md) | 2.44 | — |
 
@@ -55,7 +55,7 @@
 | [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | seed |
 | [bison](./bison.md) | 3.8.2 | optional |
 | [flex](./flex.md) | 2.6.4 | optional |
-| [perl](./perl.md) | 5.42.3 | optional |
+| [perl](./perl.md) | 5.44.0 | optional |
 | [texinfo](./texinfo.md) | 7.3 | optional |
 | [m4](./m4.md) | 1.4.21 | optional |
 
@@ -90,7 +90,7 @@ host-dependencies は `dep:false` でマウントされ、PATH には載りま�
 | フラグ | 設定値 | 条件 |
 |-|-|-|
 | `--build` | `${HOST_TRIPLE}` | amd64/v1 amd64/v2 amd64/v3, arm64, ppc64le, riscv64, s390x |
-| `--host` | `${HOST_TRIPLE}` | amd64/v1 amd64/v2 amd64/v3, arm64, ppc64le, riscv64, s390x |
+| `--host` | `${PACKAGE_HOST}` | arm64, ppc64le, riscv64, s390x |
 | `--target` | `${TRIPLE}` | amd64/v1 amd64/v2 amd64/v3, arm64, ppc64le, riscv64, s390x |
 | `--program-prefix` | `${TRIPLE}-` | amd64/v1 amd64/v2 amd64/v3, arm64, ppc64le, riscv64, s390x |
 | `--prefix` | `/usr` | amd64/v1 amd64/v2 amd64/v3, arm64, ppc64le, riscv64, s390x |
@@ -129,6 +129,7 @@ host-dependencies は `dep:false` でマウントされ、PATH には載りま�
 | `--enable-host-pie` |  | amd64/v1 amd64/v2 amd64/v3, arm64, ppc64le, riscv64, s390x |
 | `--enable-host-bind-now` |  | amd64/v1 amd64/v2 amd64/v3, arm64, ppc64le, riscv64, s390x |
 | `--with-specs` | `'%{!fno-hardened:-fhardened} -Wno-hardened'` | amd64/v1 amd64/v2 amd64/v3, arm64, ppc64le, riscv64, s390x |
+| `--host` | `${HOST_TRIPLE}` | amd64/v1 amd64/v2 amd64/v3 |
 | `--with-arch` | `${MARCH}` | s390x |
 
 ### `${SOURCE}/configure`（2回目の呼出）
@@ -292,14 +293,14 @@ else
   GCC_LIB_FLAGS=--with-isl
 fi
 if [ -d /dep/zlib/usr/include ]; then
-  export CFLAGS=" -I/dep/zlib/usr/include"
-  export CXXFLAGS=" -I/dep/zlib/usr/include"
-  export LDFLAGS=" -L/dep/zlib/usr/lib64 -L/dep/zlib/usr/lib"
+  export CFLAGS="${CFLAGS:-} -I/dep/zlib/usr/include"
+  export CXXFLAGS="${CXXFLAGS:-} -I/dep/zlib/usr/include"
+  export LDFLAGS="${LDFLAGS:-} -L/dep/zlib/usr/lib64 -L/dep/zlib/usr/lib"
 fi
 if [ -d /dep/zstd/usr/include ]; then
-  export CFLAGS=" -I/dep/zstd/usr/include"
-  export CXXFLAGS=" -I/dep/zstd/usr/include"
-  export LDFLAGS=" -L/dep/zstd/usr/lib64 -L/dep/zstd/usr/lib"
+  export CFLAGS="${CFLAGS:-} -I/dep/zstd/usr/include"
+  export CXXFLAGS="${CXXFLAGS:-} -I/dep/zstd/usr/include"
+  export LDFLAGS="${LDFLAGS:-} -L/dep/zstd/usr/lib64 -L/dep/zstd/usr/lib"
 fi
 cd ${BUILD}/instrumented
 CFLAGS="${CFLAGS:-} -fprofile-generate=${_profiledir} -fprofile-update=atomic" CXXFLAGS="${CXXFLAGS:-} -fprofile-generate=${_profiledir} -fprofile-update=atomic" LDFLAGS="${LDFLAGS:-} -fprofile-generate=${_profiledir}" ${SOURCE}/configure --build=${HOST_TRIPLE} --host=${HOST_TRIPLE} --target=${TRIPLE} --program-prefix=${TRIPLE}- --prefix=/usr --with-sysroot=${SYSROOT} --with-build-sysroot=${BUILD_SYSROOT} --with-native-system-header-dir=/include --with-as=/usr/bin/${TRIPLE}-as --with-ld=/usr/bin/${TRIPLE}-ld --infodir=/usr/share/info/${TRIPLE} --with-system-zlib ${GCC_LIB_FLAGS} --with-arch=z900 --enable-decimal-float --disable-nls --disable-werror --disable-libssp --disable-libstdcxx-pch --disable-bootstrap --disable-multilib --disable-libsanitizer --enable-plugin --enable-languages=c,c++ --enable-lto --enable-checking=release --enable-__cxa_atexit --enable-threads=posix --enable-shared --enable-default-pie --enable-default-ssp --with-linker-hash-style=gnu --enable-linker-build-id --enable-gnu-indirect-function --enable-gnu-unique-object --enable-initfini-array --enable-libstdcxx-backtrace --enable-host-pie --enable-host-bind-now --with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'
@@ -381,14 +382,14 @@ else
   GCC_LIB_FLAGS=--with-isl
 fi
 if [ -d /dep/zlib/usr/include ]; then
-  export CFLAGS=" -I/dep/zlib/usr/include"
-  export CXXFLAGS=" -I/dep/zlib/usr/include"
-  export LDFLAGS=" -L/dep/zlib/usr/lib64 -L/dep/zlib/usr/lib"
+  export CFLAGS="${CFLAGS:-} -I/dep/zlib/usr/include"
+  export CXXFLAGS="${CXXFLAGS:-} -I/dep/zlib/usr/include"
+  export LDFLAGS="${LDFLAGS:-} -L/dep/zlib/usr/lib64 -L/dep/zlib/usr/lib"
 fi
 if [ -d /dep/zstd/usr/include ]; then
-  export CFLAGS=" -I/dep/zstd/usr/include"
-  export CXXFLAGS=" -I/dep/zstd/usr/include"
-  export LDFLAGS=" -L/dep/zstd/usr/lib64 -L/dep/zstd/usr/lib"
+  export CFLAGS="${CFLAGS:-} -I/dep/zstd/usr/include"
+  export CXXFLAGS="${CXXFLAGS:-} -I/dep/zstd/usr/include"
+  export LDFLAGS="${LDFLAGS:-} -L/dep/zstd/usr/lib64 -L/dep/zstd/usr/lib"
 fi
 cat > /tmp/gen-wrap.pl <<'EOF'
 my ($dest, @cmd) = @ARGV;
@@ -413,6 +414,7 @@ if [ "${PACKAGE_HOST}" = "${TRIPLE}" ] >/dev/null; then
   _cflags=$(printf %s "${_cflags}" | sed "s|/dep/${PACKAGE_HOST}-glibc/usr/${PACKAGE_HOST}|${SYSROOT}|g")
   _cxxflags=$(printf %s "${_cxxflags}" | sed "s|/dep/${PACKAGE_HOST}-glibc/usr/${PACKAGE_HOST}|${SYSROOT}|g")
   _ldflags=$(printf %s "${_ldflags}" | sed "s|/dep/${PACKAGE_HOST}-glibc/usr/${PACKAGE_HOST}|${SYSROOT}|g")
+  export gcc_cv_objdump="/dep/${PACKAGE_HOST}-binutils/usr/${PACKAGE_HOST}/bin/objdump"
 fi
 perl /tmp/gen-wrap.pl ${_wrap}/${PACKAGE_HOST}-gcc ${_real_cc} ${_cflags} ${_ldflags}
 perl /tmp/gen-wrap.pl ${_wrap}/${PACKAGE_HOST}-g++ ${_real_cxx} ${_cxxflags} ${_ldflags}
@@ -437,7 +439,7 @@ export NM_FOR_TARGET="${TRIPLE}-nm"
 export AS_FOR_TARGET="${TRIPLE}-as"
 export LD_FOR_TARGET="${TRIPLE}-ld"
 cd ${BUILD}/final
-${SOURCE}/configure --build=${HOST_TRIPLE} --host=${HOST_TRIPLE} --target=${TRIPLE} --program-prefix=${TRIPLE}- --prefix=/usr --with-sysroot=${SYSROOT} --with-build-sysroot=${BUILD_SYSROOT} --with-native-system-header-dir=/include --with-as=/usr/bin/${TRIPLE}-as --with-ld=/usr/bin/${TRIPLE}-ld --infodir=/usr/share/info/${TRIPLE} --with-system-zlib ${GCC_LIB_FLAGS} --with-arch=z900 --enable-decimal-float --disable-nls --disable-werror --disable-libssp --disable-libstdcxx-pch --disable-bootstrap --disable-multilib --disable-libsanitizer --enable-plugin --enable-languages=c,c++ --enable-lto --enable-checking=release --enable-__cxa_atexit --enable-threads=posix --enable-shared --enable-default-pie --enable-default-ssp --with-linker-hash-style=gnu --enable-linker-build-id --enable-gnu-indirect-function --enable-gnu-unique-object --enable-initfini-array --enable-libstdcxx-backtrace --enable-host-pie --enable-host-bind-now --with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'
+${SOURCE}/configure --build=${HOST_TRIPLE} --host=${PACKAGE_HOST} --target=${TRIPLE} --program-prefix=${TRIPLE}- --prefix=/usr --with-sysroot=${SYSROOT} --with-build-sysroot=${BUILD_SYSROOT} --with-native-system-header-dir=/include --with-as=/usr/bin/${TRIPLE}-as --with-ld=/usr/bin/${TRIPLE}-ld --infodir=/usr/share/info/${TRIPLE} --with-system-zlib ${GCC_LIB_FLAGS} --with-arch=z900 --enable-decimal-float --disable-nls --disable-werror --disable-libssp --disable-libstdcxx-pch --disable-bootstrap --disable-multilib --disable-libsanitizer --enable-plugin --enable-languages=c,c++ --enable-lto --enable-checking=release --enable-__cxa_atexit --enable-threads=posix --enable-shared --enable-default-pie --enable-default-ssp --with-linker-hash-style=gnu --enable-linker-build-id --enable-gnu-indirect-function --enable-gnu-unique-object --enable-initfini-array --enable-libstdcxx-backtrace --enable-host-pie --enable-host-bind-now --with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'
 make -j"$(nproc)"
 make DESTDIR="$OUT" install
 ```
@@ -505,14 +507,14 @@ else
   GCC_LIB_FLAGS=--with-isl
 fi
 if [ -d /dep/zlib/usr/include ]; then
-  export CFLAGS=" -I/dep/zlib/usr/include"
-  export CXXFLAGS=" -I/dep/zlib/usr/include"
-  export LDFLAGS=" -L/dep/zlib/usr/lib64 -L/dep/zlib/usr/lib"
+  export CFLAGS="${CFLAGS:-} -I/dep/zlib/usr/include"
+  export CXXFLAGS="${CXXFLAGS:-} -I/dep/zlib/usr/include"
+  export LDFLAGS="${LDFLAGS:-} -L/dep/zlib/usr/lib64 -L/dep/zlib/usr/lib"
 fi
 if [ -d /dep/zstd/usr/include ]; then
-  export CFLAGS=" -I/dep/zstd/usr/include"
-  export CXXFLAGS=" -I/dep/zstd/usr/include"
-  export LDFLAGS=" -L/dep/zstd/usr/lib64 -L/dep/zstd/usr/lib"
+  export CFLAGS="${CFLAGS:-} -I/dep/zstd/usr/include"
+  export CXXFLAGS="${CXXFLAGS:-} -I/dep/zstd/usr/include"
+  export LDFLAGS="${LDFLAGS:-} -L/dep/zstd/usr/lib64 -L/dep/zstd/usr/lib"
 fi
 cd ${BUILD}/final
 ${SOURCE}/configure --build=${HOST_TRIPLE} --host=${HOST_TRIPLE} --target=${TRIPLE} --program-prefix=${TRIPLE}- --prefix=/usr --with-sysroot=${SYSROOT} --with-build-sysroot=${BUILD_SYSROOT} --with-native-system-header-dir=/include --with-as=/usr/bin/${TRIPLE}-as --with-ld=/usr/bin/${TRIPLE}-ld --infodir=/usr/share/info/${TRIPLE} --with-system-zlib ${GCC_LIB_FLAGS} --with-arch=z900 --enable-decimal-float --disable-nls --disable-werror --disable-libssp --disable-libstdcxx-pch --disable-bootstrap --disable-multilib --disable-libsanitizer --enable-plugin --enable-languages=c,c++ --enable-lto --enable-checking=release --enable-__cxa_atexit --enable-threads=posix --enable-shared --enable-default-pie --enable-default-ssp --with-linker-hash-style=gnu --enable-linker-build-id --enable-gnu-indirect-function --enable-gnu-unique-object --enable-initfini-array --enable-libstdcxx-backtrace --enable-host-pie --enable-host-bind-now --with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'
@@ -583,14 +585,14 @@ else
   GCC_LIB_FLAGS=--with-isl
 fi
 if [ -d /dep/zlib/usr/include ]; then
-  export CFLAGS=" -I/dep/zlib/usr/include"
-  export CXXFLAGS=" -I/dep/zlib/usr/include"
-  export LDFLAGS=" -L/dep/zlib/usr/lib64 -L/dep/zlib/usr/lib"
+  export CFLAGS="${CFLAGS:-} -I/dep/zlib/usr/include"
+  export CXXFLAGS="${CXXFLAGS:-} -I/dep/zlib/usr/include"
+  export LDFLAGS="${LDFLAGS:-} -L/dep/zlib/usr/lib64 -L/dep/zlib/usr/lib"
 fi
 if [ -d /dep/zstd/usr/include ]; then
-  export CFLAGS=" -I/dep/zstd/usr/include"
-  export CXXFLAGS=" -I/dep/zstd/usr/include"
-  export LDFLAGS=" -L/dep/zstd/usr/lib64 -L/dep/zstd/usr/lib"
+  export CFLAGS="${CFLAGS:-} -I/dep/zstd/usr/include"
+  export CXXFLAGS="${CXXFLAGS:-} -I/dep/zstd/usr/include"
+  export LDFLAGS="${LDFLAGS:-} -L/dep/zstd/usr/lib64 -L/dep/zstd/usr/lib"
 fi
 cat > /tmp/gen-wrap.pl <<'EOF'
 my ($dest, @cmd) = @ARGV;
@@ -615,6 +617,7 @@ if [ "${PACKAGE_HOST}" = "${TRIPLE}" ] >/dev/null; then
   _cflags=$(printf %s "${_cflags}" | sed "s|/dep/${PACKAGE_HOST}-glibc/usr/${PACKAGE_HOST}|${SYSROOT}|g")
   _cxxflags=$(printf %s "${_cxxflags}" | sed "s|/dep/${PACKAGE_HOST}-glibc/usr/${PACKAGE_HOST}|${SYSROOT}|g")
   _ldflags=$(printf %s "${_ldflags}" | sed "s|/dep/${PACKAGE_HOST}-glibc/usr/${PACKAGE_HOST}|${SYSROOT}|g")
+  export gcc_cv_objdump="/dep/${PACKAGE_HOST}-binutils/usr/${PACKAGE_HOST}/bin/objdump"
 fi
 perl /tmp/gen-wrap.pl ${_wrap}/${PACKAGE_HOST}-gcc ${_real_cc} ${_cflags} ${_ldflags}
 perl /tmp/gen-wrap.pl ${_wrap}/${PACKAGE_HOST}-g++ ${_real_cxx} ${_cxxflags} ${_ldflags}
@@ -639,7 +642,7 @@ export NM_FOR_TARGET="${TRIPLE}-nm"
 export AS_FOR_TARGET="${TRIPLE}-as"
 export LD_FOR_TARGET="${TRIPLE}-ld"
 cd ${BUILD}/final
-${SOURCE}/configure --build=${HOST_TRIPLE} --host=${HOST_TRIPLE} --target=${TRIPLE} --program-prefix=${TRIPLE}- --prefix=/usr --with-sysroot=${SYSROOT} --with-build-sysroot=${BUILD_SYSROOT} --with-native-system-header-dir=/include --with-as=/usr/bin/${TRIPLE}-as --with-ld=/usr/bin/${TRIPLE}-ld --infodir=/usr/share/info/${TRIPLE} --with-system-zlib ${GCC_LIB_FLAGS} --with-arch=${MARCH} --enable-decimal-float --disable-nls --disable-werror --disable-libssp --disable-libstdcxx-pch --disable-bootstrap --disable-multilib --disable-libsanitizer --enable-plugin --enable-languages=c,c++ --enable-lto --enable-checking=release --enable-__cxa_atexit --enable-threads=posix --enable-shared --enable-default-pie --enable-default-ssp --with-linker-hash-style=gnu --enable-linker-build-id --enable-gnu-indirect-function --enable-gnu-unique-object --enable-initfini-array --enable-libstdcxx-backtrace --enable-host-pie --enable-host-bind-now --with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'
+${SOURCE}/configure --build=${HOST_TRIPLE} --host=${PACKAGE_HOST} --target=${TRIPLE} --program-prefix=${TRIPLE}- --prefix=/usr --with-sysroot=${SYSROOT} --with-build-sysroot=${BUILD_SYSROOT} --with-native-system-header-dir=/include --with-as=/usr/bin/${TRIPLE}-as --with-ld=/usr/bin/${TRIPLE}-ld --infodir=/usr/share/info/${TRIPLE} --with-system-zlib ${GCC_LIB_FLAGS} --with-arch=${MARCH} --enable-decimal-float --disable-nls --disable-werror --disable-libssp --disable-libstdcxx-pch --disable-bootstrap --disable-multilib --disable-libsanitizer --enable-plugin --enable-languages=c,c++ --enable-lto --enable-checking=release --enable-__cxa_atexit --enable-threads=posix --enable-shared --enable-default-pie --enable-default-ssp --with-linker-hash-style=gnu --enable-linker-build-id --enable-gnu-indirect-function --enable-gnu-unique-object --enable-initfini-array --enable-libstdcxx-backtrace --enable-host-pie --enable-host-bind-now --with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'
 make -j"$(nproc)"
 make DESTDIR="$OUT" install
 ```

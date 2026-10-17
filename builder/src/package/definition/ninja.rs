@@ -43,9 +43,9 @@ impl Package for Ninja {
     fn host_dependencies(&self, target: crate::target::Target) -> Vec<crate::package::Dependency> {
         let mut deps = crate::package::cc_deps(self, target);
         deps.push(if matches!(target, crate::target::Target::Amd64(_)) {
-            crate::package::dep("python", "3.14.7")
+            crate::package::dep("python", "3.15.0")
         } else {
-            crate::package::dep("cmake", "4.4.3")
+            crate::package::dep("cmake", "4.4.4")
         });
         deps
     }

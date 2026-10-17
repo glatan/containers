@@ -4,6 +4,14 @@
 
 - シェルコマンド（`rm` 等）でのファイル削除は禁止。
 
+## パイプライン運用
+
+- `oci-layouts/` をローカルの正本として扱い、`packages/artifacts/` は中間生成物とする。
+- `pack` は既定で増分 merge を行い、既存 platform を保持する。platform の追加や再封入は `pack {pkg} -t {arch}/{variant}`、除去は `--remove-platform`、全再生成は `--replace` を使用する。
+- 成果物の復元には `restore` を使用する（`--from-registry` を指定すると layout ごとレジストリから復元する）。
+- push 前は `verify` で blob 整合性を検証し、`status --local` で状態を確認する。`index` の再生成は pack 後に必須。
+- `pack` の既定 profile は release（zstd 22）。開発用途では `--profile dev` を指定する。
+
 ## シェル注意
 
 - この環境のシェルは `$` 変数展開が不安定な場合がある。変数を含む破壊的コマンドは避け、実行前に小さく検証すること。

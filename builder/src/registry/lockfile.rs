@@ -61,9 +61,8 @@ pub fn load(path: &Path) -> Result<Option<Lockfile>> {
         return Ok(None);
     }
     let bytes = std::fs::read(path).map_err(|source| Error::io(path, source))?;
-    let lockfile: Lockfile = serde_json::from_slice(&bytes).map_err(|source| {
-        Error::message(format!("{} のパースに失敗: {source}", path.display()))
-    })?;
+    let lockfile: Lockfile = serde_json::from_slice(&bytes)
+        .map_err(|source| Error::message(format!("{} のパースに失敗: {source}", path.display())))?;
     Ok(Some(lockfile))
 }
 
