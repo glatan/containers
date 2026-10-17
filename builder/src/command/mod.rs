@@ -124,7 +124,7 @@ enum Command {
         /// ローカルに layout が無い場合にレジストリから復元します
         #[arg(long)]
         from_registry: bool,
-        /// レジストリ前置詞（送信先を決める操作では必須。CONTAINERS_REGISTRY でも指定可。既定値はない）
+        /// レジストリ前置詞（送信先を決める操作では必須。CONTAINERS_REGISTRY でも指定可。既定値はありません）
         #[arg(long)]
         registry: Option<String>,
         /// 既存の成果物を上書きします
@@ -146,7 +146,7 @@ enum Command {
     },
     /// oci-layouts/ からレジストリ index を生成します
     Index {
-        /// レジストリ前置詞（送信先を決める操作では必須。CONTAINERS_REGISTRY でも指定可。既定値はない）
+        /// レジストリ前置詞（送信先を決める操作では必須。CONTAINERS_REGISTRY でも指定可。既定値はありません）
         #[arg(long)]
         registry: Option<String>,
         /// 生成せず既存の生成物との差分のみ検査します
@@ -165,7 +165,7 @@ enum Command {
     Status {
         #[command(flatten)]
         selection: PackageSelection,
-        /// レジストリ前置詞（送信先を決める操作では必須。CONTAINERS_REGISTRY でも指定可。既定値はない）
+        /// レジストリ前置詞（送信先を決める操作では必須。CONTAINERS_REGISTRY でも指定可。既定値はありません）
         #[arg(long)]
         registry: Option<String>,
         /// リモート問い合わせを省略しローカル状態のみ表示します
@@ -176,7 +176,7 @@ enum Command {
     Push {
         #[command(flatten)]
         selection: PackageSelection,
-        /// レジストリ前置詞（送信先を決める操作では必須。CONTAINERS_REGISTRY でも指定可。既定値はない）
+        /// レジストリ前置詞（送信先を決める操作では必須。CONTAINERS_REGISTRY でも指定可。既定値はありません）
         #[arg(long)]
         registry: Option<String>,
         /// push せず対象のみ表示します
@@ -192,8 +192,8 @@ enum Command {
         #[arg(long, value_name = "ARCH/VARIANT", conflicts_with = "force_replace")]
         replace_platform: Vec<String>,
         /// push 成功後に index artifact も公開します
-        /// （--all-packages では常に公開。単一パッケージ push 後の
-        /// index 陳腐化を防ぐために使います）
+        /// （--all-packages では常に公開。単一パッケージ push 後に
+        /// index に記録された digest と乖離が生じるのを防ぐために使います）
         #[arg(long)]
         with_index: bool,
     },
@@ -207,7 +207,7 @@ enum Command {
         /// 使用する index 参照（既定: CONTAINERS_INDEX / 設定の index）
         #[arg(long)]
         index: Option<String>,
-        /// レジストリ前置詞（送信先を決める操作では必須。CONTAINERS_REGISTRY でも指定可。既定値はない）
+        /// レジストリ前置詞（送信先を決める操作では必須。CONTAINERS_REGISTRY でも指定可。既定値はありません）
         #[arg(long)]
         registry: Option<String>,
         /// mode=compose の合成イメージの出力先
@@ -226,7 +226,7 @@ enum Command {
     Clean {
         #[command(flatten)]
         selection: PackageSelection,
-        /// セル <arch>/<variant>（複数回可）。--packages-build、--packages-artifacts、--packages-logs のとき必須です
+        /// ターゲット <arch>/<variant>（複数回可）。--packages-build、--packages-artifacts、--packages-logs のとき必須です
         #[arg(short = 't', long = "target", value_name = "ARCH/VARIANT")]
         targets: Vec<String>,
         /// --packages-build、--packages-artifacts、--packages-logs の対象を、パッケージがサポートする全ターゲットにします

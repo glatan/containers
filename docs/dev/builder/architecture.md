@@ -83,16 +83,19 @@ compose          dependencies の推移閉包を単一の出力イメージへ�
     ↓                 oci-layouts/{name}-{arch}-{date}-{revision}/
 index            oci-layouts/ から index artifact を生成
     ↓                 oci-layouts/index/
+verify           OCI layout が参照する全 blob の実在と digest を検査
 push             パッケージイメージと index を skopeo 経由で公開
     ↓                 {registry}/packages/{name}:{version}、{registry}/packages/index:{yyyymmdd}-{rev}
+restore          layout（またはレジストリ）から packages/artifacts/ へ成果物を復元
+    ↓                 packages/artifacts/{package}-{version}-{arch}-{variant}/
 sync             消費側の containers.json から Dockerfile 生成ブロックと lockfile を同期
     ↓                 containers.lock.json、キャッシュ $XDG_CACHE_HOME/containers-builder/
-clean            指定したディレクトリだけを削除する（--packages-build、--packages-artifacts、--packages-logs、--oci-layouts、--oci-layouts-index。少なくとも一つ必須）
-ls / info / tree / targets / env plan  照会系（tree --reverse は逆依存、env plan はシード相の最小集合）
+clean            指定したディレクトリだけを削除（--packages-build、--packages-artifacts、--packages-logs、--oci-layouts、--oci-layouts-index）
+status / ls / info / tree / targets / env plan  状態確認・照会系（status はローカルとリモートの同期状態、tree --reverse は逆依存、env plan はシード相の最小集合）
 docs             定義文書（docs/dev/package/definition/）の生成ブロックと索引、および docs/dev/package/{README,host-tools,toolchain}.md の名前つき GENERATED:{name} ブロックを PACKAGES から再生成（--check で差分検査）
 ```
 
-ビルドスクリプトへ渡す環境変数と `/dep` へのマウントは [package/README.md](../package/README.md) です。
+ビルドスクリプトへ渡す環境変数と `/dep` へのマウント方針は [package/README.md](../package/README.md) に記載しています。
 
 ### 依存グラフとスキップ
 
@@ -123,7 +126,7 @@ runner の意味論は bash 描画スクリプトと揃えています。
 - `Bootstrap` トレイトを実装したパッケージは、シード環境（Arch Linux イメージ）上で直接ビルドできます。判定は `Package::as_bootstrap()` で行い、登録一覧は持ちません。`env bootstrap` の対象は `build-env` の依存閉包から導出します。
 - 自前で合成したビルド環境イメージ上では `--network=none` を指定して完全に隔離された状態でビルドします。一方、シード環境では `Package::pacman()` によるパッケージ導入や、カタログのクロス gcc 導入のためにネットワークアクセスを許可します。
 
-新規パッケージを定義する場合は次の手順です。
+新規パッケージを定義する際の手順は次のとおりです。
 
 1. `builder/src/package/definition/{name}.rs` に `Package` トレイトを実装します。
 2. `builder/src/package/definition/mod.rs` の一覧へ登録します。
@@ -133,7 +136,7 @@ runner の意味論は bash 描画スクリプトと揃えています。
 
 ### 定義文書の生成
 
-各パッケージのビルド設定は [`docs/dev/package/definition/{name}.md`](../package/definition/) に記述します。1 パッケージ 1 ファイルです。各ファイルの先頭部（タイトル・メタデータ・ソース・依存表）と索引表は `<!-- GENERATED -->` マーカーで囲まれた生成ブロックであり、`containers-builder docs` が `PACKAGES` から再生成します（`docs --check` で差分検査）。手書きの補足はマーカーの外側に書きます。索引は [definition/README.md](../package/definition/README.md) です。Host tools の共通前処理については [host-tools.md](../package/host-tools.md)、プレフィックス付きツールチェーンのステージ順については [toolchain.md](../package/toolchain.md) を参照してください。
+各パッケージのビルド設定は [`docs/dev/package/definition/{name}.md`](../package/definition/) に記述します。1 パッケージ 1 ファイルです。各ファイルの先頭部（タイトル・メタデータ・ソース・依存表）と索引表は `<!-- GENERATED -->` マーカーで囲まれた生成ブロックであり、`containers-builder docs` が `PACKAGES` から再生成します（`docs --check` で差分検査）。手書きの補足はマーカーの外側に書きます。索引は [definition/README.md](../package/definition/README.md) にまとめています。Host tools の共通前処理については [host-tools.md](../package/host-tools.md)、プレフィックス付きツールチェーンのステージ順については [toolchain.md](../package/toolchain.md) を参照してください。
 
 モジュール名はパッケージ名のハイフンをアンダースコアに置き換えた名前です（`linux_headers.rs` は `linux-headers`、`x86_64_linux_gnu_binutils.rs` は `x86_64-linux-gnu-binutils` に対応します）。プレフィックス付きパッケージも 1 パッケージ 1 ファイルです。ステージ共通の実装（レシピ・依存表・バージョン）は `definition/` 直下の `binutils.rs` / `gcc.rs` / `gcc_stage1.rs` / `gcc_stage2.rs` / `glibc.rs` / `glibc_headers.rs`（共有部品は `stages.rs`）に置き、各タプルのリーフは `impl Package` / `impl Bootstrap` で共有実装へ委譲します。
 
@@ -153,7 +156,7 @@ runner の意味論は bash 描画スクリプトと揃えています。
 
 - 1 パッケージを 1 レイヤーとして扱います。`packages/artifacts/` の未圧縮成果物を tar 形式でまとめ、zstd で圧縮して blob を生成します。
 - 未圧縮 tar のダイジェストである DiffID をレイヤー内容の恒久的な識別子として使用します。zstd の圧縮レベルは layer digest にのみ影響し、DiffID には影響しません。
-- `pack` の既定はレベル 22（`--profile release`）、`compose` の既定はレベル 3（`--profile dev`）です。既定の merge は既存 platform の manifest を保持するため、同一 layout 内で圧縮レベルの異なる platform が併存します。全 platform を同じレベルに揃えるときは `pack --replace` です。
+- `pack` の既定はレベル 22（`--profile release`）、`compose` の既定はレベル 3（`--profile dev`）です。既定の merge は既存 platform の manifest を保持するため、同一 layout 内で圧縮レベルの異なる platform が併存し得ます。全 platform を同一レベルに揃える場合は `pack --replace` で全再生成します。
 - Layout の生成時は、一時的な staging ディレクトリで構造を構築したのち、不可分（アトミック）に配置を置き換えます。これにより、生成途中で処理が失敗した場合でも既存の `oci-layouts/` が保護されます。
 - レイヤーのハッシュ計算はストリーミング方式で行い、アーカイブ全体をメモリ上に展開しません。
 - SPDX SBOM は Layout ディレクトリ内の `sbom.spdx.json` に配置します。OCI Image Specification ではレイアウト内の未知の追加ファイルを許容しているため、この配置は仕様に適合します。なお、referrers による attestation としての公開は現時点では未実装です。

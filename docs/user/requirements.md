@@ -28,7 +28,7 @@
 ## index 参照の要件
 
 - index 参照は `--index` > `CONTAINERS_INDEX` > 設定ファイルの `index` > 内蔵 pin の順に解決し、いずれかの指定が存在すること。
-- `"auto"` を指定した場合、`{8桁の日付}-{数値rev}` 形式のタグのみを対象に最新を採用します。形式外のタグは候補から除外されます。
+- `"auto"` を指定した場合、`{8桁の日付}-{数値rev}` 形式のタグのみを対象に最新を採用します。形式外のタグは候補から除外されます。また、`"auto"` が参照する `{registry}/packages/index` のレジストリ前置詞として、`--registry` または `CONTAINERS_REGISTRY` の指定が必須です（既定値はありません）。
 - index の pull はタグではなく解決済み digest への pin で行われ、タグ差し替えに伴う不整合（TOCTOU）を防ぎます。
 
 ## Dockerfile の要件

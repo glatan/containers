@@ -67,13 +67,13 @@
 | `clean {package\|--all-packages} (--packages-build\|--packages-artifacts\|--packages-logs\|--oci-layouts\|--oci-layouts-index)...` | 指定したディレクトリだけを削除する。フラグは一つ以上必須で、併用は和集合になる |
 | `restore {package\|--all-packages} [-t {arch}/{variant}...] [--from-registry] [--registry {prefix}] [--force]` | layout（またはレジストリ）の blob から成果物を `packages/artifacts/` へ復元する（`--from-registry` は前置詞が必須） |
 
-`--all-packages` を取るコマンドは全件を処理し、失敗を集約して最後に非 0 で終了します（`build` は `--keep-going` 指定時のみ失敗後も継続し、未指定時は最初の失敗で終了します）。`--all-packages` はパッケージの選択だけを広げ、削除するディレクトリは増やしません。
+`--all-packages` を取るコマンドは全件を処理し、失敗を集約して最後に非 0 で終了します（`build` は `--keep-going` 指定時のみ失敗後も継続し、未指定時は最初の失敗で終了します）。
 
 #### build のオプション
 
 - `-t {arch}/{variant}`: 対象ターゲットを指定します（複数回指定可。`targets` コマンドで有効な一覧を確認できます）。
 - `--all-packages`: 全パッケージを単一のトポロジカル順でビルドします。この場合 `-t` に対応しないルートはエラーにせずスキップします（`--all-targets` と同じ緩和）。
-- `--all-targets`: `supports` が真の architecture / variant をビルド対象とします。最終 gcc / binutils の製品キューはこれより狭く、[toolchain.md](../package/toolchain.md) です。シード環境ではクロスコンパイラが存在しないため ppc64le および s390x を自動的にスキップします。`-t` との同時指定はできません。
+- `--all-targets`: `supports` が真の architecture / variant をビルド対象とします。最終 gcc / binutils の製品キューはこれより狭く、[toolchain.md](../package/toolchain.md) に記載しています。シード環境ではクロスコンパイラが存在しないため ppc64le および s390x を自動的にスキップします。`-t` との同時指定はできません。
 - `--force`: 成果物が存在しても対象パッケージを再ビルドします（依存はキャッシュ済みなら再利用します）。
 - `--keep-going`: 失敗しても無関係な後続のビルドを継続し、最後に失敗一覧を集約して非 0 で終了します。
 - `--no-deps`: 依存をビルドせず対象パッケージのみをビルドします（`--all-packages`・`--keep-going` との同時指定はできません）。
@@ -91,37 +91,37 @@
 
 #### clean
 
-`clean` は削除するディレクトリをフラグで指定します。フラグは一つ以上が必須で、複数指定したときは和集合を削除します。`--all-packages` はパッケージを選び、`--all-targets` は platform を選びます。どちらも削除するディレクトリは増やしません。`--dry-run` は削除せず、消えるパスを `削除予定:` で表示します。表示のあいだロックは保持しません。
+`clean` は削除対象のディレクトリ種別をフラグで指定します。フラグは一つ以上が必須で、複数指定したときはその和集合を削除します。`--all-packages` は対象パッケージを全件に広げ、`--all-targets` は対象 platform を全件に広げます。いずれのオプションも選択範囲を広げるだけであり、削除対象とするディレクトリ種別を自動で増やすことはありません。`--dry-run` は削除を実行せず、削除予定のパスを `削除予定:` と表示します（この表示処理中はロックを保持しません）。
 
-セルを消すフラグは `--packages-build`、`--packages-artifacts`、`--packages-logs` です。これらには `-t` または `--all-targets` が必要です。`--all-targets` は各パッケージがサポートする platform だけを対象にします。明示した `-t` はサポートの有無で除外しません。
+ターゲット（platform）単位で削除対象を指定するフラグは `--packages-build`、`--packages-artifacts`、`--packages-logs` の 3 つです。作業ツリーを削除するのは `--packages-build`、公開済みの成果物ディレクトリを削除するのは `--packages-artifacts`、個別ログファイルを削除するのは `--packages-logs` です。これらを指定する場合は `-t` または `--all-targets` が必須です。`--all-targets` は各パッケージが対応している platform のみを対象としますが、`-t` で明示した platform は対応の有無にかかわらず削除対象とします。
 
 `--packages-build` は次を削除します。公開済みの成果物ディレクトリは残します。
 
 - `packages/build/<arch>-<variant>/<name>-<version>`
 - `packages/build/<arch>-<variant>/.gen/<name>-<version>`
-- 成果物ディレクトリの兄弟 `{artifact}.tmp` と `{artifact}.restore-bak`
+- 成果物ディレクトリの兄弟ディレクトリである `{artifact}.tmp`（展開・ビルド途中の成果物）および `{artifact}.restore-bak`（`restore --force` による退避先）
 
-`--packages-artifacts` は `packages/artifacts/<name>-<version>-<arch>-<variant>` だけを削除します。`.locks`、`.tmp`、`.restore-bak` は残します。
+`--packages-artifacts` は公開済みの成果物ディレクトリ `packages/artifacts/<name>-<version>-<arch>-<variant>` のみを削除します。`.locks`、`.tmp`、`.restore-bak` は残します。
 
-`--packages-logs` は `packages/logs/<name>-<version>-<arch>-<variant>.log` だけを削除します。`packages/logs/bootstrap.log` は残します。
+`--packages-logs` は個別ログファイル `packages/logs/<name>-<version>-<arch>-<variant>.log` のみを削除します。`packages/logs/bootstrap.log` は残します。
 
-layout を消すフラグは `--oci-layouts` と `--oci-layouts-index` です。この二つだけを指定するときは `-t` と `--all-targets` を付けられません。`-t` を付けると platform 単位の削除に見える一方、layout はパッケージ単位だからです。セル側のフラグと併用したときは、`-t` はセルだけを絞り、`--oci-layouts` はパッケージの layout 全体を削除します。
+OCI Layout ディレクトリを削除するフラグは `--oci-layouts` と `--oci-layouts-index` です。Layout は platform 単位ではなくパッケージ単位で管理されるため、この 2 つのみを指定する場合は `-t` や `--all-targets` を指定できません。ターゲット指定が必要なフラグ（`--packages-build` 等）と併用した場合は、`-t` が該当フラグの絞り込みのみに適用され、`--oci-layouts` は該当パッケージの Layout ディレクトリ全体を削除します。
 
-`--oci-layouts` は `oci-layouts/<name>-<version>` を削除します。`oci-layouts/index`、compose の layout（`oci-layouts/{name}-{arch}` と `{name}-{arch}-{date}-{revision}`）、`oci-layouts/.locks`、`oci-layouts/.tmp` は残します。
+`--oci-layouts` は `oci-layouts/<name>-<version>` を削除します。`oci-layouts/index`、compose による Layout（`oci-layouts/{name}-{arch}` および `{name}-{arch}-{date}-{revision}`）、`oci-layouts/.locks`、`oci-layouts/.tmp` は残します。
 
-`--oci-layouts-index` は `oci-layouts/index` を削除します。`--all-packages` と同時のときだけ指定できます。
+`--oci-layouts-index` は `oci-layouts/index` を削除します。`--all-packages` と同時にのみ指定できます。
 
-`packages/sources/` を消すフラグはありません。
+上流ソースコードを展開した `packages/sources/` を削除するフラグはありません。
 
-`build`、`pack`、`restore`、`compose` は `packages/artifacts/.locks/active.lock` を共有ロックで保持します。`--packages-artifacts`、`--oci-layouts`、`--oci-layouts-index` はこのロックを排他で取れなければコマンド全体を拒否し、何も削除しません。`--packages-build` と `--packages-logs` は `active.lock` を取りません。セルの flock が取れないセルは `実行中のためスキップ` と表示して残し、失敗にはしません。`--packages-artifacts` は対象セルの flock が一つでも取れなければコマンド全体を拒否します。layout の output lock が取れないときもコマンド全体を拒否します。
+排他制御として、`build`、`pack`、`restore`、`compose` は `packages/artifacts/.locks/active.lock` を共有ロックで保持します。`--packages-artifacts`、`--oci-layouts`、`--oci-layouts-index` の各処理はこのロックを排他で取得できなければコマンド全体を拒否し、削除を行いません。`--packages-build` と `--packages-logs` は `active.lock` を取得しませんが、処理中のターゲットの flock が取得できない場合は `実行中のためスキップ` と表示して削除を保留し、コマンド自体は成功とします。一方、`--packages-artifacts` は対象ターゲットの flock が 1 つでも取得できない場合に、安全のためコマンド全体を拒否します。同様に、`--oci-layouts` および `--oci-layouts-index` は対象 Layout の出力ロックが取得できない場合にコマンド全体を拒否します。
 
-ビルド作業ツリーだけを回収するときは次です。
+ビルド作業ツリーのみを削除する場合は、次のコマンドを実行します。
 
 ```
 containers-builder clean --all-packages --all-targets --packages-build
 ```
 
-成果物と個別ログも消すときは次です。`oci-layouts/` は含みません。
+ビルド作業ツリーに加えて成果物と個別ログも削除する場合は、次のコマンドを実行します（`oci-layouts/` は保持されます）。
 
 ```
 containers-builder clean --all-packages --all-targets --packages-build --packages-artifacts --packages-logs
@@ -136,13 +136,13 @@ containers-builder clean --all-packages --all-targets --packages-build --package
 
 - `--all-packages`: 公開対象となっているすべてのパッケージイメージを生成します（`build-env` およびビルド専用パッケージは対象外、成果物のないエントリは `スキップ(パッケージなし)` を出して継続します）。
 - `-t {arch}/{variant}`: 封入対象の platform を絞ります（複数回指定可）。指定 platform の成果物が無い場合はエラーです。既定（`-t` 省略）は成果物が揃う全 platform です。
-- `--replace`: 既存 layout を全再生成します（`-t`・`--remove-platform` との同時指定はできません）。単一パッケージでは、対応する全 platform の成果物が必要です。無い platform があるとエラーになり、layout は変わりません。`--all-packages` では、成果物が無い platform を警告したうえで layout から外し、他のパッケージの pack は続けます。
-- `--remove-platform {arch}/{variant}`: 既存 layout から platform を除去します（複数回可）。`-t` と併用すると pack と除去を一度に行います。単独指定時は除去のみ行い、成果物は封入しません。最後の 1 platform の除去はエラーです（layout 全体の削除は `clean --oci-layouts`）。
-- `--with-build`: Image Layout の生成前に、対応するパッケージ成果物のビルドも併せて実行します（`-t` 指定時はそのターゲットのみ）。
-- `--profile {dev|release}`: 圧縮プロファイルを指定します。`release` は公開用アーカイブとして zstd 圧縮レベル 22（`--ultra`）を用い、`dev` はレベル 3 です。**pack の既定値は `release`**（配布用 layout を作るコマンドのため）で、開発用途には `--profile dev` を指定します。
-- `--zstd-level {1-22}`: 圧縮レベルを直接指定します（`--profile` より優先。`--profile` との同時指定はできません）。
+- `--replace`: 既存 layout を全再生成します（`-t`・`--remove-platform` との同時指定はできません）。単一パッケージで指定した場合は、対応する全 platform の成果物が必要です。成果物が不足している platform があるとエラーとなり、layout は変更されません。`--all-packages` と併用した場合は、成果物が不足している platform について警告を表示したうえで layout の構成対象から外し、他のパッケージの pack は継続します。
+- `--remove-platform {arch}/{variant}`: 既存 layout から指定した platform を除去します（複数回指定可）。`-t` と併用すると成果物の封入と指定 platform の除去を同時に実行します。単独で指定した場合は platform の除去のみを行い、新たな成果物は封入しません。なお、最後の 1 platform を除去しようとするとエラーになります（layout 全体を削除する場合は `clean --oci-layouts` を使用します）。
+- `--with-build`: Image Layout の生成前に、対応するパッケージ成果物のビルドも併せて実行します（`-t` 指定時はそのターゲットのみをビルドします）。
+- `--profile {dev|release}`: 圧縮プロファイルを指定します。`release` は公開用アーカイブとして zstd 圧縮レベル 22（`--ultra`）を用い、`dev` はレベル 3 を用います。配布用 layout を生成するコマンドであるため、pack の既定値は `release` です。開発用途には `--profile dev` を指定します。
+- `--zstd-level {1-22}`: 圧縮レベルを直接指定します（`--profile` より優先されます。`--profile` との同時指定はできません）。
 
-`pack` は既定で既存 layout の指定外 platform の manifest を digest 不変のまま保持します（増分 merge）。platform の追加・更新だけで既存 platform の manifest を再生成する必要はありません。merge 対象の既存 layout が破損している場合はエラーになり、`--replace` を促します。`oci-layouts/.locks/{name}-{version}.lock` の flock で layout 単位に直列化するため、同一パッケージへの同時 pack は待ち合わせます。
+`pack` は既定で既存 layout の指定外 platform の manifest を digest 不変のまま保持します（増分 merge）。そのため、特定 platform の追加や更新の際に既存 platform の manifest を再生成する必要はありません。merge 対象の既存 layout が破損している場合はエラーとなり、`--replace` による全再生成を促します。また、同一パッケージに対する同時実行を防ぐため、`oci-layouts/.locks/{name}-{version}.lock` の flock により layout 単位で処理を直列化します。
 
 #### restore
 
@@ -173,9 +173,13 @@ containers-builder clean --all-packages --all-targets --packages-build --package
 
 #### push
 
-`push` は `skopeo copy --all oci:{dir} docker://{ref}` でパッケージイメージを公開します。既存タグが同一 digest を指す場合は冪等にスキップし、platform 追加のみの差分（リモート ⊆ ローカル）であれば additive 更新として上書きします。platform の削除や層内容の変更は拒否します。`--all-packages` では additive 不適合を全パッケージ分集約して報告し、適合したものだけを push します。`--force-replace` は additive 判定をスキップして強制置換します。`--replace-platform {arch}/{variant}` は指定 platform のみ内容置換を許容し（正当なリビルドで変わったペイロードの公開用）、他 platform は通常どおり検証します。`--with-index` は単一パッケージ push 後に index artifact も公開します（`push <pkg>` 単体では index が陳腐化するため）。`--all-packages` は index artifact を `{registry}/packages/index:{yyyymmdd}-{rev}`（同日タグの最大 rev + 1）で最後に公開します。レジストリ前置詞の既定値はありません。`--registry` または `CONTAINERS_REGISTRY` が必須です。skopeo の一時ファイルは `oci-layouts/.tmp`（TMPDIR）に固定されます。
+`push` は `skopeo copy --all oci:{dir} docker://{ref}` でパッケージイメージを公開します。既存タグが同一 digest を指す場合は冪等にスキップし、新規 platform の追加のみを含む差分（リモート ⊆ ローカル）であれば additive 更新として上書きを許可します。一方、既存 platform の削除や層内容の変更が含まれる場合は push を拒否します。`--all-packages` では additive 条件に適合しないパッケージを集約して報告し、適合したパッケージのみを順次 push します。強制的にタグを置換する場合は `--force-replace` を指定します。また、正当な再ビルドにより成果物が更新された特定 platform のみ置換を許可し、他の platform は通常どおり検証する場合は `--replace-platform {arch}/{variant}` を指定します。`--with-index` は単一パッケージの push 後に index artifact も併せて公開します（単体 push では index に記録された digest と実際の layout とに乖離が生じるためです）。`--all-packages` は全パッケージの push 完了後、末尾で index artifact を `{registry}/packages/index:{yyyymmdd}-{rev}`（同日タグの最大 rev + 1）として公開します。レジストリ前置詞に既定値はなく、`--registry` または `CONTAINERS_REGISTRY` の指定が必須です。skopeo が使用する一時ディレクトリは `oci-layouts/.tmp` に固定されます。
 
-- タグはイミュータブルとして扱います。既存タグが同一 digest を指す場合は冪等にスキップします。digest が異なる場合は、リモートの platform 集合がローカルの部分集合（共通 platform の内容が一致）であるときに限り platform 追加として上書きを許容し、それ以外は上書きせずエラーにします。内容一致は次のいずれかです。manifest digest が一致する。config と layer の digest が一致し、annotations が additive 適合である。digest が違っても、config は `created` を除いて一致し、layer の個数と media type が一致し、`rootfs.diff_ids` が等しい（同一ペイロードの再エンコード。圧縮形式の変更は適合しません）。additive 適合とは、リモートの annotation がすべてローカルに同値で存在することです。ローカル側の追加は許容します。`org.opencontainers.image.revision` だけは、値の差と、どちらか一方に無いことを許容します。
+- タグは原則として不変（イミュータブル）として扱います。既存タグが同一 digest を指す場合は冪等にスキップします。digest が異なる場合でも、リモートの全 platform がローカルに含まれ、かつ共通する各 platform の内容が一致しているときに限り、platform の追加として上書きを許可します。それ以外の場合は上書きせずエラーとします。内容の一致と判定されるのは、次のいずれかの条件を満たす場合です。
+  1. manifest digest が完全に一致する。
+  2. config および各 layer の digest が一致し、annotations が additive 条件に適合する。
+  3. digest が異なる場合でも、config が `created` を除いて一致し、layer の個数および media type が一致し、`rootfs.diff_ids` が等しい（同一ペイロードの再エンコード。圧縮形式の変更は不適合）。
+  ここで annotations の additive 適合とは、リモートに存在する全 annotation がローカルにも同値で保持されている状態を指します（ローカル側への新規追加は許容され、`org.opencontainers.image.revision` のみ値の差異や有無が許容されます）。
 - push 前に `oci-layouts/index` のエントリとローカル layout の digest を照合し、世代ズレ（pack 後に index を再生成していない等）を拒否します。
 - push 後の digest は `--digestfile` で検証し、期待値と一致しない場合はエラーにします。
 - `--dry-run` は対象参照の一覧のみを表示します。

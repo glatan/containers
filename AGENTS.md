@@ -6,11 +6,11 @@
 
 ## パイプライン運用
 
-- `oci-layouts/` がローカル正本。`packages/artifacts/` は中間生成物。
-- `pack` は既定で増分 merge（既存 platform を保持）。platform の追加・再封入は `pack {pkg} -t {arch}/{variant}`、除去は `--remove-platform`、全再生成は `--replace`。
-- 成果物の復元は `restore`（`--from-registry` で layout ごとレジストリから復元）。
-- push 前は `verify` で blob 整合性、`status --local` で状態を確認。`index` の再生成は pack 後に必須。
-- `pack` の既定 profile は release（zstd 22）。開発用途は `--profile dev`。
+- `oci-layouts/` をローカルの正本として扱い、`packages/artifacts/` は中間生成物とする。
+- `pack` は既定で増分 merge を行い、既存 platform を保持する。platform の追加や再封入は `pack {pkg} -t {arch}/{variant}`、除去は `--remove-platform`、全再生成は `--replace` を使用する。
+- 成果物の復元には `restore` を使用する（`--from-registry` を指定すると layout ごとレジストリから復元する）。
+- push 前は `verify` で blob 整合性を検証し、`status --local` で状態を確認する。`index` の再生成は pack 後に必須。
+- `pack` の既定 profile は release（zstd 22）。開発用途では `--profile dev` を指定する。
 
 ## シェル注意
 

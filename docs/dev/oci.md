@@ -111,8 +111,8 @@ manifest のトップレベル `annotations`（複数 platform イメージで�
 | `imageLayoutVersion: "1.0.0"` | oci-layout ファイル |
 
 `ImageManifest.artifactType` は通常イメージでは省略し、index artifact
-のみ `vnd.containers.index` を設定します。`ExecConfig::runnable()` は
-compose 系 runnable イメージの env/cmd/workingdir を設定します。
+のみ `vnd.containers.index` を設定します。また `ExecConfig::runnable()` は、
+compose 系 runnable イメージにおける環境変数、実行コマンド、および作業ディレクトリを設定します。
 
 ## レイヤー圧縮
 
@@ -130,7 +130,7 @@ zstd の圧縮レベル設定は仕様外の実装方針です。ビルドの再
 
 圧縮レベルを変更すると layer blob のダイジェストは変化しますが、未圧縮 tar のハッシュ値である DiffID は同一のまま保持されます。したがって、レジストリ上においてレベル 3 とレベル 22 の blob を共有することはできません。
 
-ローカルの正本は `oci-layouts/`（pack の確定物）であり、`packages/artifacts/` はビルド・restore が出入力する中間ストアです。merge（既定）は既存 platform を保持したまま対象 platform のみ差し替えるため、同一 layout 内で異なるプロファイルの blob が併存し得ます。全 platform を同一プロファイルに揃えたい場合は `--replace` で全再生成します。単一パッケージでは対応する全 platform の成果物が必要です。`--all-packages` では成果物が無い platform は警告のあと layout から外れます。
+ローカルの正本は `oci-layouts/`（`pack` による確定成果物）であり、`packages/artifacts/` はビルドの出力先および `restore` の復元先となる中間ストレージです。既定の増分 merge は既存 platform を保持したまま対象 platform のみを差し替えるため、同一 layout 内に圧縮プロファイルの異なる blob が併存し得ます。全 platform を同一プロファイルに揃える場合は `--replace` で全再生成します。単一パッケージを指定して全再生成する場合は、対応する全 platform の成果物が必要です。`--all-packages` と併用した場合は、成果物が存在しない platform について警告を表示したうえで、該当 platform を layout から除外して処理を継続します。
 
 ## プラットフォームと variant の扱い
 

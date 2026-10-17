@@ -33,7 +33,7 @@
 | フィールド | 説明 |
 |-|-|
 | `schemaVersion` | `1` 固定 |
-| `index` | index artifact の参照。`"auto"` は `list-tags` で最新の `{yyyymmdd}-{rev}` タグに解決する。`--index` > `CONTAINERS_INDEX` > このフィールド > 内蔵 pin の順に解決する。`"auto"` が参照する `{registry}/packages/index` の前置詞は `--registry` または `CONTAINERS_REGISTRY` が必須で、既定値はない |
+| `index` | index artifact の参照。`"auto"` は `list-tags` で最新の `{yyyymmdd}-{rev}` タグに解決する。解決順序は `--index` > `CONTAINERS_INDEX` > このフィールド > 内蔵 pin の順。`"auto"` が参照する `{registry}/packages/index` の前置詞は `--registry` または `CONTAINERS_REGISTRY` が必須（既定値なし） |
 | `images[].name` | イメージ識別子。mode `compose` のリポジトリ名 `{registry}/images/{name}` と lockfile のキーに使う |
 | `images[].dockerfile` | 対象 Dockerfile（設定ファイルからの相対パス） |
 | `images[].platform` | `amd64/v4` 形式の解決 platform |
