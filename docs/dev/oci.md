@@ -81,6 +81,39 @@ builder が生成するパッケージイメージおよび Image Layout は、�
 | `policy-zstd-publish` | 通常ビルド（レベル 3）と公開ビルド（レベル 22）で DiffID は同一を保ち、layer digest のみが変化すること | `publish_level_changes_blob_but_not_diff_id` |
 | `policy-zstd-level` | zstd 圧縮レベルは 1〜22 の範囲とし、通常ビルドは 3、公開ビルドは 22 とすること（`--profile release` と `--zstd-level` は同時指定不可） | `zstd_level_must_be_1_to_22` |
 
+## 発行アノテーション・メディアタイプ一覧
+
+GHCR 公開時に付与するメタデータの一覧です。アノテーションの置き場所は
+manifest のトップレベル `annotations`（複数 platform イメージでは
+ネスト Image Index の `annotations` にも同内容を付与）です。
+
+| キー / 値 | 置き場所 | 意味 |
+|-|-|-|
+| `org.opencontainers.image.title` | manifest / index | イメージ名（パッケージ名、`{name}-{arch}` 等） |
+| `org.opencontainers.image.version` | manifest / index | バージョンまたは日付-リビジョンタグ |
+| `org.opencontainers.image.description` | manifest / index | パッケージページの説明文（GHCR は multi-arch で index の値のみ参照） |
+| `org.opencontainers.image.source` | manifest / index | `https://github.com/glatan/containers`。GHCR のリポジトリ自動連携と初回公開時の権限継承に必要 |
+| `org.opencontainers.image.revision` | manifest / index | パッケージング時点の HEAD コミット（git 利用不可時は省略） |
+| `org.opencontainers.image.licenses` | manifest（パッケージ・index artifact） | SPDX 識別子。compose 系は複数ライセンス混在のため付与しない |
+| `dev.containers.dependencies` | manifest（パッケージのみ） | platform 評価済み実行時依存（`name version` カンマ区切り）。独自キー |
+| `org.opencontainers.image.ref.name` | index.json / ネスト index 内 descriptor | タグ参照名（containers/image との互換規約） |
+| `io.github.containers.compression.zstd` | ネスト index 内 manifest descriptor | skopeo が push 時に付与する zstd 注釈を先回りして付け、digest 一致を保証 |
+
+| メディアタイプ / 値 | 用途 |
+|-|-|
+| `application/vnd.oci.image.index.v1+json` | Image Index |
+| `application/vnd.oci.image.manifest.v1+json` | Image Manifest |
+| `application/vnd.oci.image.config.v1+json` | Image Config |
+| `application/vnd.oci.image.layer.v1.tar+zstd` | レイヤー blob（zstd 圧縮 tar） |
+| `application/vnd.oci.empty.v1+json` | index artifact の空 config |
+| `application/vnd.containers.index.v1+json` | index artifact の artifactType および index JSON blob（独自） |
+| `unknown/unknown` platform | 実行プラットフォームを持たない index descriptor（buildx 規約） |
+| `imageLayoutVersion: "1.0.0"` | oci-layout ファイル |
+
+`ImageManifest.artifactType` は通常イメージでは省略し、index artifact
+のみ `vnd.containers.index` を設定します。`ExecConfig::runnable()` は
+compose 系 runnable イメージの env/cmd/workingdir を設定します。
+
 ## レイヤー圧縮
 
 OCI Image Specification が規定しているのは、レイヤーのエンコーディングを示す media type のみであり、圧縮率、圧縮レベル、辞書の有無などは定義されていません。
@@ -89,15 +122,15 @@ OCI Image Specification が規定しているのは、レイヤーのエンコ�
 
 zstd の圧縮レベル設定は仕様外の実装方針です。ビルドの再現性を確保するため、マルチスレッド圧縮は行わず `--single-thread` を指定します。
 
-- 通常の `pack` ではレベル 3（処理速度優先）を使用します。
-- 公開用の `pack --profile release` ではレベル 22（公開用高圧縮率、`--ultra`）を使用します。
-- `--zstd-level` オプションで直接レベルを指定することも可能ですが、`--profile release` との同時指定はできません。
+- `pack` の既定は `release`（レベル 22、公開用高圧縮率、`--ultra`）です。ローカルでの動作確認には `--profile dev`（レベル 3、処理速度優先）を指定します。
+- `compose`・`sync`・`env compose` の既定は `dev`（レベル 3）です。
+- `--zstd-level` オプションで直接レベルを指定することも可能ですが、`--profile` との同時指定はできません。
 
 ## 圧縮レベルの違いと成果物の正本
 
 圧縮レベルを変更すると layer blob のダイジェストは変化しますが、未圧縮 tar のハッシュ値である DiffID は同一のまま保持されます。したがって、レジストリ上においてレベル 3 とレベル 22 の blob を共有することはできません。
 
-成果物の正本は、未圧縮のパッケージ成果物（`packages/artifacts/`）です。`oci-layouts/` はそこから都度生成する派生物であり、レベル 3 とレベル 22 の成果物を併存させることはしません。ローカルでの動作確認にはレベル 3 を使用し、GitHub Container Registry（GHCR）への公開時には `--profile release` オプションでレベル 22 として上書き生成したうえでプッシュします。
+ローカルの正本は `oci-layouts/`（pack の確定物）であり、`packages/artifacts/` はビルド・restore が出入力する中間ストアです。merge（既定）は既存 platform を保持したまま対象 platform のみ差し替えるため、同一 layout 内で異なるプロファイルの blob が併存し得ます。全 platform を同一プロファイルに揃えたい場合は `--replace` で全再生成します。単一パッケージでは対応する全 platform の成果物が必要です。`--all-packages` では成果物が無い platform は警告のあと layout から外れます。
 
 ## プラットフォームと variant の扱い
 

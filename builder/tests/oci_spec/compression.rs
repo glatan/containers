@@ -16,7 +16,8 @@ fn zstd_level_must_be_1_to_22() {
 
 #[test]
 fn same_input_same_layer_digest() {
-    // config / manifest digest は created 時刻を含むため再現しない。
+    // manifest digest は revision 注釈が HEAD コミット依存のため
+    // コミット間では変動する（同一コミット内では決定的）。
     let first = build_with_bytes(&[amd64("v1")], b"hello");
     let second = build_with_bytes(&[amd64("v1")], b"hello");
     let first_layer = &manifests(&first)[0].1["layers"][0]["digest"];

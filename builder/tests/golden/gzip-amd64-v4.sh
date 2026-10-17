@@ -8,7 +8,7 @@ autotools_configure() {
   if ! CFLAGS="$(sanitize_flags "${CFLAGS:-}")" \
        CXXFLAGS="$(sanitize_flags "${CXXFLAGS:-}")" \
        LDFLAGS="$(sanitize_flags "${LDFLAGS:-}")" \
-       "$SOURCE"/configure --build="$HOST_TRIPLE" --host="${PACKAGE_HOST:-$TRIPLE}" "$@"; then
+       ./configure --build="$HOST_TRIPLE" --host="${PACKAGE_HOST:-$TRIPLE}" "$@"; then
     if [ -f config.log ]; then
       echo "===== config.log (last 80 lines) ====="
       tail -n 80 config.log
@@ -17,10 +17,12 @@ autotools_configure() {
   fi
 }
 mkdir -p "$BUILD"
+cp -a "$SOURCE"/. "$BUILD"/
 cd "$BUILD"
 export PGODIR=/tmp/pgo
 rm -rf "$PGODIR"
 mkdir -p "$PGODIR"
+sed -i "/gzip\.h/i #include <signal.h>" gzip.c
 autotools_configure --prefix=/usr
 export _PGO_CFLAGS="${CFLAGS:-}" _PGO_CXXFLAGS="${CXXFLAGS:-}" _PGO_LDFLAGS="${LDFLAGS:-}"
 export CFLAGS="$_PGO_CFLAGS -fprofile-generate=$PGODIR -fprofile-update=atomic"

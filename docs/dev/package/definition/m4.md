@@ -35,7 +35,7 @@
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | — |
+| [linux-headers](./linux-headers.md) | 6.18.56 | — |
 
 ### host-dependencies
 
@@ -43,7 +43,7 @@
 |-|-|-|
 | [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | seed |
 | [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | seed |
-| [mold](./mold.md) | 2.42.1 | optional |
+| [mold](./mold.md) | 3.0.0 | optional |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
 ## ビルド設定

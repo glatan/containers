@@ -8,17 +8,17 @@ impl Package for Pcre2 {
         "pcre2"
     }
     fn version(&self) -> &'static str {
-        "10.48"
+        "10.49"
     }
     fn license(&self) -> &'static str {
         "BSD-3-Clause"
     }
     fn source(&self) -> Source {
         Source {
-            url: "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.48/pcre2-10.48.tar.bz2",
-            sha3_512: "445ca5ab94350b9c4307405350758e0c148c92160329b0443159274ce12bae0f437a1d788fb566d7731081553a2a31cc9915055e38e4f97ae17b834d7a1c17e6",
-            blake3: "5e84ce242f146b8a97ce10e3cf31ac4c2c2b23d67814fa1cf266636d0545f3a50f08634ee1a724793b20cdae76647113f56f13a814328e8c3de48a837168ca45",
-            subdir: "pcre2-10.48",
+            url: "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.49/pcre2-10.49.tar.bz2",
+            sha3_512: "2731650b984a34e41cae95ffaaa4c06d817b4d933e74edd43abbc4fb44e524a452727ee0fd2a8f6011042dd0cd533d52f99210b4557d5ae37812e96991aaff43",
+            blake3: "a1b29c27e5d4389e62a37f43df8fe8bcdcfb5dcd293f517ee6749f7d07bad8029cd44b0afd43a890fb9b4fd41b37ea3c66dd97fee3646078835c066b72d82912",
+            subdir: "pcre2-10.49",
         }
     }
     fn dependencies(&self, target: crate::target::Target) -> Vec<crate::package::Dependency> {

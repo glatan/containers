@@ -72,9 +72,9 @@ impl PackageIndex {
 
 impl Entry {
     pub fn manifest_for(&self, platform: &str) -> Option<&PlatformEntry> {
-        self.platforms.iter().find(|entry| {
-            format!("{}/{}", entry.architecture, entry.variant) == platform
-        })
+        self.platforms
+            .iter()
+            .find(|entry| format!("{}/{}", entry.architecture, entry.variant) == platform)
     }
 }
 
@@ -82,8 +82,7 @@ impl Entry {
 /// 合成出力（`current` symlink 経由）、それ以外は `pack` の出力。
 pub fn layout_source(package: &dyn Package) -> Option<PathBuf> {
     if package.compose_root() {
-        let link =
-            workspace::compose_current_link(package.name(), workspace::BUILD_ENV_ARCH);
+        let link = workspace::compose_current_link(package.name(), workspace::BUILD_ENV_ARCH);
         return link.exists().then_some(link);
     }
     let dir = workspace::layout_dir(package.name(), package.version());
@@ -93,58 +92,93 @@ pub fn layout_source(package: &dyn Package) -> Option<PathBuf> {
 /// `oci-layouts/` を走査して index JSON を構築する。
 /// layout が存在する配布対象のみ収録し、依存は `artifact_target`
 /// 解決済みの platform を持つ。
-pub fn generate(registry: &str) -> Result<PackageIndex> {
+/// `all_issues` が真なら個別パッケージの失敗を集約して最後に報告する
+/// （先頭の 1 件で止まらない）。
+pub fn generate(registry: &str, all_issues: bool) -> Result<PackageIndex> {
     let mut packages = Vec::new();
     let mut skipped = Vec::new();
+    let mut issues = Vec::new();
     for package in package::images() {
         let Some(dir) = layout_source(package) else {
             skipped.push(package.name());
             continue;
         };
-        let published = layout_io::published(&dir).map_err(|error| {
-            Error::message(format!("{} の layout が読めません: {error}", package.name()))
-        })?;
-        let platforms = published
-            .manifests
-            .iter()
-            .map(|manifest| PlatformEntry {
-                architecture: manifest.target.architecture().to_string(),
-                variant: manifest.target.variant().to_string(),
-                manifest_digest: manifest.digest.clone(),
-                size: manifest.size,
-            })
-            .collect::<Vec<_>>();
-        let mut dependencies = BTreeMap::new();
-        if !package.compose_root() {
-            for manifest in &published.manifests {
-                let key = format!(
-                    "{}/{}",
-                    manifest.target.architecture(),
-                    manifest.target.variant()
-                );
-                let deps = resolve_dependencies(package, manifest.target)?;
-                dependencies.insert(key, deps);
+        match collect_entry(package, &dir) {
+            Ok(entry) => packages.push(entry),
+            Err(error) => {
+                if all_issues {
+                    issues.push(error.to_string());
+                } else {
+                    return Err(error);
+                }
             }
         }
-        packages.push(Entry {
-            name: package.name().to_string(),
-            version: package.version().to_string(),
-            license: package.license().to_string(),
-            index_digest: published.index_digest,
-            platforms,
-            dependencies,
-        });
     }
     let index = PackageIndex {
         schema_version: SCHEMA_VERSION,
         registry: registry.to_string(),
         packages,
     };
-    validate(&index)?;
+    issues.extend(validate(&index));
+    if !issues.is_empty() {
+        for issue in &issues {
+            eprintln!("問題: {issue}");
+        }
+        return Err(Error::message(format!(
+            "{} 件の問題があります",
+            issues.len()
+        )));
+    }
     for name in &skipped {
         eprintln!("スキップ(layout なし): {name}");
     }
     Ok(index)
+}
+
+/// 1 パッケージ分の index エントリを組み立てる。
+/// layout の読み取りは output lock の read 取得下で行い、並走する
+/// pack/compose の rename 窓で偽の破損を検出しないようにする。
+fn collect_entry(package: &dyn Package, dir: &Path) -> Result<Entry> {
+    let lock = workspace::output_lock(dir)?;
+    let published = {
+        let _guard = lock.read().map_err(|source| Error::io(dir, source))?;
+        layout_io::published(dir).map_err(|error| {
+            Error::message(format!(
+                "{} の layout が読めません: {error}",
+                package.name()
+            ))
+        })?
+    };
+    let platforms = published
+        .manifests
+        .iter()
+        .map(|manifest| PlatformEntry {
+            architecture: manifest.target.architecture().to_string(),
+            variant: manifest.target.variant().to_string(),
+            manifest_digest: manifest.digest.clone(),
+            size: manifest.size,
+        })
+        .collect::<Vec<_>>();
+    let mut dependencies = BTreeMap::new();
+    if !package.compose_root() {
+        for manifest in &published.manifests {
+            let key = format!(
+                "{}/{}",
+                manifest.target.architecture(),
+                manifest.target.variant()
+            );
+            let deps = resolve_dependencies(package, manifest.target)?;
+            dependencies.insert(key, deps);
+        }
+    }
+    Ok(Entry {
+        name: package.name().to_string(),
+        version: package.version().to_string(),
+        license: package.license().to_string(),
+        index_digest: published.index_digest,
+        platforms,
+        dependencies,
+    })
 }
 
 /// 依存を `{name, version, 解決済み platform}` に写像する。
@@ -170,51 +204,54 @@ fn resolve_dependencies(package: &dyn Package, target: Target) -> Result<Vec<Dep
     Ok(dependencies)
 }
 
-/// 依存辺が index 内で解決可能かを検査する。
+/// 依存辺が index 内で解決可能かを検査し、問題を全件返す。
 /// - 依存名が index に存在し version が一致すること
 /// - 依存先エントリが解決済み platform の manifest を持つこと
-fn validate(index: &PackageIndex) -> Result<()> {
+fn validate(index: &PackageIndex) -> Vec<String> {
+    let mut issues = Vec::new();
     for entry in &index.packages {
         for (key, deps) in &entry.dependencies {
             for dep in deps {
                 let Some(found) = index.find(&dep.name) else {
-                    return Err(Error::message(format!(
+                    issues.push(format!(
                         "{} ({key}) の依存 {} が index にありません（pack してください）",
                         entry.name, dep.name
-                    )));
+                    ));
+                    continue;
                 };
                 if found.version != dep.version {
-                    return Err(Error::message(format!(
+                    issues.push(format!(
                         "{} ({key}) の依存 {} のバージョンが一致しません: {} vs {}",
                         entry.name, dep.name, dep.version, found.version
-                    )));
+                    ));
                 }
                 if found.manifest_for(&dep.platform).is_none() {
-                    return Err(Error::message(format!(
+                    issues.push(format!(
                         "{} ({key}) の依存 {} に platform {} の manifest がありません（pack してください）",
                         entry.name, dep.name, dep.platform
-                    )));
+                    ));
                 }
             }
         }
     }
-    Ok(())
+    issues
 }
 
 /// index JSON を OCI artifact として `output`（`oci-layouts/index/`）に書く。
 /// 返り値は artifact manifest の digest（push 後にタグが指す値）。
+/// output 単位の flock で pack/compose 等の layout 書き換えと直列化する。
 pub fn write_artifact(index: &PackageIndex, output: &Path, tag: &str) -> Result<Digest> {
+    let mut lock = workspace::output_lock(output)?;
+    let _guard = lock.write().map_err(|source| Error::io(output, source))?;
     let parent = output.parent().unwrap_or_else(|| Path::new("."));
     if !parent.exists() {
         std::fs::create_dir_all(parent).map_err(|source| Error::io(parent, source))?;
     }
-    let staging =
-        tempfile::TempDir::new_in(parent).map_err(|source| Error::io(parent, source))?;
+    let staging = tempfile::TempDir::new_in(parent).map_err(|source| Error::io(parent, source))?;
     let blobs = staging.path().join("blobs/sha256");
     std::fs::create_dir_all(&blobs).map_err(|source| Error::io(&blobs, source))?;
 
-    let (json_digest, json_size) =
-        oci::store_blob(&blobs, &serde_json::to_vec_pretty(index)?)?;
+    let (json_digest, json_size) = oci::store_blob(&blobs, &serde_json::to_vec_pretty(index)?)?;
     let (config_digest, config_size) = oci::store_blob(&blobs, b"{}")?;
     let manifest = ImageManifest {
         schema_version: 2,
@@ -234,13 +271,34 @@ pub fn write_artifact(index: &PackageIndex, output: &Path, tag: &str) -> Result<
             platform: None,
             annotations: None,
         }],
-        annotations: BTreeMap::from([
-            (
-                "org.opencontainers.image.title".to_string(),
-                "containers package index".to_string(),
-            ),
-            ("org.opencontainers.image.version".to_string(), tag.to_string()),
-        ]),
+        annotations: {
+            let mut annotations = BTreeMap::from([
+                (
+                    "org.opencontainers.image.title".to_string(),
+                    "containers package index".to_string(),
+                ),
+                (
+                    "org.opencontainers.image.version".to_string(),
+                    tag.to_string(),
+                ),
+                (
+                    "org.opencontainers.image.description".to_string(),
+                    "containers package index".to_string(),
+                ),
+                (
+                    "org.opencontainers.image.licenses".to_string(),
+                    "AGPL-3.0-only".to_string(),
+                ),
+                (
+                    "org.opencontainers.image.source".to_string(),
+                    oci::SOURCE_URL.to_string(),
+                ),
+            ]);
+            if let Some(revision) = util::revision() {
+                annotations.insert("org.opencontainers.image.revision".to_string(), revision);
+            }
+            annotations
+        },
     };
     let (manifest_digest, manifest_size) =
         oci::store_blob(&blobs, &serde_json::to_vec(&manifest)?)?;
@@ -261,8 +319,12 @@ pub fn write_artifact(index: &PackageIndex, output: &Path, tag: &str) -> Result<
                 tag.to_string(),
             )])),
         }],
+        annotations: None,
     };
-    util::write(&staging.path().join("index.json"), serde_json::to_vec(&top)?)?;
+    util::write(
+        &staging.path().join("index.json"),
+        serde_json::to_vec(&top)?,
+    )?;
     util::write(
         &staging.path().join("oci-layout"),
         serde_json::to_vec(&oci::OciLayout {
@@ -362,14 +424,23 @@ mod tests {
         let parsed = read_artifact(&out).unwrap();
         assert_eq!(parsed.registry, "ghcr.io/example");
         let manifest = layout_io::pulled_manifest(&out).unwrap();
-        assert_eq!(
-            manifest.artifact_type.as_deref(),
-            Some(ARTIFACT_TYPE)
-        );
+        assert_eq!(manifest.artifact_type.as_deref(), Some(ARTIFACT_TYPE));
         assert_eq!(
             manifest.config.media_type,
             "application/vnd.oci.empty.v1+json"
         );
         assert!(digest.prefixed().starts_with("sha256:"));
+        assert_eq!(
+            manifest.annotations["org.opencontainers.image.source"],
+            crate::oci::SOURCE_URL
+        );
+        assert_eq!(
+            manifest.annotations["org.opencontainers.image.description"],
+            "containers package index"
+        );
+        assert_eq!(
+            manifest.annotations["org.opencontainers.image.licenses"],
+            "AGPL-3.0-only"
+        );
     }
 }

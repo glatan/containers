@@ -18,7 +18,7 @@ impl Package for Texinfo {
     /// あれば使う（任意）。
     fn host_dependencies(&self, target: Target) -> Vec<Dependency> {
         let mut deps = crate::package::cc_deps(self, target);
-        deps.push(dep("perl", "5.42.3").via(crate::package::Via::Optional));
+        deps.push(dep("perl", "5.44.0").via(crate::package::Via::Optional));
         deps
     }
     /// HOST 側で実行されるツール。依存として常に BUILD_ENV 成果物を使う。

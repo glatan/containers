@@ -4,7 +4,7 @@
 | 項目 | 値 |
 |-|-|
 | パッケージ名 | `meson` |
-| バージョン | 1.12.0 |
+| バージョン | 1.12.1 |
 | ライセンス | Apache-2.0 |
 | 分類 | パッケージ |
 | 対象 Platform | amd64: v1 v2 v3 v4; arm64: v8 v8.1 v8.2 v8.3 v8.4 v8.5 v8.6 v8.7 v8.8 v8.9 v9 v9.1 v9.2 v9.3 v9.4 v9.5; ppc64le: power8 power9 power10 power11; riscv64: rva20u64 rva22u64 rva23u64; s390x: z900 z990 z9-ec z10 z196 zEC12 z13 z14 z15 z16 z17 |
@@ -15,10 +15,10 @@
 
 | 項目 | 値 |
 |-|-|
-| URL | https://github.com/mesonbuild/meson/releases/download/1.12.0/meson-1.12.0.tar.gz |
-| sha3-512 | `e1832949d31d2e7010a5c3883779dbb0811937a22dac233b4d35dfc6e5e2e7fcbeb0148fc803c795c209a84407269e11df6f123e7f45e397676d1a2100e34e50` |
-| blake3 | `6115839425ffe60c0f036f8f9445e9572a48d207b7c1aa758c624e3f1e66d77ab71d0cff644c4e91c1169c62726baae74625a7832d64e5f0101b6742574e1f8a` |
-| 展開ディレクトリ | `meson-1.12.0` |
+| URL | https://github.com/mesonbuild/meson/releases/download/1.12.1/meson-1.12.1.tar.gz |
+| sha3-512 | `82f6c97fdbf6877c326cb1c82cc9b3f1c3e9d0f2de16a11e9cc4e4c72d47bce89ca53c4d13802f579f47b50359a2b3171762e8c2d7561ce11789086baf2d9221` |
+| blake3 | `f6d4541d0a5129992e93ce9e55a5ec7608781381451e84e9a4c2afd6400f13e077412def1775d18c6ba3b84a9fbe28edaef8d3b6621df794c7a3edbd339564d9` |
+| 展開ディレクトリ | `meson-1.12.1` |
 
 ## 依存
 
@@ -28,7 +28,7 @@
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [python](./python.md) | 3.14.7 | — |
+| [python](./python.md) | 3.15.0 | — |
 
 ### build-dependencies
 
@@ -36,8 +36,11 @@
 
 ### host-dependencies
 
-なし。
+| パッケージ | バージョン | via |
+|-|-|-|
+| [python](./python.md) | 3.15.0 | — |
 
+host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
 ## ビルド設定
 
 | 項目 | 値 |

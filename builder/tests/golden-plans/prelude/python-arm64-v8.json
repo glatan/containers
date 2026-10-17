@@ -584,29 +584,6 @@
                                 }
                               }
                             }
-                          },
-                          {
-                            "Export": {
-                              "name": "LD_LIBRARY_PATH",
-                              "value": {
-                                "Quoted": {
-                                  "Concat": [
-                                    {
-                                      "Lit": "/dep/"
-                                    },
-                                    {
-                                      "Var": "_dep"
-                                    },
-                                    {
-                                      "Lit": "/usr/lib"
-                                    },
-                                    {
-                                      "Lit": "${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-                                    }
-                                  ]
-                                }
-                              }
-                            }
                           }
                         ]
                       }
@@ -653,29 +630,6 @@
                               },
                               {
                                 "Lit": "${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
-                              }
-                            ]
-                          }
-                        }
-                      }
-                    },
-                    {
-                      "Export": {
-                        "name": "LD_LIBRARY_PATH",
-                        "value": {
-                          "Quoted": {
-                            "Concat": [
-                              {
-                                "Lit": "/dep/"
-                              },
-                              {
-                                "Var": "_dep"
-                              },
-                              {
-                                "Lit": "/usr/lib64"
-                              },
-                              {
-                                "Lit": "${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
                               }
                             ]
                           }
@@ -772,14 +726,46 @@
           ]
         },
         {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "sed"
+                  },
+                  {
+                    "Lit": "-i"
+                  },
+                  {
+                    "Quoted": {
+                      "Lit": "s|check_extension_modules.py|check_extension_modules.py --cross-compiling|g"
+                    }
+                  },
+                  {
+                    "Lit": "Makefile"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
           "Make": {
-            "args": [],
+            "args": [
+              "RUNSHARED="
+            ],
             "jobs": true
           }
         },
         {
           "MakeInstall": {
-            "vars": []
+            "vars": [
+              "RUNSHARED="
+            ]
           }
         },
         {

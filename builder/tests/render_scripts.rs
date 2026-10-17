@@ -101,6 +101,22 @@ fn python_enables_optimizations_only_when_native() {
 }
 
 #[test]
+fn python_exports_dep_ld_library_path_only_when_native() {
+    let needle = "LD_LIBRARY_PATH=\"/dep/${_dep}/usr/lib";
+    assert!(script("python", NATIVE).contains(needle));
+    let cross = script("python", CROSS);
+    assert!(!cross.contains(needle));
+    assert!(
+        cross.contains(
+            "sed -i \"s|check_extension_modules.py|check_extension_modules.py --cross-compiling|g\" Makefile"
+        ),
+        "{cross}"
+    );
+    assert!(cross.contains("make -j\"$(nproc)\" RUNSHARED="), "{cross}");
+    assert!(!script("python", NATIVE).contains("check_extension_modules.py --cross-compiling"));
+}
+
+#[test]
 fn ninja_uses_custom_pgo_bootstrap() {
     let s = script("ninja", NATIVE);
     assert!(s.contains("--bootstrap"), "{s}");

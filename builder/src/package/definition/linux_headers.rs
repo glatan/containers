@@ -11,7 +11,7 @@ impl Package for LinuxHeaders {
     }
 
     fn version(&self) -> &'static str {
-        "6.18.33"
+        "6.18.56"
     }
 
     fn license(&self) -> &'static str {
@@ -45,10 +45,10 @@ impl Package for LinuxHeaders {
 
     fn source(&self) -> Source {
         Source {
-            url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.33.tar.xz",
-            sha3_512: "ad87ec123afe83db49e304a4f32d1c529d525f2e55d8c78de208cff0de2b1306d1eaa35d0b49a3738ffa170977e252e1e85fa58654710f11de9f4267947258ca",
-            blake3: "00d95e1098670a56ee94558692f1e63e0ac3d2113c9e46568e2da9423a37ad8855a530aba3e6f67bc43beacb5edd7a54834cb0f946112630143b7b7bd930f707",
-            subdir: "linux-6.18.33",
+            url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.56.tar.xz",
+            sha3_512: "1cd94e02690a2e548c49d1f9f10d874b174f8e9f6ad69dab98dea41f58133b2867775dbf1dea44761abb3a673065b27ff8a8fdd5aaf0d695fc30ded5b3cc8a30",
+            blake3: "e7d2895ae0c1a3151f5a8795643113c736f94996fe86956e5174246b9f018a8f2e82256f215a5c851bb364720235b32fe85e7c1bccd3837d1f346825477841cd",
+            subdir: "linux-6.18.56",
         }
     }
 
@@ -94,6 +94,10 @@ impl Package for LinuxHeaders {
                         "\"$SOURCE\"".to_owned(),
                         format!("O=\"{out_dir}\""),
                         format!("ARCH=\"{karch}\""),
+                        // kbuild は HOSTCC を `=` で代入するため env でなく
+                        // make 引数として渡す。seed 相は無印 gcc、env 相は
+                        // prefix 付き自前 gcc を指す `$CC` をそのまま使う。
+                        "HOSTCC=\"$CC\"".to_owned(),
                         "headers".to_owned(),
                     ],
                 })

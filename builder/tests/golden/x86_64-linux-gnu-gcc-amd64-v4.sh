@@ -55,14 +55,14 @@ else
   GCC_LIB_FLAGS=--with-isl
 fi
 if [ -d /dep/zlib/usr/include ]; then
-  export CFLAGS=" -I/dep/zlib/usr/include"
-  export CXXFLAGS=" -I/dep/zlib/usr/include"
-  export LDFLAGS=" -L/dep/zlib/usr/lib64 -L/dep/zlib/usr/lib"
+  export CFLAGS="${CFLAGS:-} -I/dep/zlib/usr/include"
+  export CXXFLAGS="${CXXFLAGS:-} -I/dep/zlib/usr/include"
+  export LDFLAGS="${LDFLAGS:-} -L/dep/zlib/usr/lib64 -L/dep/zlib/usr/lib"
 fi
 if [ -d /dep/zstd/usr/include ]; then
-  export CFLAGS=" -I/dep/zstd/usr/include"
-  export CXXFLAGS=" -I/dep/zstd/usr/include"
-  export LDFLAGS=" -L/dep/zstd/usr/lib64 -L/dep/zstd/usr/lib"
+  export CFLAGS="${CFLAGS:-} -I/dep/zstd/usr/include"
+  export CXXFLAGS="${CXXFLAGS:-} -I/dep/zstd/usr/include"
+  export LDFLAGS="${LDFLAGS:-} -L/dep/zstd/usr/lib64 -L/dep/zstd/usr/lib"
 fi
 cd ${BUILD}/instrumented
 CFLAGS="${CFLAGS:-} -fprofile-generate=${_profiledir} -fprofile-update=atomic" CXXFLAGS="${CXXFLAGS:-} -fprofile-generate=${_profiledir} -fprofile-update=atomic" LDFLAGS="${LDFLAGS:-} -fprofile-generate=${_profiledir}" ${SOURCE}/configure --build=${HOST_TRIPLE} --host=${HOST_TRIPLE} --target=${TRIPLE} --program-prefix=${TRIPLE}- --prefix=/usr --with-sysroot=${SYSROOT} --with-build-sysroot=${BUILD_SYSROOT} --with-native-system-header-dir=/include --with-as=/usr/bin/${TRIPLE}-as --with-ld=/usr/bin/${TRIPLE}-ld --infodir=/usr/share/info/${TRIPLE} --with-system-zlib ${GCC_LIB_FLAGS} --with-arch=${MARCH} --enable-cet --disable-nls --disable-werror --disable-libssp --disable-libstdcxx-pch --disable-bootstrap --disable-multilib --enable-plugin --enable-languages=c,c++ --enable-lto --enable-checking=release --enable-__cxa_atexit --enable-threads=posix --enable-shared --enable-default-pie --enable-default-ssp --with-linker-hash-style=gnu --enable-linker-build-id --enable-gnu-indirect-function --enable-gnu-unique-object --enable-initfini-array --enable-libstdcxx-backtrace --enable-host-pie --enable-host-bind-now --with-specs='%{!fno-hardened:-fhardened} -Wno-hardened'

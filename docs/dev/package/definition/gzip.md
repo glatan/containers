@@ -4,7 +4,7 @@
 | 項目 | 値 |
 |-|-|
 | パッケージ名 | `gzip` |
-| バージョン | 1.14 |
+| バージョン | 1.15 |
 | ライセンス | GPL-3.0-or-later |
 | 分類 | パッケージ（Bootstrap） |
 | 対象 Platform | amd64: v1 v2 v3 v4; arm64: v8 v8.1 v8.2 v8.3 v8.4 v8.5 v8.6 v8.7 v8.8 v8.9 v9 v9.1 v9.2 v9.3 v9.4 v9.5; ppc64le: power8 power9 power10 power11; riscv64: rva20u64 rva22u64 rva23u64; s390x: z900 z990 z9-ec z10 z196 zEC12 z13 z14 z15 z16 z17 |
@@ -15,10 +15,10 @@
 
 | 項目 | 値 |
 |-|-|
-| URL | https://ftp.gnu.org/gnu/gzip/gzip-1.14.tar.xz |
-| sha3-512 | `6e7b2e6c5d87a64d2adde0dbd81e0262d638c60088dc5a61be5a0e64b8fa1ed9452bc2a7c3c29667ddb37fac8f8dc35ef16e10154f7a6a57ec8de6aa24ee4162` |
-| blake3 | `4d318e6b8ff830c98b98314bcafb54d540ab940553ef1ad5e0743b21a36a473be1c98b3671dae64e436526b39c2359f623d66dae1a003067c3a5ed9e0c0d0617` |
-| 展開ディレクトリ | `gzip-1.14` |
+| URL | https://ftp.gnu.org/gnu/gzip/gzip-1.15.tar.xz |
+| sha3-512 | `a9b7f473b0baa272f67f18ac4de788f5457231cde528f9b1f287db9c870bdf67857210bc444fe3f8502cd3b76f44e3fec3544da3aec42b0a665dea3e890b219a` |
+| blake3 | `ed2b2743048530c90a8b93b32bac1f9e06b6fc0988c36ca39d94e10ffb5379d11bab254fe1a13f97a6950991b8d817f4186cada139291aa69c5cf560b72d91e6` |
+| 展開ディレクトリ | `gzip-1.15` |
 
 ## 依存
 
@@ -34,7 +34,7 @@
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | — |
+| [linux-headers](./linux-headers.md) | 6.18.56 | — |
 
 ### host-dependencies
 
@@ -42,7 +42,7 @@
 |-|-|-|
 | [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | seed |
 | [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | seed |
-| [mold](./mold.md) | 2.42.1 | optional |
+| [mold](./mold.md) | 3.0.0 | optional |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
 ## ビルド設定
@@ -52,7 +52,7 @@ host-dependencies は `dep:false` でマウントされ、PATH には載りま�
 | env プリリュード | `Env::Autotools`（configure のみ `-flto*`・LTO 系 `-Werror=*`・`-f{,no-}hardened` を `sanitize_flags` で除去。`make`/`make install` に `CFLAGS`/`CXXFLAGS`/`LDFLAGS` の変数上書きを自動付与） |
 | `-std` 付与 | `-std=gnu17`（CFLAGS 末尾） |
 | sysroot | あり（`--sysroot`/`-idirafter` は `wrap_script` が注入） |
-| ビルドディレクトリ | `$BUILD`（out-of-tree） |
+| ビルドディレクトリ | `$BUILD`（`$SOURCE` をコピーして in-source） |
 | PGO テンプレート | `autotools`（configure → instrumented make → workload → distclean → 再 configure → use make → install。ネイティブのみ） |
 
 configure には `autotools_configure` が `--build="$HOST_TRIPLE" --host="${PACKAGE_HOST:-$TRIPLE}"` を自動付与します。
@@ -91,7 +91,7 @@ autotools_configure() {
   if ! CFLAGS="$(sanitize_flags "${CFLAGS:-}")" \
        CXXFLAGS="$(sanitize_flags "${CXXFLAGS:-}")" \
        LDFLAGS="$(sanitize_flags "${LDFLAGS:-}")" \
-       "$SOURCE"/configure --build="$HOST_TRIPLE" --host="${PACKAGE_HOST:-$TRIPLE}" "$@"; then
+       ./configure --build="$HOST_TRIPLE" --host="${PACKAGE_HOST:-$TRIPLE}" "$@"; then
     if [ -f config.log ]; then
       echo "===== config.log (last 80 lines) ====="
       tail -n 80 config.log
@@ -100,10 +100,12 @@ autotools_configure() {
   fi
 }
 mkdir -p "$BUILD"
+cp -a "$SOURCE"/. "$BUILD"/
 cd "$BUILD"
 export PGODIR=/tmp/pgo
 rm -rf "$PGODIR"
 mkdir -p "$PGODIR"
+sed -i "/gzip\.h/i #include <signal.h>" gzip.c
 autotools_configure --prefix=/usr
 export _PGO_CFLAGS="${CFLAGS:-}" _PGO_CXXFLAGS="${CXXFLAGS:-}" _PGO_LDFLAGS="${LDFLAGS:-}"
 export CFLAGS="$_PGO_CFLAGS -fprofile-generate=$PGODIR -fprofile-update=atomic"
@@ -173,7 +175,7 @@ autotools_configure() {
   if ! CFLAGS="$(sanitize_flags "${CFLAGS:-}")" \
        CXXFLAGS="$(sanitize_flags "${CXXFLAGS:-}")" \
        LDFLAGS="$(sanitize_flags "${LDFLAGS:-}")" \
-       "$SOURCE"/configure --build="$HOST_TRIPLE" --host="${PACKAGE_HOST:-$TRIPLE}" "$@"; then
+       ./configure --build="$HOST_TRIPLE" --host="${PACKAGE_HOST:-$TRIPLE}" "$@"; then
     if [ -f config.log ]; then
       echo "===== config.log (last 80 lines) ====="
       tail -n 80 config.log
@@ -182,7 +184,9 @@ autotools_configure() {
   fi
 }
 mkdir -p "$BUILD"
+cp -a "$SOURCE"/. "$BUILD"/
 cd "$BUILD"
+sed -i "/gzip\.h/i #include <signal.h>" gzip.c
 autotools_configure --prefix=/usr
 make -j"$(nproc)" CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}"
 make install CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}" DESTDIR="$OUT"

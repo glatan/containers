@@ -33,7 +33,7 @@
 | フィールド | 説明 |
 |-|-|
 | `schemaVersion` | `1` 固定 |
-| `index` | index artifact の参照。`"auto"` は `list-tags` で最新の `{yyyymmdd}-{rev}` タグに解決する。`--index` > `CONTAINERS_INDEX` > このフィールド > 内蔵 pin の順に解決する。`"auto"` が参照する `{registry}/packages/index` は `--registry` / `CONTAINERS_REGISTRY`（既定 `ghcr.io`）で変わる |
+| `index` | index artifact の参照。`"auto"` は `list-tags` で最新の `{yyyymmdd}-{rev}` タグに解決する。`--index` > `CONTAINERS_INDEX` > このフィールド > 内蔵 pin の順に解決する。`"auto"` が参照する `{registry}/packages/index` の前置詞は `--registry` または `CONTAINERS_REGISTRY` が必須で、既定値はない |
 | `images[].name` | イメージ識別子。mode `compose` のリポジトリ名 `{registry}/images/{name}` と lockfile のキーに使う |
 | `images[].dockerfile` | 対象 Dockerfile（設定ファイルからの相対パス） |
 | `images[].platform` | `amd64/v4` 形式の解決 platform |
@@ -55,7 +55,7 @@ containers-builder sync containers.json [--check] [--index {ref}] [--registry {p
 
 - `--check`: 再解決・再生成した内容と差分があれば失敗します（CI 向け。書き込みません）
 - `--index`: 使用する index 参照を上書きします
-- `--registry`: `"index": "auto"` が参照する `{registry}/packages/index` の前置詞です（既定 `ghcr.io`、`CONTAINERS_REGISTRY` でも指定可）。生成ブロック内の FROM 参照や mode `compose` の push 先は、このフラグではなく index artifact に記録された `registry` フィールドから導出されます
+- `--registry`: `"index": "auto"` が参照する `{registry}/packages/index` の前置詞です。`"auto"` のときは `--registry` または `CONTAINERS_REGISTRY` が必須で、既定値はありません。生成ブロック内の FROM 参照や mode `compose` の push 先は、このフラグではなく index artifact に記録された `registry` フィールドから導出されます
 - `--output`: mode `compose` の合成 layout の出力先を変更します（既定はキャッシュの `composed/{name}-{tag}`）
 - `--no-push`: mode `compose` で push を省略しローカル layout のみ生成します
 - `--profile` / `--zstd-level`: mode `compose` の合成イメージの圧縮レベルを指定します

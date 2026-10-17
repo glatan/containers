@@ -15,14 +15,14 @@ else
   GCC_LIB_FLAGS=--with-isl
 fi
 if [ -d /dep/zlib/usr/include ]; then
-  export CFLAGS=" -I/dep/zlib/usr/include"
-  export CXXFLAGS=" -I/dep/zlib/usr/include"
-  export LDFLAGS=" -L/dep/zlib/usr/lib64 -L/dep/zlib/usr/lib"
+  export CFLAGS="${CFLAGS:-} -I/dep/zlib/usr/include"
+  export CXXFLAGS="${CXXFLAGS:-} -I/dep/zlib/usr/include"
+  export LDFLAGS="${LDFLAGS:-} -L/dep/zlib/usr/lib64 -L/dep/zlib/usr/lib"
 fi
 if [ -d /dep/zstd/usr/include ]; then
-  export CFLAGS=" -I/dep/zstd/usr/include"
-  export CXXFLAGS=" -I/dep/zstd/usr/include"
-  export LDFLAGS=" -L/dep/zstd/usr/lib64 -L/dep/zstd/usr/lib"
+  export CFLAGS="${CFLAGS:-} -I/dep/zstd/usr/include"
+  export CXXFLAGS="${CXXFLAGS:-} -I/dep/zstd/usr/include"
+  export LDFLAGS="${LDFLAGS:-} -L/dep/zstd/usr/lib64 -L/dep/zstd/usr/lib"
 fi
 cd ${BUILD}
 ${SOURCE}/configure --build=${HOST_TRIPLE} --host=${HOST_TRIPLE} --target=${TRIPLE} --program-prefix=${TRIPLE}- --prefix=/usr/lib/cross/${TRIPLE}/stage1 --with-sysroot=/usr/${TRIPLE} --with-build-sysroot=/usr/${TRIPLE} --with-native-system-header-dir=/include --with-as=/usr/bin/${TRIPLE}-as --with-ld=/usr/bin/${TRIPLE}-ld --infodir=/usr/share/info/${TRIPLE} --with-system-zlib ${GCC_LIB_FLAGS} --with-cpu=power8 --without-headers --with-newlib --disable-shared --disable-threads --disable-werror --disable-libatomic --disable-libsanitizer --disable-libssp --disable-libquadmath --disable-libgomp --disable-libstdcxx --disable-libvtv --disable-bootstrap --disable-multilib --enable-languages=c --enable-lto --enable-plugin --enable-default-pie --enable-default-ssp --enable-checking=release

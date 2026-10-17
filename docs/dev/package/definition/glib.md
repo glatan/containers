@@ -4,7 +4,7 @@
 | 項目 | 値 |
 |-|-|
 | パッケージ名 | `glib` |
-| バージョン | 2.90.0 |
+| バージョン | 2.90.1 |
 | ライセンス | LGPL-2.1-or-later |
 | 分類 | パッケージ |
 | 対象 Platform | amd64: v1 v2 v3 v4; arm64: v8 v8.1 v8.2 v8.3 v8.4 v8.5 v8.6 v8.7 v8.8 v8.9 v9 v9.1 v9.2 v9.3 v9.4 v9.5; ppc64le: power8 power9 power10 power11; riscv64: rva20u64 rva22u64 rva23u64; s390x: z900 z990 z9-ec z10 z196 zEC12 z13 z14 z15 z16 z17 |
@@ -14,10 +14,10 @@
 
 | 項目 | 値 |
 |-|-|
-| URL | https://download.gnome.org/sources/glib/2.90/glib-2.90.0.tar.xz |
-| sha3-512 | `c896df2b43beb87254843d355e2fc389d9d62e01a49c58e078f3736286c0f0f16eedcfb611b19edb13ebf38ec8714ab1639b7b52b1ad02301eb1365cddaa205d` |
-| blake3 | `0cd33e9b83b0fbc9b8396e99a59504909ced4e2f233f445e6127dacbcf17c0d00cc425186477da98e7f37cacfc8a27f8957f28b6b1cbd94ba1e98deef2570866` |
-| 展開ディレクトリ | `glib-2.90.0` |
+| URL | https://download.gnome.org/sources/glib/2.90/glib-2.90.1.tar.xz |
+| sha3-512 | `6734ba4b739abf878ecd3f179fef61afd856006890c32fdc8a617af680234ccabc71a93ef36ee3cbb26a4e86b987c594eb7845c367ed8b51947fb415d3f9b911` |
+| blake3 | `86a15eec2594a3fa4e5e301132713f21d342e57830b03c75d4d537c67f810b52ccc2f36199026032bd47908db1036db2478e8789dc1b1336857f35547a80e5da` |
+| 展開ディレクトリ | `glib-2.90.1` |
 
 ## 依存
 
@@ -29,14 +29,14 @@
 |-|-|-|
 | [x86_64-linux-gnu-glibc](./x86_64-linux-gnu-glibc.md) | 2.44 | — |
 | [libffi](./libffi.md) | 3.8.0 | — |
-| [pcre2](./pcre2.md) | 10.48 | — |
+| [pcre2](./pcre2.md) | 10.49 | — |
 | [zlib](./zlib.md) | 1.3.2 | — |
 
 ### build-dependencies
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | — |
+| [linux-headers](./linux-headers.md) | 6.18.56 | — |
 
 ### host-dependencies
 
@@ -44,11 +44,11 @@
 |-|-|-|
 | [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | seed |
 | [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | seed |
-| [meson](./meson.md) | 1.12.0 | — |
+| [meson](./meson.md) | 1.12.1 | — |
 | [ninja](./ninja.md) | 1.13.2 | — |
-| [python](./python.md) | 3.14.7 | — |
-| [pkgconf](./pkgconf.md) | 2.5.1 | — |
-| [mold](./mold.md) | 2.42.1 | optional |
+| [python](./python.md) | 3.15.0 | — |
+| [pkgconf](./pkgconf.md) | 3.0.8 | — |
+| [mold](./mold.md) | 3.0.0 | optional |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
 ## ビルド設定

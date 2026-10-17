@@ -13,7 +13,7 @@ impl Package for Openssl {
     }
 
     fn version(&self) -> &'static str {
-        "4.0.2"
+        "4.0.3"
     }
 
     fn license(&self) -> &'static str {
@@ -26,10 +26,10 @@ impl Package for Openssl {
 
     fn source(&self) -> Source {
         Source {
-            url: "https://github.com/openssl/openssl/releases/download/openssl-4.0.2/openssl-4.0.2.tar.gz",
-            sha3_512: "a7d86c8609e98dea12cab18f22724439a1fda43ef9a45a6440a201a6d9e616fe29dcf83dbffbc5c303cc5f43a1c92f5d222adb29f03a30b1e0b578af0a47dc4b",
-            blake3: "ef5af5011e1ee875521ed63331cf35d16e82167042b37f361a630b10f5bf2f999fad90fcc972bc02a0d83e2972af48040140d4e78279311b46a7c1557c206d7a",
-            subdir: "openssl-4.0.2",
+            url: "https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz",
+            sha3_512: "11583faf5718638acdca493ca593d382302fab032db7ec1c6adedb07d073394e891ddf236591070f3fb5d48fe7fad149ee990d87397c4c3a6f95748db80d20cc",
+            blake3: "92a6d5e2e74a989c1405de8a7770c7fb469ddcf9c9ed74b768d51c274af6487b5816f7dd05f15714baf55b17bb948175891ecfc24da8117fb5527462795abe2b",
+            subdir: "openssl-4.0.3",
         }
     }
 
@@ -44,7 +44,7 @@ impl Package for Openssl {
     /// Configure スクリプトが perl を実行するため必須の HOST 依存。
     fn host_dependencies(&self, target: Target) -> Vec<Dependency> {
         let mut deps = crate::package::cc_deps(self, target);
-        deps.push(dep("perl", "5.42.3"));
+        deps.push(dep("perl", "5.44.0"));
         deps
     }
 

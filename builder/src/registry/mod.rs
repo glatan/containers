@@ -5,6 +5,7 @@
 //! - `sync`: 消費側リポジトリの設定ファイルを読み、Dockerfile の
 //!   GENERATED ブロックを同期する
 
+pub(crate) mod additive;
 pub(crate) mod cache;
 pub(crate) mod config;
 pub(crate) mod dockerfile;
@@ -15,12 +16,8 @@ pub(crate) mod pull;
 pub(crate) mod resolve;
 pub(crate) mod skopeo;
 
+use crate::error::{Error, Result};
 use crate::oci::Digest;
-
-/// 既定のレジストリ前置詞（`{registry}/packages/{name}:{version}`）。
-/// `--registry` または `CONTAINERS_REGISTRY` で上書きする。
-/// `ghcr.io/{org}` の org 確定まではホスト名のみを既定とする。
-pub const DEFAULT_REGISTRY: &str = "ghcr.io";
 
 /// パッケージイメージを置く名前空間。
 pub const PACKAGES_NAMESPACE: &str = "packages";
@@ -60,12 +57,18 @@ pub fn digest_ref(repository: &str, digest: &Digest) -> String {
     format!("docker://{repository}@{}", digest.prefixed())
 }
 
-/// レジストリ前置詞の解決: `--registry` > `CONTAINERS_REGISTRY` > 既定値。
-pub fn registry_prefix(flag: Option<&str>) -> String {
+/// レジストリ前置詞の解決: `--registry` > `CONTAINERS_REGISTRY`。
+/// どちらも無ければエラーにする。ホスト名だけの既定値は
+/// `{host}/packages/{name}` の host 部分を owner と誤認して送る。
+pub fn registry_prefix(flag: Option<&str>) -> Result<String> {
     flag.map(str::to_string)
         .or_else(|| std::env::var("CONTAINERS_REGISTRY").ok())
         .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| DEFAULT_REGISTRY.to_string())
+        .ok_or_else(|| {
+            Error::message(
+                "レジストリ前置詞を指定してください（--registry または CONTAINERS_REGISTRY）",
+            )
+        })
 }
 
 /// index 参照の解決: `--index` > `CONTAINERS_INDEX` > 設定 > 内蔵 pin。

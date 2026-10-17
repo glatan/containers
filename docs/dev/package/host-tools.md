@@ -28,14 +28,14 @@ GNU Autotools（configure）を使用するツールでは、configure 実行時
 
 - `Env::Autotools`: mpfr / mpc / isl / libffi / pcre2 / readline / expat / sqlite / libxcrypt / coreutils / xz / bzip2 / flex / perl / pkgconf / ninja / python / cmake / make / m4 / bison / findutils / sed / grep / gawk / diffutils / patch / tar / gzip / texinfo
 - `Env::Lto`: gmp / ncurses / glib / bash
-- `Env::None`: ca-certificates / linux-headers / openssl / zlib / zlib-ng / zstd / mold / meson / qemu / {triple}-binutils / {triple}-gcc-stage1 / {triple}-glibc-headers / {triple}-gcc-stage2 / {triple}-glibc / {triple}-gcc
+- `Env::None`: ca-certificates / linux-headers / openssl / zlib / zlib-ng / zstd / mold / meson / qemu / rust / {triple}-binutils / {triple}-gcc-stage1 / {triple}-glibc-headers / {triple}-gcc-stage2 / {triple}-glibc / {triple}-gcc
 - `Recipe::Noop`: build-env
 
 <!-- /GENERATED:env -->
 
 perl は `Env::Autotools` ですが `Step::Configure` ではなく `Step::ConfigureScript` で `./Configure` を直接起動するため、レシピ冒頭で `sanitize_flags` を `CFLAGS` / `CXXFLAGS` / `LDFLAGS` に明示 export しています。`Env::Lto` では configure がフルフラグを Makefile へ焼くため、make 時の変数上書きなしに LTO とバイナリ強化が維持されます。meson は Python パッケージの配置処理のみを行うため、C コンパイラの LTO は使用しません。
 
-Host tools の多くにはネイティブ実行可能な PGO を適用します。`Pgo::Profiled` は各パッケージのワークロード（`make check` またはビルドしたツール自身でのデータ処理）、`Pgo::Custom` は openssl / ninja / zlib / zlib-ng / mold / python の個別手順です。適用対象とワークロードは [README.md](./README.md) の PGO 対象パッケージ表を参照してください。ncurses は `tic` が libncurses の消費者経路を駆動しないため `Pgo::None` です。
+Host tools の多くにはネイティブ実行可能な PGO を適用します。`Pgo::Profiled` は各パッケージのワークロード（`make check` またはビルドしたツール自身でのデータ処理）、`Pgo::Custom` は openssl / ninja / zlib / zlib-ng / python の個別手順です。適用対象とワークロードは [README.md](./README.md) の PGO 対象パッケージ表を参照してください。mold は `pgo()` を上書きしないため `Pgo::None` です。ncurses は `tic` が libncurses の消費者経路を駆動しないため `Pgo::None` です。
 
 ホスト用 glibc がビルド済みである場合は、`/dep/${TRIPLE}-glibc/usr/${TRIPLE}` を優先して `--sysroot` に渡し、linux-headers の `-idirafter` をコンパイラ引数に追加します。qemu のリンク方針は [qemu.md](./definition/qemu.md) です。
 
@@ -50,28 +50,28 @@ Host tools の多くにはネイティブ実行可能な PGO を適用します�
 | [gmp](./definition/gmp.md) | 6.3.0 | LGPL-3.0-or-later | Profiled | Lto |
 | [mpfr](./definition/mpfr.md) | 4.2.2 | LGPL-3.0-or-later | Profiled | Autotools |
 | [mpc](./definition/mpc.md) | 1.4.1 | LGPL-3.0-or-later | Profiled | Autotools |
-| [isl](./definition/isl.md) | 0.26 | MIT | Profiled | Autotools |
+| [isl](./definition/isl.md) | 0.28 | MIT | Profiled | Autotools |
 | [zstd](./definition/zstd.md) | 1.5.7 | BSD-3-Clause OR GPL-2.0-only | Profiled | None |
-| [mold](./definition/mold.md) | 2.42.1 | MIT | Custom | None |
+| [mold](./definition/mold.md) | 3.0.0 | MIT | None | None |
 | [libffi](./definition/libffi.md) | 3.8.0 | MIT | Profiled | Autotools |
-| [pcre2](./definition/pcre2.md) | 10.48 | BSD-3-Clause | Profiled | Autotools |
+| [pcre2](./definition/pcre2.md) | 10.49 | BSD-3-Clause | Profiled | Autotools |
 | [ncurses](./definition/ncurses.md) | 6.6 | MIT-open-group | None | Lto |
 | [readline](./definition/readline.md) | 8.3 | GPL-3.0-or-later | Profiled | Autotools |
-| [expat](./definition/expat.md) | 2.8.4 | MIT | Profiled | Autotools |
-| [sqlite](./definition/sqlite.md) | 3.53.4 | blessing | Profiled | Autotools |
+| [expat](./definition/expat.md) | 2.9.0 | MIT | Profiled | Autotools |
+| [sqlite](./definition/sqlite.md) | 3.54.0 | blessing | Profiled | Autotools |
 | [libxcrypt](./definition/libxcrypt.md) | 4.5.2 | LGPL-2.1-or-later | Profiled | Autotools |
-| [glib](./definition/glib.md) | 2.90.0 | LGPL-2.1-or-later | None | Lto |
+| [glib](./definition/glib.md) | 2.90.1 | LGPL-2.1-or-later | None | Lto |
 | [bash](./definition/bash.md) | 5.3 | GPL-3.0-or-later | Profiled | Lto |
 | [coreutils](./definition/coreutils.md) | 9.12 | GPL-3.0-or-later | Profiled | Autotools |
 | [xz](./definition/xz.md) | 5.8.4 | 0BSD | Profiled | Autotools |
 | [bzip2](./definition/bzip2.md) | 1.0.8 | bzip2-1.0.6 | Profiled | Autotools |
 | [flex](./definition/flex.md) | 2.6.4 | BSD-2-Clause | Profiled | Autotools |
-| [perl](./definition/perl.md) | 5.42.3 | Artistic-1.0-Perl OR GPL-1.0-or-later | None | Autotools |
-| [pkgconf](./definition/pkgconf.md) | 2.5.1 | ISC | Profiled | Autotools |
+| [perl](./definition/perl.md) | 5.44.0 | Artistic-1.0-Perl OR GPL-1.0-or-later | None | Autotools |
+| [pkgconf](./definition/pkgconf.md) | 3.0.8 | ISC | Profiled | Autotools |
 | [ninja](./definition/ninja.md) | 1.13.2 | Apache-2.0 | Custom | Autotools |
-| [meson](./definition/meson.md) | 1.12.0 | Apache-2.0 | None | None |
-| [python](./definition/python.md) | 3.14.7 | Python-2.0 | Custom | Autotools |
-| [cmake](./definition/cmake.md) | 4.4.3 | BSD-3-Clause | None | Autotools |
+| [meson](./definition/meson.md) | 1.12.1 | Apache-2.0 | None | None |
+| [python](./definition/python.md) | 3.15.0 | Python-2.0 | Custom | Autotools |
+| [cmake](./definition/cmake.md) | 4.4.4 | BSD-3-Clause | None | Autotools |
 | [make](./definition/make.md) | 4.4.1 | GPL-3.0-or-later | Profiled | Autotools |
 | [m4](./definition/m4.md) | 1.4.21 | GPL-3.0-or-later | Profiled | Autotools |
 | [bison](./definition/bison.md) | 3.8.2 | GPL-3.0-or-later | Profiled | Autotools |
@@ -82,7 +82,7 @@ Host tools の多くにはネイティブ実行可能な PGO を適用します�
 | [diffutils](./definition/diffutils.md) | 3.12 | GPL-3.0-or-later | Profiled | Autotools |
 | [patch](./definition/patch.md) | 2.8 | GPL-3.0-or-later | Profiled | Autotools |
 | [tar](./definition/tar.md) | 1.35 | GPL-3.0-or-later | Profiled | Autotools |
-| [gzip](./definition/gzip.md) | 1.14 | GPL-3.0-or-later | Profiled | Autotools |
+| [gzip](./definition/gzip.md) | 1.15 | GPL-3.0-or-later | Profiled | Autotools |
 | [texinfo](./definition/texinfo.md) | 7.3 | GPL-3.0-or-later | Profiled | Autotools |
 
 <!-- /GENERATED:packages -->

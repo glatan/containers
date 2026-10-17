@@ -12,7 +12,7 @@ impl Package for Qemu {
         "qemu"
     }
     fn version(&self) -> &'static str {
-        "11.1.1"
+        "11.1.2"
     }
     fn license(&self) -> &'static str {
         "GPL-2.0-only"
@@ -24,17 +24,17 @@ impl Package for Qemu {
 
     fn source(&self) -> Source {
         Source {
-            url: "https://download.qemu.org/qemu-11.1.1.tar.xz",
-            sha3_512: "8b53993040fe8ce2e6c69e2d616a952fcd3da00ddcd114b64dea2d5b1cc0a4f6df03bc899ba12437b6166559be8f2379b97a737608659f6b2c6ab56605bd20a2",
-            blake3: "9cda9512c997d0ec176add30ff4f4531d4882681eb12e98ba5c7d11cb4cf610ca079689e5def5ae36c1c1a173dee7eb001ce8fffeba77f418048e4b4773dff67",
-            subdir: "qemu-11.1.1",
+            url: "https://download.qemu.org/qemu-11.1.2.tar.xz",
+            sha3_512: "58b4c78200e2bd35640e33bd36be28688919ab12c102e5cd2e69fa3359b55f53678080b9dec2fba2b9a73692664f09b8d69bc4be99384624acc967e03c464b41",
+            blake3: "0c0ce4290270c88ae4fb419bbbec191fda6608850e3d80dea4294341004fc5ea77dadd7c6cf628b4218fd3e9acba90e183a2a1389dd4f115ef333124d7f80d90",
+            subdir: "qemu-11.1.2",
         }
     }
     fn dependencies(&self, target: Target) -> Vec<Dependency> {
         crate::package::with_libc(
             target,
             &[
-                dep("glib", "2.90.0"),
+                dep("glib", "2.90.1"),
                 dep("zlib", "1.3.2"),
                 dep("zstd", "1.5.7"),
             ],
@@ -43,7 +43,7 @@ impl Package for Qemu {
     fn build_dependencies(&self, _target: Target) -> Vec<Dependency> {
         vec![
             crate::package::LINUX_HEADERS,
-            dep("pcre2", "10.48"),
+            dep("pcre2", "10.49"),
             dep("libffi", "3.8.0"),
         ]
     }
@@ -58,10 +58,10 @@ impl Package for Qemu {
     fn host_dependencies(&self, target: Target) -> Vec<Dependency> {
         let mut deps = crate::package::cc_deps(self, target);
         deps.extend([
-            dep("python", "3.14.7"),
-            dep("meson", "1.12.0"),
+            dep("python", "3.15.0"),
+            dep("meson", "1.12.1"),
             dep("ninja", "1.13.2"),
-            dep("pkgconf", "2.5.1"),
+            dep("pkgconf", "3.0.8"),
         ]);
         deps
     }

@@ -4,7 +4,7 @@
 | 項目 | 値 |
 |-|-|
 | パッケージ名 | `expat` |
-| バージョン | 2.8.4 |
+| バージョン | 2.9.0 |
 | ライセンス | MIT |
 | 分類 | パッケージ |
 | 対象 Platform | amd64: v1 v2 v3 v4; arm64: v8 v8.1 v8.2 v8.3 v8.4 v8.5 v8.6 v8.7 v8.8 v8.9 v9 v9.1 v9.2 v9.3 v9.4 v9.5; ppc64le: power8 power9 power10 power11; riscv64: rva20u64 rva22u64 rva23u64; s390x: z900 z990 z9-ec z10 z196 zEC12 z13 z14 z15 z16 z17 |
@@ -15,10 +15,10 @@
 
 | 項目 | 値 |
 |-|-|
-| URL | https://github.com/libexpat/libexpat/releases/download/R_2_8_4/expat-2.8.4.tar.xz |
-| sha3-512 | `056d6b25263d95d7375e2fc14f22f161722558c7e695ca3fccc73eb2842bf921e2791fcc1104fd52b0e057dd3be00795af698af5c70a9d8a257b5d6123ac75cc` |
-| blake3 | `1311a1adc8da8ffd10ca65db96be3abe9e7e9d83561d899bd0dbdab17ab599dbddde8e8e3a1a6b9a3223c184a3bf1e71d767750418b304be8b22e8e209348f54` |
-| 展開ディレクトリ | `expat-2.8.4` |
+| URL | https://github.com/libexpat/libexpat/releases/download/R_2_9_0/expat-2.9.0.tar.xz |
+| sha3-512 | `93d3c389be1941a7a0fc6395c2e88d3d4a41a304291e2899c07826f02f28a2ace121c9ac8ea067c5d8d7eaa51b2bc03feec887a5ab504d8db5f782844d26845d` |
+| blake3 | `2b7fee29ba5d7168dbe56fb0a12359cac3729aa2ad0b56ea97f93a45894e868bb05cafc01ec8ec4c269b1aad538ebc8b9d50ec06e9ee9187993888bc5fa2825a` |
+| 展開ディレクトリ | `expat-2.9.0` |
 
 ## 依存
 
@@ -34,7 +34,7 @@
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | — |
+| [linux-headers](./linux-headers.md) | 6.18.56 | — |
 
 ### host-dependencies
 
@@ -42,7 +42,7 @@
 |-|-|-|
 | [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | seed |
 | [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | seed |
-| [mold](./mold.md) | 2.42.1 | optional |
+| [mold](./mold.md) | 3.0.0 | optional |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
 ## ビルド設定

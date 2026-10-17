@@ -18,7 +18,7 @@ impl Package for Libxcrypt {
     /// あれば使う（任意）。
     fn host_dependencies(&self, target: Target) -> Vec<Dependency> {
         let mut deps = crate::package::cc_deps(self, target);
-        deps.push(dep("perl", "5.42.3").via(crate::package::Via::Optional));
+        deps.push(dep("perl", "5.44.0").via(crate::package::Via::Optional));
         deps
     }
 

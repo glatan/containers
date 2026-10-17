@@ -8,7 +8,7 @@
 | ライセンス | GPL-3.0-or-later |
 | 分類 | パッケージ（Bootstrap・seed） |
 | 対象 Platform | amd64: v1 v2 v3 v4; arm64: v8 v8.1 v8.2 v8.3 v8.4 v8.5 v8.6 v8.7 v8.8 v8.9 v9 v9.1 v9.2 v9.3 v9.4 v9.5; ppc64le: power8 power9 power10 power11; riscv64: rva20u64 rva22u64 rva23u64; s390x: z900 z990 z9-ec z10 z196 zEC12 z13 z14 z15 z16 z17 |
-| PGO | 全対象 Platform で適用（`Pgo::Custom`、レシピ内の個別手順） |
+| PGO | amd64 で適用（`Pgo::Custom`、レシピ内の個別手順） |
 | シード用 pacman | gcc make bison flex texinfo zlib zstd mold |
 | コード生成 triple | `x86_64-linux-gnu` |
 | 定義 | [`builder/src/package/definition/x86_64_linux_gnu_binutils.rs`](../../../../builder/src/package/definition/x86_64_linux_gnu_binutils.rs) |
@@ -38,13 +38,13 @@
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | — |
+| [linux-headers](./linux-headers.md) | 6.18.56 | — |
 
 ### host-dependencies
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [mold](./mold.md) | 2.42.1 | optional |
+| [mold](./mold.md) | 3.0.0 | optional |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
 ## ビルド設定
@@ -69,58 +69,84 @@ host-dependencies は `dep:false` でマウントされ、PATH には載りま�
 
 ### `${SOURCE}/configure`（1回目の呼出）
 
+- 対象: arm64, ppc64le, riscv64, s390x
+
+| フラグ | 設定値 | 条件 |
+|-|-|-|
+| `--build` | `${HOST_TRIPLE}` | arm64, ppc64le, riscv64, s390x |
+| `--host` | `${PACKAGE_HOST}` | arm64, ppc64le, riscv64, s390x |
+| `--target` | `${TRIPLE}` | arm64, ppc64le, riscv64, s390x |
+| `--program-prefix` | `${TRIPLE}-` | arm64, ppc64le, riscv64, s390x |
+| `--prefix` | `/usr` | arm64, ppc64le, riscv64, s390x |
+| `--infodir` | `/usr/share/info/${TRIPLE}` | arm64, ppc64le, riscv64, s390x |
+| `--disable-nls` |  | arm64, ppc64le, riscv64, s390x |
+| `--disable-werror` |  | arm64, ppc64le, riscv64, s390x |
+| `--enable-plugins` |  | arm64, ppc64le, riscv64, s390x |
+| `--with-system-zlib` |  | arm64, ppc64le, riscv64, s390x |
+| `--without-debuginfod` |  | arm64, ppc64le, riscv64, s390x |
+| `--disable-gprofng` |  | arm64, ppc64le, riscv64, s390x |
+| `--enable-new-dtags` |  | arm64, ppc64le, riscv64, s390x |
+| `--enable-relro` |  | arm64, ppc64le, riscv64, s390x |
+| `--enable-default-execstack` | `no` | arm64, ppc64le, riscv64, s390x |
+| `--enable-default-hash-style` | `gnu` | arm64, ppc64le, riscv64, s390x |
+| `--enable-cet` |  | arm64, ppc64le, riscv64, s390x |
+
+### `${SOURCE}/configure`（2回目の呼出）
+
+- 対象: amd64
 - env: `CFLAGS="${CFLAGS:-} -fprofile-generate=${PGODIR} -fprofile-update=atomic"` `CXXFLAGS="${CXXFLAGS:-} -fprofile-generate=${PGODIR} -fprofile-update=atomic"` `LDFLAGS="${LDFLAGS:-} -fprofile-generate"`
 
 | フラグ | 設定値 | 条件 |
 |-|-|-|
-| `--build` | `${HOST_TRIPLE}` | 常時 |
-| `--host` | `${HOST_TRIPLE}` | 常時 |
-| `--target` | `${TRIPLE}` | 常時 |
-| `--program-prefix` | `${TRIPLE}-` | 常時 |
-| `--prefix` | `/usr` | 常時 |
-| `--infodir` | `/usr/share/info/${TRIPLE}` | 常時 |
-| `--disable-nls` |  | 常時 |
-| `--disable-werror` |  | 常時 |
-| `--enable-plugins` |  | 常時 |
-| `--with-system-zlib` |  | 常時 |
-| `--without-debuginfod` |  | 常時 |
-| `--disable-gprofng` |  | 常時 |
-| `--enable-new-dtags` |  | 常時 |
-| `--enable-relro` |  | 常時 |
-| `--enable-default-execstack` | `no` | 常時 |
-| `--enable-default-hash-style` | `gnu` | 常時 |
-| `--enable-cet` |  | 常時 |
+| `--build` | `${HOST_TRIPLE}` | amd64 |
+| `--host` | `${HOST_TRIPLE}` | amd64 |
+| `--target` | `${TRIPLE}` | amd64 |
+| `--program-prefix` | `${TRIPLE}-` | amd64 |
+| `--prefix` | `/usr` | amd64 |
+| `--infodir` | `/usr/share/info/${TRIPLE}` | amd64 |
+| `--disable-nls` |  | amd64 |
+| `--disable-werror` |  | amd64 |
+| `--enable-plugins` |  | amd64 |
+| `--with-system-zlib` |  | amd64 |
+| `--without-debuginfod` |  | amd64 |
+| `--disable-gprofng` |  | amd64 |
+| `--enable-new-dtags` |  | amd64 |
+| `--enable-relro` |  | amd64 |
+| `--enable-default-execstack` | `no` | amd64 |
+| `--enable-default-hash-style` | `gnu` | amd64 |
+| `--enable-cet` |  | amd64 |
 
-### `${SOURCE}/configure`（2回目の呼出）
+### `${SOURCE}/configure`（3回目の呼出）
 
+- 対象: amd64
 - env: `CFLAGS="${CFLAGS:-} -fprofile-use=${PGODIR} -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"` `CXXFLAGS="${CXXFLAGS:-} -fprofile-use=${PGODIR} -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch"` `LDFLAGS="${LDFLAGS:-} -fprofile-use"`
 
 | フラグ | 設定値 | 条件 |
 |-|-|-|
-| `--build` | `${HOST_TRIPLE}` | 常時 |
-| `--host` | `${HOST_TRIPLE}` | 常時 |
-| `--target` | `${TRIPLE}` | 常時 |
-| `--program-prefix` | `${TRIPLE}-` | 常時 |
-| `--prefix` | `/usr` | 常時 |
-| `--infodir` | `/usr/share/info/${TRIPLE}` | 常時 |
-| `--disable-nls` |  | 常時 |
-| `--disable-werror` |  | 常時 |
-| `--enable-plugins` |  | 常時 |
-| `--with-system-zlib` |  | 常時 |
-| `--without-debuginfod` |  | 常時 |
-| `--disable-gprofng` |  | 常時 |
-| `--enable-new-dtags` |  | 常時 |
-| `--enable-relro` |  | 常時 |
-| `--enable-default-execstack` | `no` | 常時 |
-| `--enable-default-hash-style` | `gnu` | 常時 |
-| `--enable-cet` |  | 常時 |
+| `--build` | `${HOST_TRIPLE}` | amd64 |
+| `--host` | `${HOST_TRIPLE}` | amd64 |
+| `--target` | `${TRIPLE}` | amd64 |
+| `--program-prefix` | `${TRIPLE}-` | amd64 |
+| `--prefix` | `/usr` | amd64 |
+| `--infodir` | `/usr/share/info/${TRIPLE}` | amd64 |
+| `--disable-nls` |  | amd64 |
+| `--disable-werror` |  | amd64 |
+| `--enable-plugins` |  | amd64 |
+| `--with-system-zlib` |  | amd64 |
+| `--without-debuginfod` |  | amd64 |
+| `--disable-gprofng` |  | amd64 |
+| `--enable-new-dtags` |  | amd64 |
+| `--enable-relro` |  | amd64 |
+| `--enable-default-execstack` | `no` | amd64 |
+| `--enable-default-hash-style` | `gnu` | amd64 |
+| `--enable-cet` |  | amd64 |
 
 ## ビルド手順
 
-`recipe()` が生成するスクリプトです（`builder` が runner へ渡す IR のレンダリング）。対象 Platform 間で差分はありません。
+`recipe()` が生成するスクリプトです（`builder` が runner へ渡す IR のレンダリング）。対象 Platform 間で 2 系統に分かれます。
 
 <details>
-<summary>常時（Canadian 混在）</summary>
+<summary>amd64</summary>
 
 ```bash
 set -euxo pipefail
@@ -148,6 +174,22 @@ make -j"$(nproc)"
 ) || true
 cd ${BUILD}/final
 CFLAGS="${CFLAGS:-} -fprofile-use=${PGODIR} -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch" CXXFLAGS="${CXXFLAGS:-} -fprofile-use=${PGODIR} -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch" LDFLAGS="${LDFLAGS:-} -fprofile-use" ${SOURCE}/configure --build=${HOST_TRIPLE} --host=${HOST_TRIPLE} --target=${TRIPLE} --program-prefix=${TRIPLE}- --prefix=/usr --infodir=/usr/share/info/${TRIPLE} --disable-nls --disable-werror --enable-plugins --with-system-zlib --without-debuginfod --disable-gprofng --enable-new-dtags --enable-relro --enable-default-execstack=no --enable-default-hash-style=gnu --enable-cet
+make -j"$(nproc)"
+make install DESTDIR="$OUT"
+```
+
+</details>
+
+<details>
+<summary>arm64, ppc64le, riscv64, s390x（Canadian）</summary>
+
+```bash
+set -euxo pipefail
+export CC_FOR_BUILD=${HOST_TRIPLE}-gcc
+export CXX_FOR_BUILD=${HOST_TRIPLE}-g++
+mkdir -p ${BUILD}
+cd ${BUILD}
+${SOURCE}/configure --build=${HOST_TRIPLE} --host=${PACKAGE_HOST} --target=${TRIPLE} --program-prefix=${TRIPLE}- --prefix=/usr --infodir=/usr/share/info/${TRIPLE} --disable-nls --disable-werror --enable-plugins --with-system-zlib --without-debuginfod --disable-gprofng --enable-new-dtags --enable-relro --enable-default-execstack=no --enable-default-hash-style=gnu --enable-cet
 make -j"$(nproc)"
 make install DESTDIR="$OUT"
 ```

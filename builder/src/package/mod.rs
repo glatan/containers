@@ -30,7 +30,7 @@ pub use definition::{PACKAGES, all, find, images};
 pub use fetch::fetch_package;
 pub use recipe::{BuildContext, Recipe};
 
-pub const LINUX_HEADERS: Dependency = dep("linux-headers", "6.18.33");
+pub const LINUX_HEADERS: Dependency = dep("linux-headers", "6.18.56");
 
 pub const GLIBC_VERSION: &str = "2.44";
 
@@ -63,6 +63,12 @@ pub trait Package: Sync {
     fn version(&self) -> &'static str;
     fn license(&self) -> &'static str;
     fn source(&self) -> Source;
+    /// `cargo vendor` 等のローカル生成補助ソース。fetch が
+    /// `packages/sources/{name}/{file}` を検証して `subdir` へ展開し、
+    /// コンテナ内では `/src/{subdir}` から参照できる。
+    fn aux_source(&self) -> Option<AuxSource> {
+        None
+    }
     fn dependencies(&self, target: Target) -> Vec<Dependency>;
     fn build_dependencies(&self, target: Target) -> Vec<Dependency>;
     /// ビルド手順。`ctx` で target・クロス判定を静的に解決する。
@@ -168,6 +174,17 @@ fn lists_name(dependencies: &[Dependency], name: &str) -> bool {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Source {
     pub url: &'static str,
+    pub sha3_512: &'static str,
+    pub blake3: &'static str,
+    pub subdir: &'static str,
+}
+
+/// ローカル生成の補助ソース（`cargo vendor` 成果物等）。
+/// `packages/sources/{name}/{file}` に配置し、fetch が検証して
+/// `subdir` へ展開する。配布元 URL を持たないため取得は手動。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AuxSource {
+    pub file: &'static str,
     pub sha3_512: &'static str,
     pub blake3: &'static str,
     pub subdir: &'static str,

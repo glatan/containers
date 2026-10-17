@@ -54,12 +54,10 @@ for _dep in libffi zlib openssl expat sqlite ncurses readline xz bzip2 zstd; do
   if [ -d /dep/${_dep}/usr/lib64 ]; then
     export LDFLAGS="${LDFLAGS} -L/dep/${_dep}/usr/lib64"
     export PKG_CONFIG_PATH="/dep/${_dep}/usr/lib64/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
-    export LD_LIBRARY_PATH="/dep/${_dep}/usr/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
   else
     if [ -d /dep/${_dep}/usr/lib ]; then
       export LDFLAGS="${LDFLAGS} -L/dep/${_dep}/usr/lib"
       export PKG_CONFIG_PATH="/dep/${_dep}/usr/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
-      export LD_LIBRARY_PATH="/dep/${_dep}/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
     fi
   fi
 done
@@ -68,6 +66,7 @@ export ac_cv_buggy_getaddrinfo=no
 export ac_cv_file__dev_ptmx=yes
 export ac_cv_file__dev_ptc=no
 autotools_configure --prefix=/usr --enable-shared --without-ensurepip --with-build-python=/dep/python/usr/bin/python3
-make -j"$(nproc)" CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}"
-make install CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}" DESTDIR="$OUT"
+sed -i "s|check_extension_modules.py|check_extension_modules.py --cross-compiling|g" Makefile
+make -j"$(nproc)" RUNSHARED= CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}"
+make install RUNSHARED= CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}" DESTDIR="$OUT"
 ln -sf python3 "$OUT"/usr/bin/python

@@ -18,7 +18,7 @@ pub fn host_deps<P: crate::package::Package + ?Sized>(
 ) -> Vec<Dependency> {
     let mut deps = crate::package::cc_deps(package, target);
     deps.extend([
-        dep("python", "3.14.7").via(crate::package::Via::Seed("python")),
+        dep("python", "3.15.0").via(crate::package::Via::Seed("python")),
         dep("bison", "3.8.2").via(crate::package::Via::Seed("bison")),
         dep("m4", "1.4.21").via(crate::package::Via::Seed("m4")),
     ]);

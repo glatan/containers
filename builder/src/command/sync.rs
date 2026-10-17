@@ -9,13 +9,13 @@ use std::path::{Path, PathBuf};
 
 use crate::error::{Error, Result};
 use crate::oci::Digest;
+use crate::registry;
 use crate::registry::config::{Config, ImageSpec, Mode};
 use crate::registry::dockerfile;
 use crate::registry::index::{self, PackageIndex};
 use crate::registry::lockfile::{self, LockEntry, Locked, Lockfile};
 use crate::registry::resolve::{self, Resolved};
 use crate::registry::{cache, pull, skopeo};
-use crate::registry;
 use crate::util;
 
 use super::Compression;
@@ -32,18 +32,21 @@ pub fn sync(
 ) -> Result<()> {
     let config = Config::load(config_path)?;
     let base = config_path.parent().unwrap_or_else(|| Path::new("."));
-    let index_ref = registry::index_ref(index_flag, config.index.as_deref())
-        .ok_or_else(|| {
-            Error::message(
-                "index 参照を指定してください（--index / CONTAINERS_INDEX / 設定の index）",
-            )
-        })?;
-    let registry = registry::registry_prefix(registry_flag);
+    let index_ref = registry::index_ref(index_flag, config.index.as_deref()).ok_or_else(|| {
+        Error::message("index 参照を指定してください（--index / CONTAINERS_INDEX / 設定の index）")
+    })?;
+    // `"auto"` だけが `{prefix}/packages/index` を引く。完全な index 参照は
+    // 前置詞を使わない。
+    let registry = if index_ref == "auto" {
+        Some(registry::registry_prefix(registry_flag)?)
+    } else {
+        None
+    };
     skopeo::require()?;
     if config.images.iter().any(|spec| spec.mode == Mode::Compose) {
         pull::require_tools()?;
     }
-    let reference = resolve_index_ref(&index_ref, &registry)?;
+    let reference = resolve_index_ref(&index_ref, registry.as_deref())?;
     let (index, index_digest) = fetch_index(&reference)?;
 
     let lock_path = lockfile::lockfile_path(config_path);
@@ -123,10 +126,15 @@ pub fn sync(
 }
 
 /// `"auto"` は `list-tags` の最新 `{date}-{rev}` に解決する。
-fn resolve_index_ref(reference: &str, registry: &str) -> Result<String> {
+fn resolve_index_ref(reference: &str, registry: Option<&str>) -> Result<String> {
     if reference != "auto" {
         return Ok(with_docker_scheme(reference));
     }
+    let registry = registry.ok_or_else(|| {
+        Error::message(
+            "レジストリ前置詞を指定してください（--registry または CONTAINERS_REGISTRY）",
+        )
+    })?;
     let repository = registry::index_repo(registry);
     let tags = skopeo::list_tags(&repository)?;
     let tag = tags
@@ -176,8 +184,7 @@ fn fetch_index(reference: &str) -> Result<(PackageIndex, Digest)> {
         let parent = dir.parent().expect("index キャッシュの親");
         std::fs::create_dir_all(parent).map_err(|source| Error::io(parent, source))?;
         // staging と dir は同一親配下なので rename は同一 FS 内で完結する。
-        let staging =
-            tempfile::tempdir_in(parent).map_err(|source| Error::io(parent, source))?;
+        let staging = tempfile::tempdir_in(parent).map_err(|source| Error::io(parent, source))?;
         let pulled = staging.path().join("layout");
         let source = if reference.starts_with("oci:") {
             reference.to_string()
@@ -215,11 +222,7 @@ fn pinned_index_ref(reference: &str, digest: &Digest) -> String {
 }
 
 /// mode A: pinned FROM + COPY 連結ブロック。
-fn block_block(
-    spec: &ImageSpec,
-    resolved: &[Resolved],
-    index_digest: &Digest,
-) -> String {
+fn block_block(spec: &ImageSpec, resolved: &[Resolved], index_digest: &Digest) -> String {
     let stages: Vec<(String, String, String)> = resolved
         .iter()
         .map(|item| {
@@ -269,16 +272,19 @@ fn compose_block(
         let Some(reference) = reusable else {
             // 再解決結果が lockfile と一致しない = 差分あり。
             // ブロックは暫定値で splice し差分検出に委ねる。
-            return Ok((
-                dockerfile::arg_block(index_digest, "out-of-date"),
-                None,
-            ));
+            return Ok((dockerfile::arg_block(index_digest, "out-of-date"), None));
         };
-        return Ok((dockerfile::arg_block(index_digest, &reference), Some(reference)));
+        return Ok((
+            dockerfile::arg_block(index_digest, &reference),
+            Some(reference),
+        ));
     }
     if let Some(reference) = reusable {
         println!("{}: 合成イメージを再利用します: {reference}", spec.name);
-        return Ok((dockerfile::arg_block(index_digest, &reference), Some(reference)));
+        return Ok((
+            dockerfile::arg_block(index_digest, &reference),
+            Some(reference),
+        ));
     }
     let repository = spec
         .repository
@@ -290,7 +296,9 @@ fn compose_block(
         .iter()
         .filter_map(|tag| tag.rsplit_once('-'))
         .filter_map(|(tag_date, rev)| {
-            (tag_date == date).then(|| rev.parse::<u32>().ok()).flatten()
+            (tag_date == date)
+                .then(|| rev.parse::<u32>().ok())
+                .flatten()
         })
         .max()
         .map(|rev| rev + 1)
@@ -308,7 +316,10 @@ fn compose_block(
         !no_push,
     )?;
     println!("{}: 合成イメージを公開しました: {reference}", spec.name);
-    Ok((dockerfile::arg_block(index_digest, &reference), Some(reference)))
+    Ok((
+        dockerfile::arg_block(index_digest, &reference),
+        Some(reference),
+    ))
 }
 
 /// `{repo}@sha256:{digest}` 参照がリモートに残っているか。

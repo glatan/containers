@@ -50,9 +50,33 @@ impl Package for Zlib {
     }
 
     fn recipe(&self, ctx: &BuildContext) -> Recipe {
-        let configure = |env: Vec<(&'static str, Arg)>| Step::ConfigureScript {
+        // zlib 1.3.2 の configure は s390x で VX を検出しても VGFMAFLAG を
+        // Makefile へ書き出さず（上流バグ）、crc32_vx.c が -march=<variant>
+        // のままコンパイルされる。z13 未満は VX 自体が存在しないため
+        // --disable-crcvx で明示的に無効化する。
+        let no_vx = matches!(
+            ctx.target,
+            Target::S390x(
+                crate::target::S390xVariant::Z900
+                    | crate::target::S390xVariant::Z990
+                    | crate::target::S390xVariant::Z9Ec
+                    | crate::target::S390xVariant::Z10
+                    | crate::target::S390xVariant::Z196
+                    | crate::target::S390xVariant::ZEc12
+            )
+        );
+        let configure = move |env: Vec<(&'static str, Arg)>| Step::ConfigureScript {
             program: vec![Arg::lit("./configure")],
-            args: argv(&["--prefix=/usr", "--libdir=/usr/lib64", "--shared"]),
+            args: if no_vx {
+                argv(&[
+                    "--prefix=/usr",
+                    "--libdir=/usr/lib64",
+                    "--shared",
+                    "--disable-crcvx",
+                ])
+            } else {
+                argv(&["--prefix=/usr", "--libdir=/usr/lib64", "--shared"])
+            },
             env,
         };
         let mut steps = Steps::new(Env::None)

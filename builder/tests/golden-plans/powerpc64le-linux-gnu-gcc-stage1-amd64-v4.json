@@ -357,7 +357,7 @@
                   "Quoted": {
                     "Concat": [
                       {
-                        "Lit": " -I/dep/"
+                        "Lit": "${CFLAGS:-} -I/dep/"
                       },
                       {
                         "Lit": "zlib"
@@ -377,7 +377,7 @@
                   "Quoted": {
                     "Concat": [
                       {
-                        "Lit": " -I/dep/"
+                        "Lit": "${CXXFLAGS:-} -I/dep/"
                       },
                       {
                         "Lit": "zlib"
@@ -397,7 +397,7 @@
                   "Quoted": {
                     "Concat": [
                       {
-                        "Lit": " -L/dep/"
+                        "Lit": "${LDFLAGS:-} -L/dep/"
                       },
                       {
                         "Lit": "zlib"
@@ -445,7 +445,7 @@
                   "Quoted": {
                     "Concat": [
                       {
-                        "Lit": " -I/dep/"
+                        "Lit": "${CFLAGS:-} -I/dep/"
                       },
                       {
                         "Lit": "zstd"
@@ -465,7 +465,7 @@
                   "Quoted": {
                     "Concat": [
                       {
-                        "Lit": " -I/dep/"
+                        "Lit": "${CXXFLAGS:-} -I/dep/"
                       },
                       {
                         "Lit": "zstd"
@@ -485,7 +485,7 @@
                   "Quoted": {
                     "Concat": [
                       {
-                        "Lit": " -L/dep/"
+                        "Lit": "${LDFLAGS:-} -L/dep/"
                       },
                       {
                         "Lit": "zstd"

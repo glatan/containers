@@ -8,17 +8,17 @@ impl Package for Glib {
         "glib"
     }
     fn version(&self) -> &'static str {
-        "2.90.0"
+        "2.90.1"
     }
     fn license(&self) -> &'static str {
         "LGPL-2.1-or-later"
     }
     fn source(&self) -> Source {
         Source {
-            url: "https://download.gnome.org/sources/glib/2.90/glib-2.90.0.tar.xz",
-            sha3_512: "c896df2b43beb87254843d355e2fc389d9d62e01a49c58e078f3736286c0f0f16eedcfb611b19edb13ebf38ec8714ab1639b7b52b1ad02301eb1365cddaa205d",
-            blake3: "0cd33e9b83b0fbc9b8396e99a59504909ced4e2f233f445e6127dacbcf17c0d00cc425186477da98e7f37cacfc8a27f8957f28b6b1cbd94ba1e98deef2570866",
-            subdir: "glib-2.90.0",
+            url: "https://download.gnome.org/sources/glib/2.90/glib-2.90.1.tar.xz",
+            sha3_512: "6734ba4b739abf878ecd3f179fef61afd856006890c32fdc8a617af680234ccabc71a93ef36ee3cbb26a4e86b987c594eb7845c367ed8b51947fb415d3f9b911",
+            blake3: "86a15eec2594a3fa4e5e301132713f21d342e57830b03c75d4d537c67f810b52ccc2f36199026032bd47908db1036db2478e8789dc1b1336857f35547a80e5da",
+            subdir: "glib-2.90.1",
         }
     }
     fn dependencies(&self, target: crate::target::Target) -> Vec<crate::package::Dependency> {
@@ -26,7 +26,7 @@ impl Package for Glib {
             target,
             &[
                 crate::package::dep("libffi", "3.8.0"),
-                crate::package::dep("pcre2", "10.48"),
+                crate::package::dep("pcre2", "10.49"),
                 crate::package::dep("zlib", "1.3.2"),
             ],
         )
@@ -43,10 +43,10 @@ impl Package for Glib {
     fn host_dependencies(&self, target: crate::target::Target) -> Vec<crate::package::Dependency> {
         let mut deps = crate::package::cc_deps(self, target);
         deps.extend([
-            crate::package::dep("meson", "1.12.0"),
+            crate::package::dep("meson", "1.12.1"),
             crate::package::dep("ninja", "1.13.2"),
-            crate::package::dep("python", "3.14.7"),
-            crate::package::dep("pkgconf", "2.5.1"),
+            crate::package::dep("python", "3.15.0"),
+            crate::package::dep("pkgconf", "3.0.8"),
         ]);
         deps
     }

@@ -8,17 +8,17 @@ impl Package for Isl {
         "isl"
     }
     fn version(&self) -> &'static str {
-        "0.26"
+        "0.28"
     }
     fn license(&self) -> &'static str {
         "MIT"
     }
     fn source(&self) -> Source {
         Source {
-            url: "https://libisl.sourceforge.io/isl-0.26.tar.xz",
-            sha3_512: "4b31f4a9a343cc15319359ad41ef8d4176bcf2f713ea1fb3b2e5a275a6bc6d109943521ef181fab5c21f0ba581f08e753b4e7c71f9a296a559dc71f77754f1aa",
-            blake3: "a27da5d097f4e105d3a63c5e81d26c2b00cc35a4a3bf62dd2a49335a0f20ce7f57a3e1152dac76aa4b16d8a4205040f108562aa9647e2d6d27717ed533af673f",
-            subdir: "isl-0.26",
+            url: "https://libisl.sourceforge.io/isl-0.28.tar.xz",
+            sha3_512: "c99c4c44b8d026d42d781f950560754b4d9288cfed4a0e35ddf097f5c948a6445f751aec1b38166fe48684deec2a080c3e4f1d30b1b28a2c1e92ef96bd02fd30",
+            blake3: "8a4c2423d60a79fd6ac3ff6942181d74d4c47a157a3113e880de4707d7ac75678673ce356a77d1834e1a8390e297cb75579002c6bf4c25624f3c44a6452b10d0",
+            subdir: "isl-0.28",
         }
     }
     fn dependencies(&self, target: crate::target::Target) -> Vec<crate::package::Dependency> {

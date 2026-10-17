@@ -426,7 +426,7 @@ if [ -f config.h ]; then
   else
     printf '#define %s %s\t\t/**/\n' "NVMANTBITS" "52" >> config.h
   fi
-  _host_cfg=/dep/perl/usr/lib/perl5/5.42.3/x86_64-linux-thread-multi/CORE/config.h
+  _host_cfg=/dep/perl/usr/lib/perl5/5.44.0/x86_64-linux-thread-multi/CORE/config.h
   if [ -f ${_host_cfg} ]; then
     for _has in $(awk '/^#define HAS_/ { print $2 }' ${_host_cfg}); do
       sed -i "/^#undef ${_has}/d" config.h

@@ -4,7 +4,7 @@
 | 項目 | 値 |
 |-|-|
 | パッケージ名 | `sqlite` |
-| バージョン | 3.53.4 |
+| バージョン | 3.54.0 |
 | ライセンス | blessing |
 | 分類 | パッケージ |
 | 対象 Platform | amd64: v1 v2 v3 v4; arm64: v8 v8.1 v8.2 v8.3 v8.4 v8.5 v8.6 v8.7 v8.8 v8.9 v9 v9.1 v9.2 v9.3 v9.4 v9.5; ppc64le: power8 power9 power10 power11; riscv64: rva20u64 rva22u64 rva23u64; s390x: z900 z990 z9-ec z10 z196 zEC12 z13 z14 z15 z16 z17 |
@@ -15,10 +15,10 @@
 
 | 項目 | 値 |
 |-|-|
-| URL | https://www.sqlite.org/2026/sqlite-autoconf-3530400.tar.gz |
-| sha3-512 | `2b9595cc6142a529462577b1d120d20a06390402efe97fd88f0a49ec915835853339775a8ff2eaee25c3d46b372724fb77a11cf4490d34439d10b198e59d3380` |
-| blake3 | `e74b1d27f5053bd29ee7e930ad71d99126b59e4f1a45493440c72d2228e32412adad771dccb35bc3ed5990e3412e7bb9e50539bfd7805d978fbdb7e84259b2a6` |
-| 展開ディレクトリ | `sqlite-autoconf-3530400` |
+| URL | https://www.sqlite.org/2026/sqlite-autoconf-3540000.tar.gz |
+| sha3-512 | `27da7c186cd32c4812b2d30f54124c94483c13f6205fee2dfead17ab767907cf0428337aa228125ce60d818320132f63c962522183443fe2da6f921ca9863f8d` |
+| blake3 | `d96be8c27a8f43b1905531d7f03bd7cfe9c9461eb9561ed6d63d66dbd364d6edfac5f1e7400b4b5993e2005d1b359acdfe66559cf9d42f060416e1ab784ad991` |
+| 展開ディレクトリ | `sqlite-autoconf-3540000` |
 
 ## 依存
 
@@ -34,7 +34,7 @@
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | — |
+| [linux-headers](./linux-headers.md) | 6.18.56 | — |
 
 ### host-dependencies
 
@@ -42,7 +42,7 @@
 |-|-|-|
 | [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | seed |
 | [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | seed |
-| [mold](./mold.md) | 2.42.1 | optional |
+| [mold](./mold.md) | 3.0.0 | optional |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
 ## ビルド設定

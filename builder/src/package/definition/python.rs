@@ -1,5 +1,5 @@
 use crate::flags::Flag;
-use crate::package::recipe::{Arg, BuildContext, Cond, Env, Recipe, Step, Steps, Workdir};
+use crate::package::recipe::{Arg, BuildContext, Cond, Env, Pipe, Recipe, Step, Steps, Workdir};
 use crate::package::{Dependency, Package, Source, dep};
 use crate::target::Target;
 
@@ -11,7 +11,7 @@ impl Package for Python {
     }
 
     fn version(&self) -> &'static str {
-        "3.14.7"
+        "3.15.0"
     }
 
     fn license(&self) -> &'static str {
@@ -25,10 +25,10 @@ impl Package for Python {
 
     fn source(&self) -> Source {
         Source {
-            url: "https://www.python.org/ftp/python/3.14.7/Python-3.14.7.tar.xz",
-            sha3_512: "2da7cc048103dfd9f3681848e13fd3dfa06f25cc9afd76f89f772c1e3a8f14410ba44546754ee177672d0f86fac551bbd26685335830e316ca0e917629934420",
-            blake3: "4406a4956bb3265c370b011383004cc2dcc94ed2c99b5f3ed67338eeab9e5eaceedabc538098da6772b361383e84ccf0274451296970e8d7c9b4261e9a30de59",
-            subdir: "Python-3.14.7",
+            url: "https://www.python.org/ftp/python/3.15.0/Python-3.15.0.tar.xz",
+            sha3_512: "b9ec570f6e23d402f5b445a2dbda7c71611aa217c41c086fe2e2a4ace36e972e65c97d54f6387b8dd0857c4e8fdc35bd1fbc57f3de3db54b3dc49698f4641e5d",
+            blake3: "1254fe6e327eaba1572549b1f8d1a1a4cf07d87733411542868cf9bebce6199572072a521e6f261f96f6b054ebac934a88237b955efc7548a8343c4e1d68a574",
+            subdir: "Python-3.15.0",
         }
     }
 
@@ -38,9 +38,9 @@ impl Package for Python {
             &[
                 dep("libffi", "3.8.0"),
                 dep("zlib", "1.3.2"),
-                dep("openssl", "4.0.2"),
-                dep("expat", "2.8.4"),
-                dep("sqlite", "3.53.4"),
+                dep("openssl", "4.0.3"),
+                dep("expat", "2.9.0"),
+                dep("sqlite", "3.54.0"),
                 dep("ncurses", "6.6"),
                 dep("readline", "8.3"),
                 dep("xz", "5.8.4"),
@@ -64,9 +64,9 @@ impl Package for Python {
     /// python が必須（自己参照。バージョン固定のため distro では賄えない）。
     fn host_dependencies(&self, target: Target) -> Vec<crate::package::Dependency> {
         let mut deps = crate::package::cc_deps(self, target);
-        deps.push(crate::package::dep("pkgconf", "2.5.1"));
+        deps.push(crate::package::dep("pkgconf", "3.0.8"));
         if !matches!(target, crate::target::Target::Amd64(_)) {
-            deps.push(crate::package::dep("python", "3.14.7").via(crate::package::Via::Artifact));
+            deps.push(crate::package::dep("python", "3.15.0").via(crate::package::Via::Artifact));
         }
         deps
     }
@@ -91,8 +91,7 @@ impl Package for Python {
         if ctx.cross() {
             configure_args.push("--with-build-python=/dep/python/usr/bin/python3");
         }
-        Recipe::Steps(
-            Steps::new(Env::Autotools)
+        let steps = Steps::new(Env::Autotools)
                 // --enable-optimizations の PROFILE_TASK（test.regrtest）は
                 // Lib 配下に .pyc を書き込み forget() で消すため、ro マウントの
                 // /src を直接使うと EROFS で失敗する。InSource で書き込み可能な
@@ -116,7 +115,7 @@ impl Package for Python {
                             value: Arg::quoted(Arg::Concat(parts)),
                         };
                         let lib_flags = |libdir: &'static str| {
-                            vec![
+                            let mut flags = vec![
                                 export(
                                     "LDFLAGS",
                                     vec![
@@ -141,11 +140,12 @@ impl Package for Python {
                                         Arg::lit("${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"),
                                     ],
                                 ),
-                                // ビルド済み拡張 .so の import テストが dep の
-                                // .so（libreadline.so.8 等）を実行時解決するため、
-                                // dep lib dir を LD_LIBRARY_PATH にも載せる。
-                                // （runs_on_host なので dep は常にホスト arch）
-                                export(
+                            ];
+                            // ネイティブの拡張 .so import テストが dep の .so を
+                            // 実行時解決するため。クロスではホストの /bin/sh が
+                            // ターゲット lib を読み、s390x（big-endian）で死ぬ。
+                            if !ctx.cross() {
+                                flags.push(export(
                                     "LD_LIBRARY_PATH",
                                     vec![
                                         Arg::lit("/dep/"),
@@ -156,8 +156,9 @@ impl Package for Python {
                                         }),
                                         Arg::lit("${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"),
                                     ],
-                                ),
-                            ]
+                                ));
+                            }
+                            flags
                         };
                         vec![
                             Step::If {
@@ -233,14 +234,34 @@ impl Package for Python {
                 } else {
                     vec![]
                 })
-                .step(Step::configure(&configure_args))
-                .step(Step::make(&[]))
-                .step(Step::make_install(&[]))
-                .step(Step::Symlink {
-                    target: "python3".into(),
-                    link: "\"$OUT\"/usr/bin/python".into(),
-                    force: true,
-                }),
-        )
+                .step(Step::configure(&configure_args));
+        // クロスの RUNSHARED は LD_LIBRARY_PATH をビルドディレクトリにする。
+        // PYTHON_FOR_BUILD（ホストの python3）が s390x の libpython を読み、
+        // 動的リンカが big-endian で死ぬ。空にしてホストの libpython のまま起動する。
+        // checksharedmods は --cross-compiling でファイルの有無だけを見て、
+        // インポート失敗による拡張 .so の改名を避ける。
+        let steps = if ctx.cross() {
+            steps
+                .step(Step::Exec {
+                    env: vec![],
+                    pipe: Pipe::cmd(vec![
+                        Arg::lit("sed"),
+                        Arg::lit("-i"),
+                        Arg::quoted(Arg::lit(
+                            "s|check_extension_modules.py|check_extension_modules.py --cross-compiling|g",
+                        )),
+                        Arg::lit("Makefile"),
+                    ]),
+                })
+                .step(Step::make(&["RUNSHARED="]))
+                .step(Step::make_install(&["RUNSHARED="]))
+        } else {
+            steps.step(Step::make(&[])).step(Step::make_install(&[]))
+        };
+        Recipe::Steps(steps.step(Step::Symlink {
+            target: "python3".into(),
+            link: "\"$OUT\"/usr/bin/python".into(),
+            force: true,
+        }))
     }
 }

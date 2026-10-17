@@ -34,7 +34,7 @@
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | — |
+| [linux-headers](./linux-headers.md) | 6.18.56 | — |
 
 ### host-dependencies
 
@@ -42,7 +42,7 @@
 |-|-|-|
 | [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | seed |
 | [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | seed |
-| [mold](./mold.md) | 2.42.1 | optional |
+| [mold](./mold.md) | 3.0.0 | optional |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
 ## ビルド設定
@@ -75,6 +75,7 @@ host-dependencies は `dep:false` でマウントされ、PATH には載りま�
 | `--prefix` | `/usr` | arm64, ppc64le, riscv64, s390x |
 | `--libdir` | `/usr/lib64` | arm64, ppc64le, riscv64, s390x |
 | `--shared` |  | arm64, ppc64le, riscv64, s390x |
+| `--disable-crcvx` |  | s390x/z900 s390x/z990 s390x/z9-ec s390x/z10 s390x/z196 s390x/zEC12 |
 
 ### `./configure`（2回目の呼出）
 
@@ -88,7 +89,7 @@ host-dependencies は `dep:false` でマウントされ、PATH には載りま�
 
 ## ビルド手順
 
-`recipe()` が生成するスクリプトです（`builder` が runner へ渡す IR のレンダリング）。対象 Platform 間で 2 系統に分かれます。
+`recipe()` が生成するスクリプトです（`builder` が runner へ渡す IR のレンダリング）。対象 Platform 間で 3 系統に分かれます。
 
 <details>
 <summary>amd64</summary>
@@ -125,7 +126,7 @@ make install DESTDIR="$OUT"
 </details>
 
 <details>
-<summary>arm64, ppc64le, riscv64, s390x（クロス・Canadian）</summary>
+<summary>arm64, ppc64le, riscv64, s390x/z13 s390x/z14 s390x/z15 s390x/z16 s390x/z17（クロス・Canadian）</summary>
 
 ```bash
 set -euxo pipefail
@@ -139,6 +140,27 @@ PGO=/tmp/zlib-pgo
 rm -rf "$PGO"
 mkdir -p "$PGO"
 CHOST="${TRIPLE}" ./configure --prefix=/usr --libdir=/usr/lib64 --shared
+make -j"$(nproc)"
+make install DESTDIR="$OUT"
+```
+
+</details>
+
+<details>
+<summary>s390x/z900 s390x/z990 s390x/z9-ec s390x/z10 s390x/z196 s390x/zEC12（クロス・Canadian）</summary>
+
+```bash
+set -euxo pipefail
+mkdir -p "$BUILD"
+cp -a "$SOURCE"/. "$BUILD"/
+cd "$BUILD"
+if [ -n "${SYSROOT:-}" ]; then
+  export CC="${CC} --sysroot=${SYSROOT}"
+fi
+PGO=/tmp/zlib-pgo
+rm -rf "$PGO"
+mkdir -p "$PGO"
+CHOST="${TRIPLE}" ./configure --prefix=/usr --libdir=/usr/lib64 --shared --disable-crcvx
 make -j"$(nproc)"
 make install DESTDIR="$OUT"
 ```

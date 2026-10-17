@@ -6,7 +6,7 @@
 ## 概要
 
 - 実装言語には Rust 1.98.1（edition 2024）を採用します。使用するツールチェーンはリポジトリルートの `rust-toolchain.toml` で固定します。
-- 単一のバイナリ（`containers-builder`）で、フラットなサブコマンド（照会: `ls` / `info` / `tree` / `targets` / `docs`、作業: `fetch` / `build` / `check` / `pack` / `compose` / `clean`、配布: `index` / `push`、消費: `sync`、環境: `env`）を提供します。ソースコードは `builder/` ディレクトリで管理します。
+- 単一のバイナリ（`containers-builder`）で、フラットなサブコマンド（照会: `ls` / `info` / `tree` / `targets` / `docs` / `status`、作業: `fetch` / `build` / `check` / `pack` / `compose` / `restore` / `clean`、配布: `index` / `verify` / `push`、消費: `sync`、環境: `env`）を提供します。ソースコードは `builder/` ディレクトリで管理します。
 - コマンド実行はリポジトリのルートディレクトリで行い、作業ディレクトリ（`packages/` および `oci-layouts/`）を相対パスで参照します。
 
 ## モジュール構成
@@ -61,7 +61,7 @@ OCI 仕様準拠のテスト群は `tests/oci_spec.rs`（本体は `tests/oci_sp
 |-|-|
 | `curl` | 上流ソースコードの取得（`fetch`） |
 | `tar` | ソースコードの展開、およびレイヤー tarball の生成（`--sort=name` などを指定してビルドの再現性を確保） |
-| `zstd` | レイヤー tarball の圧縮（`--single-thread`。通常ビルドはレベル 3、公開用ビルドはレベル 22 であり、20〜22 は `--ultra` を付与） |
+| `zstd` | レイヤー tarball の圧縮（`--single-thread`。`pack` の既定はレベル 22、`compose` と `--profile dev` はレベル 3。20〜22 は `--ultra` を付与） |
 | `podman` | 隔離されたビルド環境コンテナ上でのパッケージコンパイル |
 | `/bin/bash` | 描画したビルドスクリプトの構文検査（`bash -n`）および golden・照会・デバッグ用途のスクリプト描画。実実行は外部コマンドではなく、コンテナ内の `run-recipe` runner が plan を直接解釈します |
 | `readelf` | ELF バイナリの動的リンク依存（`DT_NEEDED`）の解析（`check`） |
@@ -87,7 +87,7 @@ push             パッケージイメージと index を skopeo 経由で公開
     ↓                 {registry}/packages/{name}:{version}、{registry}/packages/index:{yyyymmdd}-{rev}
 sync             消費側の containers.json から Dockerfile 生成ブロックと lockfile を同期
     ↓                 containers.lock.json、キャッシュ $XDG_CACHE_HOME/containers-builder/
-clean            成果物・ビルド作業ツリー・個別ログを削除（再ビルド前の掃除、--images で oci-layouts/ も対象）
+clean            指定したディレクトリだけを削除する（--packages-build、--packages-artifacts、--packages-logs、--oci-layouts、--oci-layouts-index。少なくとも一つ必須）
 ls / info / tree / targets / env plan  照会系（tree --reverse は逆依存、env plan はシード相の最小集合）
 docs             定義文書（docs/dev/package/definition/）の生成ブロックと索引、および docs/dev/package/{README,host-tools,toolchain}.md の名前つき GENERATED:{name} ブロックを PACKAGES から再生成（--check で差分検査）
 ```
@@ -153,7 +153,7 @@ runner の意味論は bash 描画スクリプトと揃えています。
 
 - 1 パッケージを 1 レイヤーとして扱います。`packages/artifacts/` の未圧縮成果物を tar 形式でまとめ、zstd で圧縮して blob を生成します。
 - 未圧縮 tar のダイジェストである DiffID をレイヤー内容の恒久的な識別子として使用します。zstd の圧縮レベルは layer digest にのみ影響し、DiffID には影響しません。
-- 通常の開発ビルドではレベル 3（速度優先）、公開用ビルド（`--profile release`）ではレベル 22（圧縮率優先）を使用します。`oci-layouts/` はパッケージ成果物からの派生物であるため、圧縮レベルの異なる layout を同一ディレクトリに併存させず、目的に応じて上書き生成します。
+- `pack` の既定はレベル 22（`--profile release`）、`compose` の既定はレベル 3（`--profile dev`）です。既定の merge は既存 platform の manifest を保持するため、同一 layout 内で圧縮レベルの異なる platform が併存します。全 platform を同じレベルに揃えるときは `pack --replace` です。
 - Layout の生成時は、一時的な staging ディレクトリで構造を構築したのち、不可分（アトミック）に配置を置き換えます。これにより、生成途中で処理が失敗した場合でも既存の `oci-layouts/` が保護されます。
 - レイヤーのハッシュ計算はストリーミング方式で行い、アーカイブ全体をメモリ上に展開しません。
 - SPDX SBOM は Layout ディレクトリ内の `sbom.spdx.json` に配置します。OCI Image Specification ではレイアウト内の未知の追加ファイルを許容しているため、この配置は仕様に適合します。なお、referrers による attestation としての公開は現時点では未実装です。
@@ -188,7 +188,7 @@ runner の意味論は bash 描画スクリプトと揃えています。
 - arm64 / v8（カタログ 40 件 + toolchain）
 - riscv64 / rva20u64（同規模）
 
-`check --all` による動的依存検証は全件パスしています。ppc64le / s390x は
+`check --all-packages` による動的依存検証は全件パスしています。ppc64le / s390x は
 bootstrap 全体の検証として別途整理するため本範囲外です。生成バイナリを
 実行できないクロスビルドでは PGO を適用しません。
 

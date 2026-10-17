@@ -4,7 +4,7 @@
 | 項目 | 値 |
 |-|-|
 | パッケージ名 | `cmake` |
-| バージョン | 4.4.3 |
+| バージョン | 4.4.4 |
 | ライセンス | BSD-3-Clause |
 | 分類 | パッケージ（Bootstrap） |
 | 対象 Platform | amd64: v1 v2 v3 v4; arm64: v8 v8.1 v8.2 v8.3 v8.4 v8.5 v8.6 v8.7 v8.8 v8.9 v9 v9.1 v9.2 v9.3 v9.4 v9.5; ppc64le: power8 power9 power10 power11; riscv64: rva20u64 rva22u64 rva23u64; s390x: z900 z990 z9-ec z10 z196 zEC12 z13 z14 z15 z16 z17 |
@@ -15,10 +15,10 @@
 
 | 項目 | 値 |
 |-|-|
-| URL | https://github.com/Kitware/CMake/releases/download/v4.4.3/cmake-4.4.3.tar.gz |
-| sha3-512 | `170e8771bffc5d56d42c1702320e5c4dafbe90982cc9bcb8d3e21a16be2bf86b76ca35cef468a0863cb65790b5f6bc4a0e5b30ea8b34a39e56f31fab78ac8162` |
-| blake3 | `347efe575e9f1c7daf9d5888de1c1f1070570d1c1e6beb62522c389b0a408a95be2fca9aaae2d2261a78e68b6777b5fbf08e6a3cce47d64bf12129a13d238f51` |
-| 展開ディレクトリ | `cmake-4.4.3` |
+| URL | https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4.tar.gz |
+| sha3-512 | `b7174122a3702699030a6c2712c6b3b4730c5e8ec949837dcf1a6bf7d83a96075490ea6fcffb4faacc8216b6706f53f19cd9a84609482b677080f737f5513cfe` |
+| blake3 | `7552b5d0fe236d45d321d7a17d44d1a2d89a68ad11759fa63be905b74f0a33991634803482fb0074c11aabae172c88971326a21e20d2902f2e3dc85a9cf581c4` |
+| 展開ディレクトリ | `cmake-4.4.4` |
 
 ## 依存
 
@@ -35,7 +35,7 @@
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | — |
+| [linux-headers](./linux-headers.md) | 6.18.56 | — |
 
 ### host-dependencies
 
@@ -43,7 +43,7 @@
 |-|-|-|
 | [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | seed |
 | [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | seed |
-| [mold](./mold.md) | 2.42.1 | optional |
+| [mold](./mold.md) | 3.0.0 | optional |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
 ## ビルド設定

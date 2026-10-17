@@ -41,17 +41,54 @@ pub fn fetch_package(package: &dyn Package) -> Result<Vec<String>> {
     }
     if cached && extracted.is_dir() {
         log.push(format!("{} は展開済みです", extracted.display()));
-        return Ok(log);
+    } else {
+        process::status(
+            Command::new("tar")
+                .args(["-xf"])
+                .arg(&tarball)
+                .args(["-C"])
+                .arg(&dir),
+            "tar",
+        )?;
+        log.push(format!("{} を展開しました", dir.display()));
     }
-    process::status(
-        Command::new("tar")
-            .args(["-xf"])
-            .arg(&tarball)
-            .args(["-C"])
-            .arg(&dir),
-        "tar",
-    )?;
-    log.push(format!("{} を展開しました", dir.display()));
+    // 補助ソース（cargo vendor 等）は配布元 URL を持たないため、
+    // packages/sources/{name}/{file} に手動配置されたものを検証して展開する。
+    if let Some(aux) = package.aux_source() {
+        let path = dir.join(aux.file);
+        if !path.is_file() {
+            return Err(Error::message(format!(
+                "補助ソースが見つかりません: {} (vendor tarball を配置してください)",
+                path.display()
+            )));
+        }
+        verify_checksums(&path, aux.sha3_512, aux.blake3)?;
+        let aux_dir = dir.join(aux.subdir);
+        // aux.subdir はバージョン非依存（"vendor" 等）なので、同名で
+        // 再生成された tarball に対して古い展開済みツリーが残り得る。
+        // 検証済みハッシュのマーカーで展開の鮮度を判定する。
+        let marker = dir.join(format!(".{}.extracted", aux.subdir));
+        let fresh = aux_dir.is_dir()
+            && fs::read_to_string(&marker)
+                .map(|content| content.trim() == aux.sha3_512)
+                .unwrap_or(false);
+        if !fresh {
+            if aux_dir.exists() {
+                fs::remove_dir_all(&aux_dir).map_err(|source| Error::io(&aux_dir, source))?;
+            }
+            process::status(
+                Command::new("tar")
+                    .args(["-xf"])
+                    .arg(&path)
+                    .args(["-C"])
+                    .arg(&dir),
+                "tar",
+            )?;
+            fs::write(&marker, format!("{}\n", aux.sha3_512))
+                .map_err(|source| Error::io(&marker, source))?;
+            log.push(format!("{} を展開しました", aux_dir.display()));
+        }
+    }
     Ok(log)
 }
 
@@ -65,15 +102,19 @@ fn hashcache_hit(filename: &std::ffi::OsStr, source: Source) -> Option<std::path
 }
 
 pub(crate) fn verify(path: &Path, source: Source) -> Result<()> {
-    let (sha3_512, blake3) = source_checksums(path)?;
-    if sha3_512 == source.sha3_512 && blake3 == source.blake3 {
+    verify_checksums(path, source.sha3_512, source.blake3)
+}
+
+fn verify_checksums(path: &Path, sha3_512: &str, blake3: &str) -> Result<()> {
+    let (actual_sha3, actual_blake3) = source_checksums(path)?;
+    if actual_sha3 == sha3_512 && actual_blake3 == blake3 {
         Ok(())
     } else {
         Err(Error::message(format!(
-            "checksum が一致しません: {} (sha3-512 期待値: {}, 実測: {sha3_512}; blake3 期待値: {}, 実測: {blake3})",
+            "checksum が一致しません: {} (sha3-512 期待値: {}, 実測: {actual_sha3}; blake3 期待値: {}, 実測: {actual_blake3})",
             path.display(),
-            source.sha3_512,
-            source.blake3
+            sha3_512,
+            blake3
         )))
     }
 }

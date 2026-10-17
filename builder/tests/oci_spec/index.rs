@@ -1,3 +1,6 @@
+use std::fs;
+
+use containers_builder::oci;
 use containers_builder::target::Target;
 use serde_json::Value;
 
@@ -110,5 +113,62 @@ fn amd64_v1_is_a_listed_platform_variant() {
         documented_platforms()
             .iter()
             .any(|(architecture, variant)| architecture == "amd64" && variant == "v1")
+    );
+}
+
+/// GHCR は multi-arch タグの description/source をイメージ index の
+/// annotations から読む。トップ index とネスト index の両方に付く。
+#[test]
+fn index_carries_publish_annotations() {
+    let layout = sample();
+    for value in [index(&layout), nested_index(&layout)] {
+        let annotations = value["annotations"]
+            .as_object()
+            .expect("index に annotations が必要です");
+        assert_eq!(
+            annotations["org.opencontainers.image.source"].as_str(),
+            Some("https://github.com/glatan/containers")
+        );
+    }
+}
+
+/// ネスト index blob のフィールド順が Go の Index marshal 順
+/// （manifests → annotations）と一致すること。containers/image の
+/// 再シリアライズとバイト一致しないと digest が食い違う。
+#[test]
+fn nested_index_field_order_matches_go_marshal() {
+    let layout = sample();
+    let entry = &index(&layout)["manifests"][0];
+    let raw = String::from_utf8(blob(&layout, entry["digest"].as_str().unwrap())).unwrap();
+    assert!(
+        raw.find("\"manifests\"").unwrap() < raw.find("\"annotations\"").unwrap(),
+        "{raw}"
+    );
+}
+
+#[test]
+fn flat_index_follows_image_description() {
+    let tmp = tempfile::tempdir().unwrap();
+    let layer = tmp.path().join("layer");
+    fs::create_dir_all(&layer).unwrap();
+    fs::write(layer.join("file.txt"), "hello").unwrap();
+    let output = tmp.path().join("layout");
+    oci::build(
+        &output,
+        &oci::Image {
+            name: "zlib".to_string(),
+            version: "1".to_string(),
+            description: Some("test description".to_string()),
+        },
+        &[(amd64("v1"), vec![layer])],
+        oci::DEFAULT_ZSTD_LEVEL,
+    )
+    .unwrap();
+    let layout = super::support::Layout::at(output);
+    let top = index(&layout);
+    let annotations = top["annotations"].as_object().unwrap();
+    assert_eq!(
+        annotations["org.opencontainers.image.description"],
+        "test description"
     );
 }

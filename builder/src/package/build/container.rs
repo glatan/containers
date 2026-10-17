@@ -48,15 +48,10 @@ pub(super) fn build_target(
     // 同一 (name, target) の同時ビルドを flock で直列化する
     // （artifact_ready チェック〜削除〜作成の TOCTOU を防ぐ。
     // flock はプロセス終了時に自動解放される）。
-    let lock_dir = PathBuf::from("packages/artifacts/.locks");
-    fs::create_dir_all(&lock_dir).map_err(|source| Error::io(&lock_dir, source))?;
-    let lock_path = lock_dir.join(format!(
-        "{}-{}-{}-{}.lock",
-        package.name(),
-        package.version(),
-        architecture,
-        variant
-    ));
+    let lock_path = workspace::artifact_lock_path(package.name(), package.version(), target);
+    if let Some(parent) = lock_path.parent() {
+        fs::create_dir_all(parent).map_err(|source| Error::io(parent, source))?;
+    }
     let lock_file = File::create(&lock_path).map_err(|source| Error::io(&lock_path, source))?;
     let mut build_lock = fd_lock::RwLock::new(lock_file);
     let _build_guard = build_lock
@@ -387,7 +382,8 @@ pub(super) fn strip_fuse_ld_mold(env: &mut Vec<(&'static str, String)>) {
 /// `/dep/{name}` はレシピが参照する契約名なので直接辺は改名しない。
 /// `dep:false` マウントのみ、名前衝突時に `{pkg}-host` へ退避する
 /// （参照は PATH/LD_LIBRARY_PATH 経由のため壊れない）。
-fn mount_dependency(
+#[allow(clippy::too_many_arguments)]
+pub(super) fn mount_dependency(
     dependency: &Dependency,
     found: &dyn Package,
     mounted_target: Target,
@@ -398,13 +394,6 @@ fn mount_dependency(
     mounted: &mut Vec<(&'static str, PathBuf)>,
 ) -> Result<()> {
     let dir = found.artifact_dir(mounted_target);
-    // 同一成果物の重複マウントは省略（runtime/build/host の重複宣言など）。
-    if mounted
-        .iter()
-        .any(|(name, mounted_dir)| *name == dependency.name && *mounted_dir == dir)
-    {
-        return Ok(());
-    }
     let required = match dependency.via {
         Via::Ordered | Via::Artifact => true,
         Via::Seed(_) => own,
@@ -420,11 +409,31 @@ fn mount_dependency(
         return Ok(());
     }
     let dir = fs::canonicalize(&dir).map_err(|source| Error::io(&dir, source))?;
+    // 同一成果物・同一種別の重複マウントは省略（runtime/build/host の
+    // 重複宣言など）。`mounts` には canonicalize 済みの絶対パスが入る
+    // ため、比較は canonicalize の後に行う（artifact_dir は相対パスを
+    // 返す）。dep フラグが異なれば環境効果も異なる（dep:true は -I/-L、
+    // dep:false は LD_LIBRARY_PATH に載る）ため、同一成果物でも両種別の
+    // マウントが必要になり得る（meson の python など）。
+    if mounts
+        .iter()
+        .any(|m| m.pkg == dependency.name && m.dir == dir && m.dep == dep_flag)
+    {
+        return Ok(());
+    }
     let name = if mounts.iter().any(|m| m.name == dependency.name) {
         if dep_flag {
+            let existing = mounts
+                .iter()
+                .filter(|m| m.name == dependency.name)
+                .map(|m| format!("{}(dep:{})", m.dir.display(), m.dep))
+                .collect::<Vec<_>>()
+                .join(", ");
             return Err(Error::message(format!(
-                "マウント名が衝突しています: {}",
-                dependency.name
+                "マウント名が衝突しています: {} → {} (既存: {})",
+                dependency.name,
+                dir.display(),
+                existing
             )));
         }
         format!("{}-host", dependency.name)
@@ -670,6 +679,10 @@ pub(super) struct Prep {
     pub meson: Option<String>,
     /// `/dep/{cc}-binutils/usr/bin` が存在する
     pub cc_binutils: bool,
+    /// `/dep/{cc}-binutils/usr/{cc}/bin`（tooldir、unprefixed 名）が存在する。
+    /// クロスビルド（triple != cc）では /tmp/unprefixed-binutils に裸の
+    /// as/ld を出さないため、gcc の as/ld 解決は -B 経由で供給する。
+    pub cc_binutils_as: bool,
     /// `/tmp/host-strip/strip` を生成済み
     pub host_strip: bool,
     /// `/dep/{triple}-binutils/usr/bin` が存在する
@@ -924,6 +937,7 @@ pub(super) fn stage_generated(
         && bu.dir.join("usr/bin").is_dir()
     {
         prep.cc_binutils = true;
+        prep.cc_binutils_as = bu.dir.join(format!("usr/{cc}/bin")).is_dir();
         let strip = format!("usr/bin/{cc}-strip");
         if is_exec(&bu.dir.join(&strip)) {
             let dir = gen_dir.join("host-strip");
@@ -954,14 +968,72 @@ pub(super) fn stage_generated(
                 prep.gcc_lib = Some(format!("/dep/{}/{}", gcc.name, rel.display()));
                 let dir = gen_dir.join("gcc-b");
                 fs::create_dir_all(&dir).map_err(|source| Error::io(&dir, source))?;
+                // sysroot/-B/-L は環境変数経由でも注入されるが、同梱の古い
+                // libtool がリンク行からそれらを落とす（-* catch-all で
+                // 破棄）パッケージがあり、mold は GNU ld と異なり -L で
+                // 裸のファイル名を解決しないため crt*.o が見つからず
+                // 失敗する。ラッパへ焼き込んでフラグ非依存にする。
+                let sysroot_dep = [
+                    (format!("{cc}-glibc"), format!("usr/{cc}")),
+                    (
+                        format!("{}-glibc", ctx.triple),
+                        format!("usr/{}", ctx.triple),
+                    ),
+                    (format!("{cc}-glibc"), String::new()),
+                    (format!("{}-glibc", ctx.triple), String::new()),
+                ]
+                .iter()
+                .find_map(|(name, sub)| {
+                    mount(name).filter(|m| m.dir.join(sub).is_dir()).map(|m| {
+                        if sub.is_empty() {
+                            format!("/dep/{}", m.name)
+                        } else {
+                            format!("/dep/{}/{sub}", m.name)
+                        }
+                    })
+                });
+                let mut baked = String::new();
+                if let Some(sysroot) = &sysroot_dep {
+                    baked.push_str(&format!(" -B{sysroot}/lib"));
+                }
+                if prep.cc_binutils_as {
+                    baked.push_str(&format!(" -B/dep/{cc}-binutils/usr/{cc}/bin"));
+                }
+                baked.push_str(&format!(
+                    " -B{}",
+                    prep.gcc_lib.as_deref().unwrap_or_default()
+                ));
+                let headers_dep = mount("linux-headers").and_then(|h| {
+                    [
+                        format!("usr/{cc}/include"),
+                        format!("usr/{}/include", ctx.triple),
+                        "usr/include".to_owned(),
+                    ]
+                    .into_iter()
+                    .find(|sub| h.dir.join(sub).is_dir())
+                    .map(|sub| format!("/dep/{}/{sub}", h.name))
+                });
+                if let Some(hdr) = &headers_dep {
+                    baked.push_str(&format!(" -idirafter {hdr}"));
+                }
+                // --sysroot は shadow（/tmp/sysroot）の存在時のみ有効化
+                // する。sysroot 無しレシピで焼き込むと存在しない sysroot
+                // を gcc に指されるため。
+                let sysroot_guard = if sysroot_dep.is_some() {
+                    "if [ -d /tmp/sysroot ]; then\n  set -- --sysroot=/tmp/sysroot -L/tmp/sysroot/lib -L/tmp/sysroot/lib64 \"$@\"\nfi\n"
+                } else {
+                    ""
+                };
                 for tool in ["gcc", "g++"] {
                     let bin = format!("usr/bin/{cc}-{tool}");
                     if is_exec(&gcc.dir.join(&bin)) {
-                        force_symlink(
-                            &format!("/dep/{}/{bin}", gcc.name),
+                        write_exec(
                             &dir.join(format!("{cc}-{tool}")),
-                        )
-                        .map_err(|source| Error::io(&dir, source))?;
+                            &format!(
+                                "#!/bin/sh\n{sysroot_guard}exec /dep/{}/{bin}{baked} \"$@\"\n",
+                                gcc.name
+                            ),
+                        )?;
                     }
                 }
             }
@@ -1472,6 +1544,16 @@ pub(crate) fn build_plan(
             "PATH",
             format!("\"/dep/{cc}-binutils/usr/bin:$PATH\""),
         ));
+        // クロスビルドでは裸の as/ld を PATH に出さない
+        // （/tmp/unprefixed-binutils 参照）ため、gcc の as/ld 解決は
+        // -B で binutils の tooldir（usr/{cc}/bin、unprefixed 名）へ向ける。
+        // コンパイラ経由のみで configure のターゲットツール検出には見えない。
+        if prep.cc_binutils_as {
+            let b = format!("-B/dep/{cc}-binutils/usr/{cc}/bin");
+            steps.push(export("CFLAGS", format!("\"${{CFLAGS:-}} {b}\"")));
+            steps.push(export("CXXFLAGS", format!("\"${{CXXFLAGS:-}} {b}\"")));
+            steps.push(export("LDFLAGS", format!("\"${{LDFLAGS:-}} {b}\"")));
+        }
         if prep.host_strip {
             steps.push(export("PATH", "\"/tmp/host-strip:$PATH\"".to_owned()));
         }
@@ -1633,6 +1715,11 @@ pub(crate) fn build_plan(
                     name: "SYSROOT",
                     value: Arg::lit("/tmp/sysroot"),
                 });
+                // ld が libc.so 等のスクリプトを sysroot 内から解決できるよう
+                // -L は /dep 直接パスより先に shadow を指す（先にヒットした方が
+                // 採用されるため prepend）。CFLAGS にも入れるのは gmp の
+                // ABI テストのように LDFLAGS を使わないリンクチェックがある
+                // ため（-c コンパイルでは無害に無視される）。
                 steps.push(export(
                     "CFLAGS",
                     "\"${CFLAGS:-} --sysroot=$SYSROOT\"".to_owned(),
@@ -1645,11 +1732,6 @@ pub(crate) fn build_plan(
                     "CPPFLAGS",
                     "\"${CPPFLAGS:-} --sysroot=$SYSROOT\"".to_owned(),
                 ));
-                // ld が libc.so 等のスクリプトを sysroot 内から解決できるよう
-                // -L は /dep 直接パスより先に shadow を指す（先にヒットした方が
-                // 採用されるため prepend）。CFLAGS にも入れるのは gmp の
-                // ABI テストのように LDFLAGS を使わないリンクチェックがある
-                // ため（-c コンパイルでは無害に無視される）。
                 steps.push(export(
                     "CFLAGS",
                     "\"-L$SYSROOT/lib -L$SYSROOT/lib64 ${CFLAGS:-}\"".to_owned(),

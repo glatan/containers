@@ -5,296 +5,19 @@
     "std": "Gnu17",
     "steps": [
       {
-        "Set": {
-          "name": "CMAKE_PREFIX",
-          "value": {
-            "Lit": ""
-          }
-        }
-      },
-      {
-        "ForEach": {
-          "body": [
-            {
-              "If": {
-                "cond": {
-                  "DirExists": {
-                    "Concat": [
-                      {
-                        "Lit": "/dep/"
-                      },
-                      {
-                        "Var": "_dep"
-                      },
-                      {
-                        "Lit": "/usr"
-                      }
-                    ]
-                  }
-                },
-                "else_": [],
-                "then": [
-                  {
-                    "Set": {
-                      "name": "CMAKE_PREFIX",
-                      "value": {
-                        "Quoted": {
-                          "Concat": [
-                            {
-                              "Lit": "${CMAKE_PREFIX:+$CMAKE_PREFIX:}/dep/"
-                            },
-                            {
-                              "Var": "_dep"
-                            },
-                            {
-                              "Lit": "/usr"
-                            }
-                          ]
-                        }
-                      }
-                    }
-                  }
-                ]
-              }
-            }
-          ],
-          "items": [
-            {
-              "Lit": "zlib"
-            },
-            {
-              "Lit": "zstd"
-            }
-          ],
-          "stdout": null,
-          "var": "_dep"
-        }
-      },
-      {
-        "If": {
-          "cond": {
-            "EnvSet": "CMAKE_PREFIX"
-          },
-          "else_": [],
-          "then": [
-            {
-              "Export": {
-                "name": "CMAKE_PREFIX_PATH",
-                "value": {
-                  "Quoted": {
-                    "Concat": [
-                      {
-                        "Var": "CMAKE_PREFIX"
-                      },
-                      {
-                        "Lit": "${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
-                      }
-                    ]
-                  }
-                }
-              }
-            }
-          ]
-        }
-      },
-      {
-        "If": {
-          "cond": {
-            "DirExists": {
-              "Lit": "/dep/cmake/usr/bin"
-            }
-          },
-          "else_": [],
-          "then": [
-            {
-              "Export": {
-                "name": "PATH",
-                "value": {
-                  "Quoted": {
-                    "Concat": [
-                      {
-                        "Lit": "/dep/cmake/usr/bin:"
-                      },
-                      {
-                        "Var": "PATH"
-                      }
-                    ]
-                  }
-                }
-              }
-            }
-          ]
-        }
-      },
-      {
-        "Cmake": {
-          "args": [
-            {
-              "Lit": "-DCMAKE_SYSTEM_NAME=Linux"
-            },
-            {
-              "Lit": "-DCMAKE_SYSTEM_PROCESSOR=aarch64"
-            },
-            {
-              "Lit": "-DCMAKE_C_COMPILER_TARGET=aarch64-linux-gnu"
-            },
-            {
-              "Lit": "-DCMAKE_CXX_COMPILER_TARGET=aarch64-linux-gnu"
-            },
-            {
-              "Lit": "-DCMAKE_BUILD_TYPE=Release"
-            },
-            {
-              "Lit": "-DCMAKE_INSTALL_PREFIX=/usr"
-            },
-            {
-              "Concat": [
-                {
-                  "Lit": "-DCMAKE_C_COMPILER="
-                },
-                {
-                  "Quoted": {
-                    "Var": "CC"
-                  }
-                }
-              ]
-            },
-            {
-              "Concat": [
-                {
-                  "Lit": "-DCMAKE_CXX_COMPILER="
-                },
-                {
-                  "Quoted": {
-                    "Var": "CXX"
-                  }
-                }
-              ]
-            },
-            {
-              "Concat": [
-                {
-                  "Lit": "-DCMAKE_C_FLAGS="
-                },
-                {
-                  "Quoted": {
-                    "Concat": [
-                      {
-                        "Lit": "${CFLAGS:-}"
-                      }
-                    ]
-                  }
-                }
-              ]
-            },
-            {
-              "Concat": [
-                {
-                  "Lit": "-DCMAKE_CXX_FLAGS="
-                },
-                {
-                  "Quoted": {
-                    "Concat": [
-                      {
-                        "Lit": "${CXXFLAGS:-}"
-                      }
-                    ]
-                  }
-                }
-              ]
-            },
-            {
-              "Concat": [
-                {
-                  "Lit": "-DCMAKE_EXE_LINKER_FLAGS="
-                },
-                {
-                  "Quoted": {
-                    "Concat": [
-                      {
-                        "Lit": "${LDFLAGS:-}"
-                      }
-                    ]
-                  }
-                }
-              ]
-            },
-            {
-              "Concat": [
-                {
-                  "Lit": "-DCMAKE_SHARED_LINKER_FLAGS="
-                },
-                {
-                  "Quoted": {
-                    "Concat": [
-                      {
-                        "Lit": "${LDFLAGS:-}"
-                      }
-                    ]
-                  }
-                }
-              ]
-            },
-            {
-              "Lit": "-DMOLD_USE_MIMALLOC=ON"
-            },
-            {
-              "Lit": "-DMOLD_USE_SYSTEM_MIMALLOC=OFF"
-            },
-            {
-              "Lit": "-DMOLD_USE_SYSTEM_TBB=OFF"
-            }
-          ],
-          "build_dir": {
-            "Quoted": {
-              "Var": "BUILD"
-            }
-          },
-          "env": [],
-          "source_dir": {
-            "Quoted": {
-              "Var": "SOURCE"
-            }
-          }
-        }
-      },
-      {
         "Exec": {
           "env": [],
           "pipe": {
             "stages": [
               [
                 {
-                  "Lit": "cmake"
+                  "Lit": "mkdir"
                 },
                 {
-                  "Lit": "--build"
+                  "Lit": "-p"
                 },
                 {
-                  "Quoted": {
-                    "Var": "BUILD"
-                  }
-                },
-                {
-                  "Concat": [
-                    {
-                      "Lit": "-j"
-                    },
-                    {
-                      "Subst": {
-                        "stages": [
-                          [
-                            {
-                              "Lit": "nproc"
-                            }
-                          ]
-                        ],
-                        "stderr": null,
-                        "stdin": null,
-                        "stdout": null
-                      }
-                    }
-                  ]
+                  "Lit": "\"$BUILD/.cargo\""
                 }
               ]
             ],
@@ -311,30 +34,315 @@
             "stages": [
               [
                 {
-                  "Lit": "cmake"
+                  "Lit": "mkdir"
                 },
                 {
-                  "Lit": "--install"
+                  "Lit": "-p"
                 },
                 {
-                  "Quoted": {
-                    "Var": "BUILD"
-                  }
+                  "Lit": "/build/ccw"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "WriteFile": {
+          "append": false,
+          "expand": false,
+          "lines": [
+            {
+              "Lit": "#!/bin/sh"
+            },
+            {
+              "Lit": "exec \"$CC\" --sysroot=/tmp/sysroot -L/tmp/sysroot/lib -L/tmp/sysroot/lib64 \"$@\""
+            }
+          ],
+          "path": {
+            "Lit": "/build/ccw/mold-link"
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "chmod"
                 },
                 {
-                  "Lit": "--prefix"
+                  "Lit": "+x"
                 },
                 {
-                  "Quoted": {
-                    "Concat": [
-                      {
-                        "Var": "OUT"
-                      },
-                      {
-                        "Lit": "/usr"
-                      }
-                    ]
-                  }
+                  "Lit": "/build/ccw/mold-link"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "WriteFile": {
+          "append": false,
+          "expand": false,
+          "lines": [
+            {
+              "Lit": "[source.crates-io]"
+            },
+            {
+              "Lit": "replace-with = \"vendored-sources\""
+            },
+            {
+              "Lit": ""
+            },
+            {
+              "Lit": "[source.\"git+https://github.com/rui314/mimalloc_rust?rev=3979460494f1cd1e7f936cb8e10f41e927c9f698\"]"
+            },
+            {
+              "Lit": "git = \"https://github.com/rui314/mimalloc_rust\""
+            },
+            {
+              "Lit": "rev = \"3979460494f1cd1e7f936cb8e10f41e927c9f698\""
+            },
+            {
+              "Lit": "replace-with = \"vendored-sources\""
+            },
+            {
+              "Lit": ""
+            },
+            {
+              "Lit": "[source.vendored-sources]"
+            },
+            {
+              "Lit": "directory = \"/src/vendor\""
+            }
+          ],
+          "path": {
+            "Lit": "$BUILD/.cargo/config.toml"
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [
+            [
+              "CARGO_HOME",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Var": "BUILD"
+                    },
+                    {
+                      "Lit": "/cargo-home"
+                    }
+                  ]
+                }
+              }
+            ],
+            [
+              "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER",
+              {
+                "Lit": "/build/ccw/mold-link"
+              }
+            ],
+            [
+              "CC_aarch64_unknown_linux_gnu",
+              {
+                "Var": "CC"
+              }
+            ],
+            [
+              "CXX_aarch64_unknown_linux_gnu",
+              {
+                "Var": "CXX"
+              }
+            ],
+            [
+              "AR_aarch64_unknown_linux_gnu",
+              {
+                "Var": "AR"
+              }
+            ],
+            [
+              "CFLAGS_aarch64_unknown_linux_gnu",
+              {
+                "Var": "CFLAGS"
+              }
+            ],
+            [
+              "CC_x86_64_unknown_linux_gnu",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Var": "HOST_TRIPLE"
+                    },
+                    {
+                      "Lit": "-gcc"
+                    }
+                  ]
+                }
+              }
+            ],
+            [
+              "CXX_x86_64_unknown_linux_gnu",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Var": "HOST_TRIPLE"
+                    },
+                    {
+                      "Lit": "-g++"
+                    }
+                  ]
+                }
+              }
+            ],
+            [
+              "AR_x86_64_unknown_linux_gnu",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Var": "HOST_TRIPLE"
+                    },
+                    {
+                      "Lit": "-ar"
+                    }
+                  ]
+                }
+              }
+            ],
+            [
+              "HOST_CC",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Var": "HOST_TRIPLE"
+                    },
+                    {
+                      "Lit": "-gcc"
+                    }
+                  ]
+                }
+              }
+            ],
+            [
+              "HOST_CXX",
+              {
+                "Quoted": {
+                  "Concat": [
+                    {
+                      "Var": "HOST_TRIPLE"
+                    },
+                    {
+                      "Lit": "-g++"
+                    }
+                  ]
+                }
+              }
+            ],
+            [
+              "CFLAGS_x86_64_unknown_linux_gnu",
+              {
+                "Lit": ""
+              }
+            ],
+            [
+              "CXXFLAGS_x86_64_unknown_linux_gnu",
+              {
+                "Lit": ""
+              }
+            ],
+            [
+              "LDFLAGS_x86_64_unknown_linux_gnu",
+              {
+                "Lit": ""
+              }
+            ]
+          ],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "cargo"
+                },
+                {
+                  "Lit": "build"
+                },
+                {
+                  "Lit": "--release"
+                },
+                {
+                  "Lit": "--locked"
+                },
+                {
+                  "Lit": "--offline"
+                },
+                {
+                  "Lit": "--target"
+                },
+                {
+                  "Lit": "aarch64-unknown-linux-gnu"
+                }
+              ]
+            ],
+            "stderr": null,
+            "stdin": null,
+            "stdout": null
+          }
+        }
+      },
+      {
+        "Exec": {
+          "env": [
+            [
+              "DESTDIR",
+              {
+                "Quoted": {
+                  "Var": "OUT"
+                }
+              }
+            ],
+            [
+              "PREFIX",
+              {
+                "Lit": "/usr"
+              }
+            ],
+            [
+              "MOLD_LIBDIR",
+              {
+                "Lit": "/usr/lib"
+              }
+            ],
+            [
+              "CARGO_TARGET_DIR",
+              {
+                "Lit": "\"$BUILD/target/aarch64-unknown-linux-gnu\""
+              }
+            ]
+          ],
+          "pipe": {
+            "stages": [
+              [
+                {
+                  "Lit": "sh"
+                },
+                {
+                  "Lit": "\"$BUILD/install-mold.sh\""
                 }
               ]
             ],
@@ -346,6 +354,6 @@
       }
     ],
     "sysroot": true,
-    "workdir": "None"
+    "workdir": "InSource"
   }
 }

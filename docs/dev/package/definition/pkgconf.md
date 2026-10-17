@@ -4,7 +4,7 @@
 | 項目 | 値 |
 |-|-|
 | パッケージ名 | `pkgconf` |
-| バージョン | 2.5.1 |
+| バージョン | 3.0.8 |
 | ライセンス | ISC |
 | 分類 | パッケージ |
 | 対象 Platform | amd64: v1 v2 v3 v4; arm64: v8 v8.1 v8.2 v8.3 v8.4 v8.5 v8.6 v8.7 v8.8 v8.9 v9 v9.1 v9.2 v9.3 v9.4 v9.5; ppc64le: power8 power9 power10 power11; riscv64: rva20u64 rva22u64 rva23u64; s390x: z900 z990 z9-ec z10 z196 zEC12 z13 z14 z15 z16 z17 |
@@ -16,10 +16,10 @@
 
 | 項目 | 値 |
 |-|-|
-| URL | https://distfiles.ariadne.space/pkgconf/pkgconf-2.5.1.tar.xz |
-| sha3-512 | `9c27796bf156adec40eaf2a10be4f30c53ef8f99f810984116dfc77a2f8f0868a9c203337bbd6661ad08da58b6f192ce33a360476c181479062d804e25490974` |
-| blake3 | `c524d73c938e7382d3c12c9cfba16ed32ee092ab21b3e9659a095b5628ea2e8854d574e1591345eb70d3eeb5e08cd99af007751a488adc9b16ad9d6dd24c7081` |
-| 展開ディレクトリ | `pkgconf-2.5.1` |
+| URL | https://distfiles.ariadne.space/pkgconf/pkgconf-3.0.8.tar.xz |
+| sha3-512 | `c4fb2615c0508dfe6b5bc5d49cdb904c25dcc8eb57e874d4829a67b843f3fb5d650b7f2c89dba4c2713dc69bb7414d257137c9e9fb2a292addd321e8a897c2c8` |
+| blake3 | `778da292b878edf09b9d8c30d9491c51b70ca4f1b881a15fdb29b23f482e936b446d9ea6ca2825768b3e7c8f81e5cbe800212d8055d07e9aef7f949ddcad6aab` |
+| 展開ディレクトリ | `pkgconf-3.0.8` |
 
 ## 依存
 
@@ -35,7 +35,7 @@
 
 | パッケージ | バージョン | via |
 |-|-|-|
-| [linux-headers](./linux-headers.md) | 6.18.33 | — |
+| [linux-headers](./linux-headers.md) | 6.18.56 | — |
 
 ### host-dependencies
 
@@ -43,7 +43,7 @@
 |-|-|-|
 | [x86_64-linux-gnu-gcc](./x86_64-linux-gnu-gcc.md) | 16.2.0 | seed |
 | [x86_64-linux-gnu-binutils](./x86_64-linux-gnu-binutils.md) | 2.47 | seed |
-| [mold](./mold.md) | 2.42.1 | optional |
+| [mold](./mold.md) | 3.0.0 | optional |
 
 host-dependencies は `dep:false` でマウントされ、PATH には載りますがターゲット向け `-I` / `-L` には載りません。
 ## ビルド設定

@@ -20,7 +20,10 @@ const BEGIN: &str = "<!-- GENERATED -->";
 const END: &str = "<!-- /GENERATED -->";
 
 fn definition_docs_dir() -> PathBuf {
-    PathBuf::from("docs").join("dev").join("package").join("definition")
+    PathBuf::from("docs")
+        .join("dev")
+        .join("package")
+        .join("definition")
 }
 
 /// `docs` コマンド。各定義文書の生成ブロックと索引表を `PACKAGES`

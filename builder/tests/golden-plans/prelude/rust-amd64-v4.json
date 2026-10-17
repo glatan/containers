@@ -1,0 +1,2653 @@
+{
+  "prelude": [
+    {
+      "Set": {
+        "name": "_cc_triple",
+        "value": {
+          "Lit": "\"${PACKAGE_HOST:-$TRIPLE}\""
+        }
+      }
+    },
+    {
+      "Comment": "Never export LD=*-gcc: libtool then reports \"is GNU ld... no\" and skips\nthe real -shared link (gmp install: dangling libgmp.so.*)."
+    },
+    {
+      "Exec": {
+        "env": [],
+        "pipe": {
+          "stages": [
+            [
+              {
+                "Lit": "mkdir"
+              },
+              {
+                "Lit": "-p"
+              },
+              {
+                "Lit": "/tmp/la-overlay"
+              },
+              {
+                "Lit": "/tmp/pc-overlay"
+              }
+            ]
+          ],
+          "stderr": null,
+          "stdin": null,
+          "stdout": null
+        }
+      }
+    },
+    {
+      "Set": {
+        "name": "_pc_wrap",
+        "value": {
+          "Lit": "/tmp/pkg-config-bin"
+        }
+      }
+    },
+    {
+      "Exec": {
+        "env": [],
+        "pipe": {
+          "stages": [
+            [
+              {
+                "Lit": "mkdir"
+              },
+              {
+                "Lit": "-p"
+              },
+              {
+                "Lit": "\"$_pc_wrap\""
+              }
+            ]
+          ],
+          "stderr": null,
+          "stdin": null,
+          "stdout": null
+        }
+      }
+    },
+    {
+      "If": {
+        "cond": {
+          "Cmd": {
+            "stages": [
+              [
+                {
+                  "Lit": "command"
+                },
+                {
+                  "Lit": "-v"
+                },
+                {
+                  "Lit": "pkgconf"
+                }
+              ]
+            ],
+            "stderr": {
+              "Lit": "/dev/null"
+            },
+            "stdin": null,
+            "stdout": {
+              "append": false,
+              "target": {
+                "Lit": "/dev/null"
+              }
+            }
+          }
+        },
+        "else_": [
+          {
+            "If": {
+              "cond": {
+                "Cmd": {
+                  "stages": [
+                    [
+                      {
+                        "Lit": "command"
+                      },
+                      {
+                        "Lit": "-v"
+                      },
+                      {
+                        "Lit": "pkg-config"
+                      }
+                    ]
+                  ],
+                  "stderr": {
+                    "Lit": "/dev/null"
+                  },
+                  "stdin": null,
+                  "stdout": {
+                    "append": false,
+                    "target": {
+                      "Lit": "/dev/null"
+                    }
+                  }
+                }
+              },
+              "else_": [],
+              "then": [
+                {
+                  "WriteFile": {
+                    "append": false,
+                    "expand": false,
+                    "lines": [
+                      {
+                        "Lit": "#!/bin/sh"
+                      },
+                      {
+                        "Lit": "exec pkg-config \"$@\""
+                      }
+                    ],
+                    "path": {
+                      "Lit": "\"$_pc_wrap/pkg-config\""
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "then": [
+          {
+            "WriteFile": {
+              "append": false,
+              "expand": false,
+              "lines": [
+                {
+                  "Lit": "#!/bin/sh"
+                },
+                {
+                  "Lit": "exec pkgconf \"$@\""
+                }
+              ],
+              "path": {
+                "Lit": "\"$_pc_wrap/pkg-config\""
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "If": {
+        "cond": {
+          "FileExists": {
+            "Lit": "\"$_pc_wrap/pkg-config\""
+          }
+        },
+        "else_": [],
+        "then": [
+          {
+            "Exec": {
+              "env": [],
+              "pipe": {
+                "stages": [
+                  [
+                    {
+                      "Lit": "chmod"
+                    },
+                    {
+                      "Lit": "+x"
+                    },
+                    {
+                      "Lit": "\"$_pc_wrap/pkg-config\""
+                    }
+                  ]
+                ],
+                "stderr": null,
+                "stdin": null,
+                "stdout": null
+              }
+            }
+          },
+          {
+            "Export": {
+              "name": "PATH",
+              "value": {
+                "Lit": "\"$_pc_wrap:$PATH\""
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "recipe": {
+    "Steps": {
+      "env": "None",
+      "pgo": null,
+      "std": "Gnu17",
+      "steps": [
+        {
+          "Comment": "stage0 と cross toolchain を検出し config.toml を生成"
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "sed"
+                  },
+                  {
+                    "Lit": "-i"
+                  },
+                  {
+                    "Lit": "\"/if constexpr (std::is_pointer_v/,/static_assert(ConstFn != nullptr)/d\""
+                  },
+                  {
+                    "Lit": "src/llvm-project/llvm/include/llvm/ADT/STLForwardCompat.h"
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Set": {
+            "name": "RUSTC",
+            "value": {
+              "Subst": {
+                "stages": [
+                  [
+                    {
+                      "Lit": "command"
+                    },
+                    {
+                      "Lit": "-v"
+                    },
+                    {
+                      "Lit": "rustc"
+                    }
+                  ]
+                ],
+                "stderr": null,
+                "stdin": null,
+                "stdout": null
+              }
+            }
+          }
+        },
+        {
+          "Set": {
+            "name": "STAGE0_CARGO",
+            "value": {
+              "Subst": {
+                "stages": [
+                  [
+                    {
+                      "Lit": "command"
+                    },
+                    {
+                      "Lit": "-v"
+                    },
+                    {
+                      "Lit": "cargo"
+                    }
+                  ]
+                ],
+                "stderr": null,
+                "stdin": null,
+                "stdout": null
+              }
+            }
+          }
+        },
+        {
+          "Set": {
+            "name": "RUST_TARGETS",
+            "value": {
+              "Lit": "\\\"x86_64-unknown-linux-gnu\\\""
+            }
+          }
+        },
+        {
+          "If": {
+            "cond": {
+              "And": [
+                {
+                  "DirExists": {
+                    "Lit": "/dep/x86_64-linux-gnu-glibc/usr/x86_64-linux-gnu/lib"
+                  }
+                },
+                {
+                  "DirExists": {
+                    "Lit": "/dep/x86_64-linux-gnu-binutils/usr/bin"
+                  }
+                },
+                {
+                  "Cmd": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "command"
+                        },
+                        {
+                          "Lit": "-v"
+                        },
+                        {
+                          "Lit": "x86_64-linux-gnu-gcc"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              ]
+            },
+            "else_": [
+              {
+                "WriteFile": {
+                  "append": true,
+                  "expand": false,
+                  "lines": [
+                    {
+                      "Lit": ""
+                    },
+                    {
+                      "Lit": "[target.x86_64-unknown-linux-gnu]"
+                    },
+                    {
+                      "Lit": "cc = \"gcc\""
+                    },
+                    {
+                      "Lit": "cxx = \"g++\""
+                    },
+                    {
+                      "Lit": "ar = \"/usr/bin/ar\""
+                    },
+                    {
+                      "Lit": "ranlib = \"/usr/bin/ranlib\""
+                    },
+                    {
+                      "Lit": "linker = \"gcc\""
+                    }
+                  ],
+                  "path": {
+                    "Lit": "$BUILD/targets.conf"
+                  }
+                }
+              }
+            ],
+            "then": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "mkdir"
+                        },
+                        {
+                          "Lit": "-p"
+                        },
+                        {
+                          "Lit": "\"/tmp/sysroot-x86_64-linux-gnu/usr\""
+                        },
+                        {
+                          "Lit": "\"$BUILD/ccw\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Lit": "\"/dep/x86_64-linux-gnu-glibc/usr/x86_64-linux-gnu/include\""
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-x86_64-linux-gnu/include"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Lit": "\"/dep/x86_64-linux-gnu-glibc/usr/x86_64-linux-gnu/include\""
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-x86_64-linux-gnu/usr/include"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "cp"
+                        },
+                        {
+                          "Lit": "-a"
+                        },
+                        {
+                          "Lit": "\"/dep/x86_64-linux-gnu-glibc/usr/x86_64-linux-gnu/lib\""
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-x86_64-linux-gnu/lib"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "If": {
+                  "cond": {
+                    "Exists": {
+                      "Lit": "\"/dep/x86_64-linux-gnu-glibc/usr/x86_64-linux-gnu/lib64\""
+                    }
+                  },
+                  "else_": [],
+                  "then": [
+                    {
+                      "Exec": {
+                        "env": [],
+                        "pipe": {
+                          "stages": [
+                            [
+                              {
+                                "Lit": "cp"
+                              },
+                              {
+                                "Lit": "-a"
+                              },
+                              {
+                                "Lit": "\"/dep/x86_64-linux-gnu-glibc/usr/x86_64-linux-gnu/lib64\""
+                              },
+                              {
+                                "Lit": "/tmp/sysroot-x86_64-linux-gnu/lib64"
+                              }
+                            ]
+                          ],
+                          "stderr": null,
+                          "stdin": null,
+                          "stdout": null
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Lit": "../lib"
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-x86_64-linux-gnu/usr/lib"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Lit": "../lib"
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-x86_64-linux-gnu/usr/lib64"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "WriteFile": {
+                  "append": false,
+                  "expand": false,
+                  "lines": [
+                    {
+                      "Lit": "#!/bin/sh"
+                    },
+                    {
+                      "Lit": "exec x86_64-linux-gnu-gcc -B/dep/x86_64-linux-gnu-binutils/usr/x86_64-linux-gnu/bin --sysroot=/tmp/sysroot-x86_64-linux-gnu -idirafter /dep/linux-headers/usr/x86_64-linux-gnu/include \"$@\""
+                    }
+                  ],
+                  "path": {
+                    "Lit": "$BUILD/ccw/x86_64-linux-gnu-gcc"
+                  }
+                }
+              },
+              {
+                "WriteFile": {
+                  "append": false,
+                  "expand": false,
+                  "lines": [
+                    {
+                      "Lit": "#!/bin/sh"
+                    },
+                    {
+                      "Lit": "exec x86_64-linux-gnu-g++ -B/dep/x86_64-linux-gnu-binutils/usr/x86_64-linux-gnu/bin --sysroot=/tmp/sysroot-x86_64-linux-gnu -idirafter /dep/linux-headers/usr/x86_64-linux-gnu/include \"$@\""
+                    }
+                  ],
+                  "path": {
+                    "Lit": "$BUILD/ccw/x86_64-linux-gnu-g++"
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "chmod"
+                        },
+                        {
+                          "Lit": "+x"
+                        },
+                        {
+                          "Lit": "\"$BUILD/ccw/x86_64-linux-gnu-gcc\""
+                        },
+                        {
+                          "Lit": "\"$BUILD/ccw/x86_64-linux-gnu-g++\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Export": {
+                  "name": "CFLAGS",
+                  "value": {
+                    "Lit": "\"${CFLAGS:-} --sysroot=/tmp/sysroot-x86_64-linux-gnu -idirafter /dep/linux-headers/usr/x86_64-linux-gnu/include\""
+                  }
+                }
+              },
+              {
+                "Export": {
+                  "name": "CXXFLAGS",
+                  "value": {
+                    "Lit": "\"${CXXFLAGS:-} --sysroot=/tmp/sysroot-x86_64-linux-gnu -idirafter /dep/linux-headers/usr/x86_64-linux-gnu/include\""
+                  }
+                }
+              },
+              {
+                "Export": {
+                  "name": "LDFLAGS",
+                  "value": {
+                    "Lit": "\"-L/tmp/sysroot-x86_64-linux-gnu/lib -L/tmp/sysroot-x86_64-linux-gnu/usr/lib -L/tmp/sysroot-x86_64-linux-gnu/lib64 -L/tmp/sysroot-x86_64-linux-gnu/usr/lib64 ${LDFLAGS:-} --sysroot=/tmp/sysroot-x86_64-linux-gnu\""
+                  }
+                }
+              },
+              {
+                "WriteFile": {
+                  "append": true,
+                  "expand": true,
+                  "lines": [
+                    {
+                      "Lit": ""
+                    },
+                    {
+                      "Lit": "[target.x86_64-unknown-linux-gnu]"
+                    },
+                    {
+                      "Lit": "cc = \"$BUILD/ccw/x86_64-linux-gnu-gcc\""
+                    },
+                    {
+                      "Lit": "cxx = \"$BUILD/ccw/x86_64-linux-gnu-g++\""
+                    },
+                    {
+                      "Lit": "ar = \"/dep/x86_64-linux-gnu-binutils/usr/bin/x86_64-linux-gnu-ar\""
+                    },
+                    {
+                      "Lit": "ranlib = \"/dep/x86_64-linux-gnu-binutils/usr/bin/x86_64-linux-gnu-ranlib\""
+                    },
+                    {
+                      "Lit": "linker = \"$BUILD/ccw/x86_64-linux-gnu-gcc\""
+                    }
+                  ],
+                  "path": {
+                    "Lit": "$BUILD/targets.conf"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "If": {
+            "cond": {
+              "And": [
+                {
+                  "DirExists": {
+                    "Lit": "/dep/aarch64-linux-gnu-glibc/usr/aarch64-linux-gnu/lib"
+                  }
+                },
+                {
+                  "DirExists": {
+                    "Lit": "/dep/aarch64-linux-gnu-binutils/usr/bin"
+                  }
+                },
+                {
+                  "Cmd": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "command"
+                        },
+                        {
+                          "Lit": "-v"
+                        },
+                        {
+                          "Lit": "aarch64-linux-gnu-gcc"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              ]
+            },
+            "else_": [
+              {
+                "If": {
+                  "cond": {
+                    "Cmd": {
+                      "stages": [
+                        [
+                          {
+                            "Lit": "command"
+                          },
+                          {
+                            "Lit": "-v"
+                          },
+                          {
+                            "Lit": "aarch64-linux-gnu-gcc"
+                          }
+                        ]
+                      ],
+                      "stderr": null,
+                      "stdin": null,
+                      "stdout": null
+                    }
+                  },
+                  "else_": [],
+                  "then": [
+                    {
+                      "Set": {
+                        "name": "RUST_TARGETS",
+                        "value": {
+                          "Lit": "${RUST_TARGETS},\\\"aarch64-unknown-linux-gnu\\\""
+                        }
+                      }
+                    },
+                    {
+                      "WriteFile": {
+                        "append": true,
+                        "expand": false,
+                        "lines": [
+                          {
+                            "Lit": ""
+                          },
+                          {
+                            "Lit": "[target.aarch64-unknown-linux-gnu]"
+                          },
+                          {
+                            "Lit": "cc = \"aarch64-linux-gnu-gcc\""
+                          },
+                          {
+                            "Lit": "cxx = \"aarch64-linux-gnu-g++\""
+                          },
+                          {
+                            "Lit": "ar = \"/usr/bin/aarch64-linux-gnu-ar\""
+                          },
+                          {
+                            "Lit": "ranlib = \"/usr/bin/aarch64-linux-gnu-ranlib\""
+                          },
+                          {
+                            "Lit": "linker = \"aarch64-linux-gnu-gcc\""
+                          }
+                        ],
+                        "path": {
+                          "Lit": "$BUILD/targets.conf"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "then": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "mkdir"
+                        },
+                        {
+                          "Lit": "-p"
+                        },
+                        {
+                          "Lit": "\"/tmp/sysroot-aarch64-linux-gnu/usr\""
+                        },
+                        {
+                          "Lit": "\"$BUILD/ccw\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Lit": "\"/dep/aarch64-linux-gnu-glibc/usr/aarch64-linux-gnu/include\""
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-aarch64-linux-gnu/include"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Lit": "\"/dep/aarch64-linux-gnu-glibc/usr/aarch64-linux-gnu/include\""
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-aarch64-linux-gnu/usr/include"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "cp"
+                        },
+                        {
+                          "Lit": "-a"
+                        },
+                        {
+                          "Lit": "\"/dep/aarch64-linux-gnu-glibc/usr/aarch64-linux-gnu/lib\""
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-aarch64-linux-gnu/lib"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "If": {
+                  "cond": {
+                    "Exists": {
+                      "Lit": "\"/dep/aarch64-linux-gnu-glibc/usr/aarch64-linux-gnu/lib64\""
+                    }
+                  },
+                  "else_": [],
+                  "then": [
+                    {
+                      "Exec": {
+                        "env": [],
+                        "pipe": {
+                          "stages": [
+                            [
+                              {
+                                "Lit": "cp"
+                              },
+                              {
+                                "Lit": "-a"
+                              },
+                              {
+                                "Lit": "\"/dep/aarch64-linux-gnu-glibc/usr/aarch64-linux-gnu/lib64\""
+                              },
+                              {
+                                "Lit": "/tmp/sysroot-aarch64-linux-gnu/lib64"
+                              }
+                            ]
+                          ],
+                          "stderr": null,
+                          "stdin": null,
+                          "stdout": null
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Lit": "../lib"
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-aarch64-linux-gnu/usr/lib"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Lit": "../lib"
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-aarch64-linux-gnu/usr/lib64"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "WriteFile": {
+                  "append": false,
+                  "expand": false,
+                  "lines": [
+                    {
+                      "Lit": "#!/bin/sh"
+                    },
+                    {
+                      "Lit": "exec aarch64-linux-gnu-gcc -B/dep/aarch64-linux-gnu-binutils/usr/aarch64-linux-gnu/bin --sysroot=/tmp/sysroot-aarch64-linux-gnu -idirafter /dep/linux-headers/usr/aarch64-linux-gnu/include \"$@\""
+                    }
+                  ],
+                  "path": {
+                    "Lit": "$BUILD/ccw/aarch64-linux-gnu-gcc"
+                  }
+                }
+              },
+              {
+                "WriteFile": {
+                  "append": false,
+                  "expand": false,
+                  "lines": [
+                    {
+                      "Lit": "#!/bin/sh"
+                    },
+                    {
+                      "Lit": "exec aarch64-linux-gnu-g++ -B/dep/aarch64-linux-gnu-binutils/usr/aarch64-linux-gnu/bin --sysroot=/tmp/sysroot-aarch64-linux-gnu -idirafter /dep/linux-headers/usr/aarch64-linux-gnu/include \"$@\""
+                    }
+                  ],
+                  "path": {
+                    "Lit": "$BUILD/ccw/aarch64-linux-gnu-g++"
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "chmod"
+                        },
+                        {
+                          "Lit": "+x"
+                        },
+                        {
+                          "Lit": "\"$BUILD/ccw/aarch64-linux-gnu-gcc\""
+                        },
+                        {
+                          "Lit": "\"$BUILD/ccw/aarch64-linux-gnu-g++\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Set": {
+                  "name": "RUST_TARGETS",
+                  "value": {
+                    "Lit": "${RUST_TARGETS},\\\"aarch64-unknown-linux-gnu\\\""
+                  }
+                }
+              },
+              {
+                "WriteFile": {
+                  "append": true,
+                  "expand": true,
+                  "lines": [
+                    {
+                      "Lit": ""
+                    },
+                    {
+                      "Lit": "[target.aarch64-unknown-linux-gnu]"
+                    },
+                    {
+                      "Lit": "cc = \"$BUILD/ccw/aarch64-linux-gnu-gcc\""
+                    },
+                    {
+                      "Lit": "cxx = \"$BUILD/ccw/aarch64-linux-gnu-g++\""
+                    },
+                    {
+                      "Lit": "ar = \"/dep/aarch64-linux-gnu-binutils/usr/bin/aarch64-linux-gnu-ar\""
+                    },
+                    {
+                      "Lit": "ranlib = \"/dep/aarch64-linux-gnu-binutils/usr/bin/aarch64-linux-gnu-ranlib\""
+                    },
+                    {
+                      "Lit": "linker = \"$BUILD/ccw/aarch64-linux-gnu-gcc\""
+                    }
+                  ],
+                  "path": {
+                    "Lit": "$BUILD/targets.conf"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "If": {
+            "cond": {
+              "And": [
+                {
+                  "DirExists": {
+                    "Lit": "/dep/riscv64-linux-gnu-glibc/usr/riscv64-linux-gnu/lib"
+                  }
+                },
+                {
+                  "DirExists": {
+                    "Lit": "/dep/riscv64-linux-gnu-binutils/usr/bin"
+                  }
+                },
+                {
+                  "Cmd": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "command"
+                        },
+                        {
+                          "Lit": "-v"
+                        },
+                        {
+                          "Lit": "riscv64-linux-gnu-gcc"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              ]
+            },
+            "else_": [
+              {
+                "If": {
+                  "cond": {
+                    "Cmd": {
+                      "stages": [
+                        [
+                          {
+                            "Lit": "command"
+                          },
+                          {
+                            "Lit": "-v"
+                          },
+                          {
+                            "Lit": "riscv64-linux-gnu-gcc"
+                          }
+                        ]
+                      ],
+                      "stderr": null,
+                      "stdin": null,
+                      "stdout": null
+                    }
+                  },
+                  "else_": [],
+                  "then": [
+                    {
+                      "Set": {
+                        "name": "RUST_TARGETS",
+                        "value": {
+                          "Lit": "${RUST_TARGETS},\\\"riscv64gc-unknown-linux-gnu\\\""
+                        }
+                      }
+                    },
+                    {
+                      "WriteFile": {
+                        "append": true,
+                        "expand": false,
+                        "lines": [
+                          {
+                            "Lit": ""
+                          },
+                          {
+                            "Lit": "[target.riscv64gc-unknown-linux-gnu]"
+                          },
+                          {
+                            "Lit": "cc = \"riscv64-linux-gnu-gcc\""
+                          },
+                          {
+                            "Lit": "cxx = \"riscv64-linux-gnu-g++\""
+                          },
+                          {
+                            "Lit": "ar = \"/usr/bin/riscv64-linux-gnu-ar\""
+                          },
+                          {
+                            "Lit": "ranlib = \"/usr/bin/riscv64-linux-gnu-ranlib\""
+                          },
+                          {
+                            "Lit": "linker = \"riscv64-linux-gnu-gcc\""
+                          }
+                        ],
+                        "path": {
+                          "Lit": "$BUILD/targets.conf"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "then": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "mkdir"
+                        },
+                        {
+                          "Lit": "-p"
+                        },
+                        {
+                          "Lit": "\"/tmp/sysroot-riscv64-linux-gnu/usr\""
+                        },
+                        {
+                          "Lit": "\"$BUILD/ccw\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Lit": "\"/dep/riscv64-linux-gnu-glibc/usr/riscv64-linux-gnu/include\""
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-riscv64-linux-gnu/include"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Lit": "\"/dep/riscv64-linux-gnu-glibc/usr/riscv64-linux-gnu/include\""
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-riscv64-linux-gnu/usr/include"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "cp"
+                        },
+                        {
+                          "Lit": "-a"
+                        },
+                        {
+                          "Lit": "\"/dep/riscv64-linux-gnu-glibc/usr/riscv64-linux-gnu/lib\""
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-riscv64-linux-gnu/lib"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "If": {
+                  "cond": {
+                    "Exists": {
+                      "Lit": "\"/dep/riscv64-linux-gnu-glibc/usr/riscv64-linux-gnu/lib64\""
+                    }
+                  },
+                  "else_": [],
+                  "then": [
+                    {
+                      "Exec": {
+                        "env": [],
+                        "pipe": {
+                          "stages": [
+                            [
+                              {
+                                "Lit": "cp"
+                              },
+                              {
+                                "Lit": "-a"
+                              },
+                              {
+                                "Lit": "\"/dep/riscv64-linux-gnu-glibc/usr/riscv64-linux-gnu/lib64\""
+                              },
+                              {
+                                "Lit": "/tmp/sysroot-riscv64-linux-gnu/lib64"
+                              }
+                            ]
+                          ],
+                          "stderr": null,
+                          "stdin": null,
+                          "stdout": null
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Lit": "../lib"
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-riscv64-linux-gnu/usr/lib"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Lit": "../lib"
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-riscv64-linux-gnu/usr/lib64"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "WriteFile": {
+                  "append": false,
+                  "expand": false,
+                  "lines": [
+                    {
+                      "Lit": "#!/bin/sh"
+                    },
+                    {
+                      "Lit": "exec riscv64-linux-gnu-gcc -B/dep/riscv64-linux-gnu-binutils/usr/riscv64-linux-gnu/bin --sysroot=/tmp/sysroot-riscv64-linux-gnu -idirafter /dep/linux-headers/usr/riscv64-linux-gnu/include \"$@\""
+                    }
+                  ],
+                  "path": {
+                    "Lit": "$BUILD/ccw/riscv64-linux-gnu-gcc"
+                  }
+                }
+              },
+              {
+                "WriteFile": {
+                  "append": false,
+                  "expand": false,
+                  "lines": [
+                    {
+                      "Lit": "#!/bin/sh"
+                    },
+                    {
+                      "Lit": "exec riscv64-linux-gnu-g++ -B/dep/riscv64-linux-gnu-binutils/usr/riscv64-linux-gnu/bin --sysroot=/tmp/sysroot-riscv64-linux-gnu -idirafter /dep/linux-headers/usr/riscv64-linux-gnu/include \"$@\""
+                    }
+                  ],
+                  "path": {
+                    "Lit": "$BUILD/ccw/riscv64-linux-gnu-g++"
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "chmod"
+                        },
+                        {
+                          "Lit": "+x"
+                        },
+                        {
+                          "Lit": "\"$BUILD/ccw/riscv64-linux-gnu-gcc\""
+                        },
+                        {
+                          "Lit": "\"$BUILD/ccw/riscv64-linux-gnu-g++\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Set": {
+                  "name": "RUST_TARGETS",
+                  "value": {
+                    "Lit": "${RUST_TARGETS},\\\"riscv64gc-unknown-linux-gnu\\\""
+                  }
+                }
+              },
+              {
+                "WriteFile": {
+                  "append": true,
+                  "expand": true,
+                  "lines": [
+                    {
+                      "Lit": ""
+                    },
+                    {
+                      "Lit": "[target.riscv64gc-unknown-linux-gnu]"
+                    },
+                    {
+                      "Lit": "cc = \"$BUILD/ccw/riscv64-linux-gnu-gcc\""
+                    },
+                    {
+                      "Lit": "cxx = \"$BUILD/ccw/riscv64-linux-gnu-g++\""
+                    },
+                    {
+                      "Lit": "ar = \"/dep/riscv64-linux-gnu-binutils/usr/bin/riscv64-linux-gnu-ar\""
+                    },
+                    {
+                      "Lit": "ranlib = \"/dep/riscv64-linux-gnu-binutils/usr/bin/riscv64-linux-gnu-ranlib\""
+                    },
+                    {
+                      "Lit": "linker = \"$BUILD/ccw/riscv64-linux-gnu-gcc\""
+                    }
+                  ],
+                  "path": {
+                    "Lit": "$BUILD/targets.conf"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "If": {
+            "cond": {
+              "And": [
+                {
+                  "DirExists": {
+                    "Lit": "/dep/powerpc64le-linux-gnu-glibc/usr/powerpc64le-linux-gnu/lib"
+                  }
+                },
+                {
+                  "DirExists": {
+                    "Lit": "/dep/powerpc64le-linux-gnu-binutils/usr/bin"
+                  }
+                },
+                {
+                  "Cmd": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "command"
+                        },
+                        {
+                          "Lit": "-v"
+                        },
+                        {
+                          "Lit": "powerpc64le-linux-gnu-gcc"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              ]
+            },
+            "else_": [
+              {
+                "If": {
+                  "cond": {
+                    "Cmd": {
+                      "stages": [
+                        [
+                          {
+                            "Lit": "command"
+                          },
+                          {
+                            "Lit": "-v"
+                          },
+                          {
+                            "Lit": "powerpc64le-linux-gnu-gcc"
+                          }
+                        ]
+                      ],
+                      "stderr": null,
+                      "stdin": null,
+                      "stdout": null
+                    }
+                  },
+                  "else_": [],
+                  "then": [
+                    {
+                      "Set": {
+                        "name": "RUST_TARGETS",
+                        "value": {
+                          "Lit": "${RUST_TARGETS},\\\"powerpc64le-unknown-linux-gnu\\\""
+                        }
+                      }
+                    },
+                    {
+                      "WriteFile": {
+                        "append": true,
+                        "expand": false,
+                        "lines": [
+                          {
+                            "Lit": ""
+                          },
+                          {
+                            "Lit": "[target.powerpc64le-unknown-linux-gnu]"
+                          },
+                          {
+                            "Lit": "cc = \"powerpc64le-linux-gnu-gcc\""
+                          },
+                          {
+                            "Lit": "cxx = \"powerpc64le-linux-gnu-g++\""
+                          },
+                          {
+                            "Lit": "ar = \"/usr/bin/powerpc64le-linux-gnu-ar\""
+                          },
+                          {
+                            "Lit": "ranlib = \"/usr/bin/powerpc64le-linux-gnu-ranlib\""
+                          },
+                          {
+                            "Lit": "linker = \"powerpc64le-linux-gnu-gcc\""
+                          }
+                        ],
+                        "path": {
+                          "Lit": "$BUILD/targets.conf"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "then": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "mkdir"
+                        },
+                        {
+                          "Lit": "-p"
+                        },
+                        {
+                          "Lit": "\"/tmp/sysroot-powerpc64le-linux-gnu/usr\""
+                        },
+                        {
+                          "Lit": "\"$BUILD/ccw\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Lit": "\"/dep/powerpc64le-linux-gnu-glibc/usr/powerpc64le-linux-gnu/include\""
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-powerpc64le-linux-gnu/include"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Lit": "\"/dep/powerpc64le-linux-gnu-glibc/usr/powerpc64le-linux-gnu/include\""
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-powerpc64le-linux-gnu/usr/include"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "cp"
+                        },
+                        {
+                          "Lit": "-a"
+                        },
+                        {
+                          "Lit": "\"/dep/powerpc64le-linux-gnu-glibc/usr/powerpc64le-linux-gnu/lib\""
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-powerpc64le-linux-gnu/lib"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "If": {
+                  "cond": {
+                    "Exists": {
+                      "Lit": "\"/dep/powerpc64le-linux-gnu-glibc/usr/powerpc64le-linux-gnu/lib64\""
+                    }
+                  },
+                  "else_": [],
+                  "then": [
+                    {
+                      "Exec": {
+                        "env": [],
+                        "pipe": {
+                          "stages": [
+                            [
+                              {
+                                "Lit": "cp"
+                              },
+                              {
+                                "Lit": "-a"
+                              },
+                              {
+                                "Lit": "\"/dep/powerpc64le-linux-gnu-glibc/usr/powerpc64le-linux-gnu/lib64\""
+                              },
+                              {
+                                "Lit": "/tmp/sysroot-powerpc64le-linux-gnu/lib64"
+                              }
+                            ]
+                          ],
+                          "stderr": null,
+                          "stdin": null,
+                          "stdout": null
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Lit": "../lib"
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-powerpc64le-linux-gnu/usr/lib"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Lit": "../lib"
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-powerpc64le-linux-gnu/usr/lib64"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "WriteFile": {
+                  "append": false,
+                  "expand": false,
+                  "lines": [
+                    {
+                      "Lit": "#!/bin/sh"
+                    },
+                    {
+                      "Lit": "exec powerpc64le-linux-gnu-gcc -B/dep/powerpc64le-linux-gnu-binutils/usr/powerpc64le-linux-gnu/bin --sysroot=/tmp/sysroot-powerpc64le-linux-gnu -idirafter /dep/linux-headers/usr/powerpc64le-linux-gnu/include \"$@\""
+                    }
+                  ],
+                  "path": {
+                    "Lit": "$BUILD/ccw/powerpc64le-linux-gnu-gcc"
+                  }
+                }
+              },
+              {
+                "WriteFile": {
+                  "append": false,
+                  "expand": false,
+                  "lines": [
+                    {
+                      "Lit": "#!/bin/sh"
+                    },
+                    {
+                      "Lit": "exec powerpc64le-linux-gnu-g++ -B/dep/powerpc64le-linux-gnu-binutils/usr/powerpc64le-linux-gnu/bin --sysroot=/tmp/sysroot-powerpc64le-linux-gnu -idirafter /dep/linux-headers/usr/powerpc64le-linux-gnu/include \"$@\""
+                    }
+                  ],
+                  "path": {
+                    "Lit": "$BUILD/ccw/powerpc64le-linux-gnu-g++"
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "chmod"
+                        },
+                        {
+                          "Lit": "+x"
+                        },
+                        {
+                          "Lit": "\"$BUILD/ccw/powerpc64le-linux-gnu-gcc\""
+                        },
+                        {
+                          "Lit": "\"$BUILD/ccw/powerpc64le-linux-gnu-g++\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Set": {
+                  "name": "RUST_TARGETS",
+                  "value": {
+                    "Lit": "${RUST_TARGETS},\\\"powerpc64le-unknown-linux-gnu\\\""
+                  }
+                }
+              },
+              {
+                "WriteFile": {
+                  "append": true,
+                  "expand": true,
+                  "lines": [
+                    {
+                      "Lit": ""
+                    },
+                    {
+                      "Lit": "[target.powerpc64le-unknown-linux-gnu]"
+                    },
+                    {
+                      "Lit": "cc = \"$BUILD/ccw/powerpc64le-linux-gnu-gcc\""
+                    },
+                    {
+                      "Lit": "cxx = \"$BUILD/ccw/powerpc64le-linux-gnu-g++\""
+                    },
+                    {
+                      "Lit": "ar = \"/dep/powerpc64le-linux-gnu-binutils/usr/bin/powerpc64le-linux-gnu-ar\""
+                    },
+                    {
+                      "Lit": "ranlib = \"/dep/powerpc64le-linux-gnu-binutils/usr/bin/powerpc64le-linux-gnu-ranlib\""
+                    },
+                    {
+                      "Lit": "linker = \"$BUILD/ccw/powerpc64le-linux-gnu-gcc\""
+                    }
+                  ],
+                  "path": {
+                    "Lit": "$BUILD/targets.conf"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "If": {
+            "cond": {
+              "And": [
+                {
+                  "DirExists": {
+                    "Lit": "/dep/s390x-linux-gnu-glibc/usr/s390x-linux-gnu/lib"
+                  }
+                },
+                {
+                  "DirExists": {
+                    "Lit": "/dep/s390x-linux-gnu-binutils/usr/bin"
+                  }
+                },
+                {
+                  "Cmd": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "command"
+                        },
+                        {
+                          "Lit": "-v"
+                        },
+                        {
+                          "Lit": "s390x-linux-gnu-gcc"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              ]
+            },
+            "else_": [
+              {
+                "If": {
+                  "cond": {
+                    "Cmd": {
+                      "stages": [
+                        [
+                          {
+                            "Lit": "command"
+                          },
+                          {
+                            "Lit": "-v"
+                          },
+                          {
+                            "Lit": "s390x-linux-gnu-gcc"
+                          }
+                        ]
+                      ],
+                      "stderr": null,
+                      "stdin": null,
+                      "stdout": null
+                    }
+                  },
+                  "else_": [],
+                  "then": [
+                    {
+                      "Set": {
+                        "name": "RUST_TARGETS",
+                        "value": {
+                          "Lit": "${RUST_TARGETS},\\\"s390x-unknown-linux-gnu\\\""
+                        }
+                      }
+                    },
+                    {
+                      "WriteFile": {
+                        "append": true,
+                        "expand": false,
+                        "lines": [
+                          {
+                            "Lit": ""
+                          },
+                          {
+                            "Lit": "[target.s390x-unknown-linux-gnu]"
+                          },
+                          {
+                            "Lit": "cc = \"s390x-linux-gnu-gcc\""
+                          },
+                          {
+                            "Lit": "cxx = \"s390x-linux-gnu-g++\""
+                          },
+                          {
+                            "Lit": "ar = \"/usr/bin/s390x-linux-gnu-ar\""
+                          },
+                          {
+                            "Lit": "ranlib = \"/usr/bin/s390x-linux-gnu-ranlib\""
+                          },
+                          {
+                            "Lit": "linker = \"s390x-linux-gnu-gcc\""
+                          }
+                        ],
+                        "path": {
+                          "Lit": "$BUILD/targets.conf"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "then": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "mkdir"
+                        },
+                        {
+                          "Lit": "-p"
+                        },
+                        {
+                          "Lit": "\"/tmp/sysroot-s390x-linux-gnu/usr\""
+                        },
+                        {
+                          "Lit": "\"$BUILD/ccw\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Lit": "\"/dep/s390x-linux-gnu-glibc/usr/s390x-linux-gnu/include\""
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-s390x-linux-gnu/include"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Lit": "\"/dep/s390x-linux-gnu-glibc/usr/s390x-linux-gnu/include\""
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-s390x-linux-gnu/usr/include"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "cp"
+                        },
+                        {
+                          "Lit": "-a"
+                        },
+                        {
+                          "Lit": "\"/dep/s390x-linux-gnu-glibc/usr/s390x-linux-gnu/lib\""
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-s390x-linux-gnu/lib"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "If": {
+                  "cond": {
+                    "Exists": {
+                      "Lit": "\"/dep/s390x-linux-gnu-glibc/usr/s390x-linux-gnu/lib64\""
+                    }
+                  },
+                  "else_": [],
+                  "then": [
+                    {
+                      "Exec": {
+                        "env": [],
+                        "pipe": {
+                          "stages": [
+                            [
+                              {
+                                "Lit": "cp"
+                              },
+                              {
+                                "Lit": "-a"
+                              },
+                              {
+                                "Lit": "\"/dep/s390x-linux-gnu-glibc/usr/s390x-linux-gnu/lib64\""
+                              },
+                              {
+                                "Lit": "/tmp/sysroot-s390x-linux-gnu/lib64"
+                              }
+                            ]
+                          ],
+                          "stderr": null,
+                          "stdin": null,
+                          "stdout": null
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Lit": "../lib"
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-s390x-linux-gnu/usr/lib"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "ln"
+                        },
+                        {
+                          "Lit": "-sfn"
+                        },
+                        {
+                          "Lit": "../lib"
+                        },
+                        {
+                          "Lit": "/tmp/sysroot-s390x-linux-gnu/usr/lib64"
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "WriteFile": {
+                  "append": false,
+                  "expand": false,
+                  "lines": [
+                    {
+                      "Lit": "#!/bin/sh"
+                    },
+                    {
+                      "Lit": "exec s390x-linux-gnu-gcc -B/dep/s390x-linux-gnu-binutils/usr/s390x-linux-gnu/bin --sysroot=/tmp/sysroot-s390x-linux-gnu -idirafter /dep/linux-headers/usr/s390x-linux-gnu/include \"$@\""
+                    }
+                  ],
+                  "path": {
+                    "Lit": "$BUILD/ccw/s390x-linux-gnu-gcc"
+                  }
+                }
+              },
+              {
+                "WriteFile": {
+                  "append": false,
+                  "expand": false,
+                  "lines": [
+                    {
+                      "Lit": "#!/bin/sh"
+                    },
+                    {
+                      "Lit": "exec s390x-linux-gnu-g++ -B/dep/s390x-linux-gnu-binutils/usr/s390x-linux-gnu/bin --sysroot=/tmp/sysroot-s390x-linux-gnu -idirafter /dep/linux-headers/usr/s390x-linux-gnu/include \"$@\""
+                    }
+                  ],
+                  "path": {
+                    "Lit": "$BUILD/ccw/s390x-linux-gnu-g++"
+                  }
+                }
+              },
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "chmod"
+                        },
+                        {
+                          "Lit": "+x"
+                        },
+                        {
+                          "Lit": "\"$BUILD/ccw/s390x-linux-gnu-gcc\""
+                        },
+                        {
+                          "Lit": "\"$BUILD/ccw/s390x-linux-gnu-g++\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              },
+              {
+                "Set": {
+                  "name": "RUST_TARGETS",
+                  "value": {
+                    "Lit": "${RUST_TARGETS},\\\"s390x-unknown-linux-gnu\\\""
+                  }
+                }
+              },
+              {
+                "WriteFile": {
+                  "append": true,
+                  "expand": true,
+                  "lines": [
+                    {
+                      "Lit": ""
+                    },
+                    {
+                      "Lit": "[target.s390x-unknown-linux-gnu]"
+                    },
+                    {
+                      "Lit": "cc = \"$BUILD/ccw/s390x-linux-gnu-gcc\""
+                    },
+                    {
+                      "Lit": "cxx = \"$BUILD/ccw/s390x-linux-gnu-g++\""
+                    },
+                    {
+                      "Lit": "ar = \"/dep/s390x-linux-gnu-binutils/usr/bin/s390x-linux-gnu-ar\""
+                    },
+                    {
+                      "Lit": "ranlib = \"/dep/s390x-linux-gnu-binutils/usr/bin/s390x-linux-gnu-ranlib\""
+                    },
+                    {
+                      "Lit": "linker = \"$BUILD/ccw/s390x-linux-gnu-gcc\""
+                    }
+                  ],
+                  "path": {
+                    "Lit": "$BUILD/targets.conf"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "WriteFile": {
+            "append": false,
+            "expand": true,
+            "lines": [
+              {
+                "Lit": ""
+              },
+              {
+                "Lit": "[build]"
+              },
+              {
+                "Lit": "build = \"x86_64-unknown-linux-gnu\""
+              },
+              {
+                "Lit": "host = [\"x86_64-unknown-linux-gnu\"]"
+              },
+              {
+                "Lit": "target = [${RUST_TARGETS}]"
+              },
+              {
+                "Lit": "rustc = \"${RUSTC}\""
+              },
+              {
+                "Lit": "cargo = \"${STAGE0_CARGO}\""
+              },
+              {
+                "Lit": "vendor = true"
+              },
+              {
+                "Lit": "cargo-native-static = true"
+              },
+              {
+                "Lit": "docs = false"
+              },
+              {
+                "Lit": "submodules = false"
+              },
+              {
+                "Lit": "extended = true"
+              },
+              {
+                "Lit": "tools = [\"cargo\"]"
+              },
+              {
+                "Lit": ""
+              },
+              {
+                "Lit": "[install]"
+              },
+              {
+                "Lit": "prefix = \"/usr\""
+              },
+              {
+                "Lit": "sysconfdir = \"etc\""
+              },
+              {
+                "Lit": ""
+              },
+              {
+                "Lit": "[llvm]"
+              },
+              {
+                "Lit": "ninja = true"
+              },
+              {
+                "Lit": "targets = \"X86;AArch64;RISCV;PowerPC;SystemZ\""
+              },
+              {
+                "Lit": "download-ci-llvm = false"
+              }
+            ],
+            "path": {
+              "Lit": "$BUILD/config.toml"
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "cat"
+                  },
+                  {
+                    "Lit": "\"$BUILD/targets.conf\""
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": {
+                "append": true,
+                "target": {
+                  "Lit": "\"$BUILD/config.toml\""
+                }
+              }
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "python3"
+                  },
+                  {
+                    "Lit": "x.py"
+                  },
+                  {
+                    "Lit": "build"
+                  },
+                  {
+                    "Lit": "--stage"
+                  },
+                  {
+                    "Lit": "2"
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "-j"
+                      },
+                      {
+                        "Subst": {
+                          "stages": [
+                            [
+                              {
+                                "Lit": "nproc"
+                              }
+                            ]
+                          ],
+                          "stderr": null,
+                          "stdin": null,
+                          "stdout": null
+                        }
+                      }
+                    ]
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "Exec": {
+            "env": [
+              [
+                "DESTDIR",
+                {
+                  "Quoted": {
+                    "Var": "OUT"
+                  }
+                }
+              ]
+            ],
+            "pipe": {
+              "stages": [
+                [
+                  {
+                    "Lit": "python3"
+                  },
+                  {
+                    "Lit": "x.py"
+                  },
+                  {
+                    "Lit": "install"
+                  },
+                  {
+                    "Concat": [
+                      {
+                        "Lit": "-j"
+                      },
+                      {
+                        "Subst": {
+                          "stages": [
+                            [
+                              {
+                                "Lit": "nproc"
+                              }
+                            ]
+                          ],
+                          "stderr": null,
+                          "stdin": null,
+                          "stdout": null
+                        }
+                      }
+                    ]
+                  }
+                ]
+              ],
+              "stderr": null,
+              "stdin": null,
+              "stdout": null
+            }
+          }
+        },
+        {
+          "If": {
+            "cond": {
+              "DirExists": {
+                "Lit": "/dep/x86_64-linux-gnu-gcc/usr/lib64"
+              }
+            },
+            "else_": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "cp"
+                        },
+                        {
+                          "Lit": "-a"
+                        },
+                        {
+                          "Lit": "/usr/lib/libstdc++.so.6*"
+                        },
+                        {
+                          "Lit": "/usr/lib/libgcc_s.so.1*"
+                        },
+                        {
+                          "Lit": "\"$OUT/usr/lib/\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              }
+            ],
+            "then": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "cp"
+                        },
+                        {
+                          "Lit": "-a"
+                        },
+                        {
+                          "Lit": "/dep/x86_64-linux-gnu-gcc/usr/lib64/libstdc++.so.6*"
+                        },
+                        {
+                          "Lit": "/dep/x86_64-linux-gnu-gcc/usr/lib64/libgcc_s.so.1*"
+                        },
+                        {
+                          "Lit": "\"$OUT/usr/lib/\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "If": {
+            "cond": {
+              "DirExists": {
+                "Lit": "/dep/zlib/usr/lib64"
+              }
+            },
+            "else_": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "cp"
+                        },
+                        {
+                          "Lit": "-a"
+                        },
+                        {
+                          "Lit": "/usr/lib/libz.so.1*"
+                        },
+                        {
+                          "Lit": "\"$OUT/usr/lib/\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              }
+            ],
+            "then": [
+              {
+                "Exec": {
+                  "env": [],
+                  "pipe": {
+                    "stages": [
+                      [
+                        {
+                          "Lit": "cp"
+                        },
+                        {
+                          "Lit": "-a"
+                        },
+                        {
+                          "Lit": "/dep/zlib/usr/lib64/libz.so.1*"
+                        },
+                        {
+                          "Lit": "\"$OUT/usr/lib/\""
+                        }
+                      ]
+                    ],
+                    "stderr": null,
+                    "stdin": null,
+                    "stdout": null
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "sysroot": false,
+      "workdir": "InSource"
+    }
+  }
+}

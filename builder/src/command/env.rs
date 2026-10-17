@@ -101,6 +101,10 @@ fn plan(name: Option<&str>) -> Result<()> {
 }
 
 fn compose(compression: &Compression) -> Result<()> {
+    let active = workspace::active_lock()?;
+    let _active = active
+        .read()
+        .map_err(|source| crate::error::Error::io(workspace::active_lock_path(), source))?;
     let level = super::resolve_zstd_level(compression)?;
     let defined = package::find(workspace::BUILD_ENV_NAME)?;
     let (output, tag) = crate::image::compose(defined, Target::BUILD_ENV, level)?;

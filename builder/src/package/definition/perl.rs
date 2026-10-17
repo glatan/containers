@@ -123,7 +123,7 @@ impl Package for Perl {
         "perl"
     }
     fn version(&self) -> &'static str {
-        "5.42.3"
+        "5.44.0"
     }
     fn license(&self) -> &'static str {
         "Artistic-1.0-Perl OR GPL-1.0-or-later"
@@ -138,17 +138,17 @@ impl Package for Perl {
     fn host_dependencies(&self, target: Target) -> Vec<crate::package::Dependency> {
         let mut deps = crate::package::cc_deps(self, target);
         if !matches!(target, crate::target::Target::Amd64(_)) {
-            deps.push(crate::package::dep("perl", "5.42.3").via(crate::package::Via::Artifact));
+            deps.push(crate::package::dep("perl", "5.44.0").via(crate::package::Via::Artifact));
         }
         deps
     }
 
     fn source(&self) -> Source {
         Source {
-            url: "https://www.cpan.org/src/5.0/perl-5.42.3.tar.xz",
-            sha3_512: "c827af1973438b9173756f5c0b44e668d0443b2bba01b1edf748947c99a5660ecdf5119e0aeada306e47c848bdc2debe7226f45c38d7158b3cf280b1804021a8",
-            blake3: "986547a8f7de7ad55e2d9877ec29461601b12e4642cf5806194f07b805fea547570e9bcbb2f52df883220190c1a891d1eba37a6f2d82f595b833e4223da68b88",
-            subdir: "perl-5.42.3",
+            url: "https://www.cpan.org/src/5.0/perl-5.44.0.tar.xz",
+            sha3_512: "0a5b1ffa2b8ba86065e9206db8a60c42ee8e7e7b5c27cc610e2fe4d8c3675fd7f6f40444bca99a2a5eb9c3c2c61365f1caa1aa2c7702b8c46d9d007a1678e9c9",
+            blake3: "2b1be108d901a7b5832e17292631b975f98d04d7c615dcde9d7f61c32c79063c3456d1eb921ea62c472be9e6748ed1ec2cc718caeb8a24844acb44d5c6cb4847",
+            subdir: "perl-5.44.0",
         }
     }
     fn dependencies(&self, target: crate::target::Target) -> Vec<crate::package::Dependency> {
@@ -759,7 +759,7 @@ impl Package for Perl {
                 Step::Set {
                     name: "_host_cfg",
                     value: Arg::lit(
-                        "/dep/perl/usr/lib/perl5/5.42.3/x86_64-linux-thread-multi/CORE/config.h",
+                        "/dep/perl/usr/lib/perl5/5.44.0/x86_64-linux-thread-multi/CORE/config.h",
                     ),
                 },
                 Step::If {

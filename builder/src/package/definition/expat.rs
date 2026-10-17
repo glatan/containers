@@ -8,17 +8,17 @@ impl Package for Expat {
         "expat"
     }
     fn version(&self) -> &'static str {
-        "2.8.4"
+        "2.9.0"
     }
     fn license(&self) -> &'static str {
         "MIT"
     }
     fn source(&self) -> Source {
         Source {
-            url: "https://github.com/libexpat/libexpat/releases/download/R_2_8_4/expat-2.8.4.tar.xz",
-            sha3_512: "056d6b25263d95d7375e2fc14f22f161722558c7e695ca3fccc73eb2842bf921e2791fcc1104fd52b0e057dd3be00795af698af5c70a9d8a257b5d6123ac75cc",
-            blake3: "1311a1adc8da8ffd10ca65db96be3abe9e7e9d83561d899bd0dbdab17ab599dbddde8e8e3a1a6b9a3223c184a3bf1e71d767750418b304be8b22e8e209348f54",
-            subdir: "expat-2.8.4",
+            url: "https://github.com/libexpat/libexpat/releases/download/R_2_9_0/expat-2.9.0.tar.xz",
+            sha3_512: "93d3c389be1941a7a0fc6395c2e88d3d4a41a304291e2899c07826f02f28a2ace121c9ac8ea067c5d8d7eaa51b2bc03feec887a5ab504d8db5f782844d26845d",
+            blake3: "2b7fee29ba5d7168dbe56fb0a12359cac3729aa2ad0b56ea97f93a45894e868bb05cafc01ec8ec4c269b1aad538ebc8b9d50ec06e9ee9187993888bc5fa2825a",
+            subdir: "expat-2.9.0",
         }
     }
     fn dependencies(&self, target: crate::target::Target) -> Vec<crate::package::Dependency> {

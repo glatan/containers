@@ -11,11 +11,15 @@ pub fn sha256_hex(data: &[u8]) -> String {
     format!("{:x}", Sha256::digest(data))
 }
 
-pub fn sha256_file(path: &Path) -> Result<String> {
-    let mut file = File::open(path).map_err(|source| Error::io(path, source))?;
-    let mut hasher = Sha256::new();
-    io::copy(&mut file, &mut hasher).map_err(|source| Error::io(path, source))?;
-    Ok(format!("{:x}", hasher.finalize()))
+/// JoinHandle の panic payload から人間可読なメッセージを取り出す。
+pub fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
+    if let Some(message) = payload.downcast_ref::<&'static str>() {
+        (*message).to_string()
+    } else if let Some(message) = payload.downcast_ref::<String>() {
+        message.clone()
+    } else {
+        "不明".to_string()
+    }
 }
 
 struct SourceHashers {
@@ -68,6 +72,48 @@ pub fn timestamp() -> String {
     utc_now().strftime("%Y-%m-%dT%H:%M:%SZ").to_string()
 }
 
+/// `SOURCE_DATE_EPOCH`（reproducible-builds の規約）を RFC 3339 に変換する。
+/// 未設定・不正値のときは epoch 0 を返す。OCI イメージの `created` を
+/// 決定的にして pack の digest を再現可能にするための値。
+pub fn source_date_epoch() -> String {
+    let epoch = std::env::var("SOURCE_DATE_EPOCH")
+        .ok()
+        .and_then(|value| value.trim().parse::<i64>().ok())
+        .unwrap_or(0);
+    jiff::Timestamp::from_second(epoch)
+        .map(|ts| {
+            ts.to_zoned(jiff::tz::TimeZone::UTC)
+                .strftime("%Y-%m-%dT%H:%M:%SZ")
+                .to_string()
+        })
+        .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_string())
+}
+
+/// パッケージング時点の HEAD コミット SHA。
+/// `org.opencontainers.image.revision` 用。git が使えない環境では
+/// None を返し、アノテーション自体を省略する。
+pub fn revision() -> Option<String> {
+    static REVISION: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    REVISION
+        .get_or_init(|| {
+            // 呼出元の CWD に依存しないようリポジトリルートを明示する。
+            std::process::Command::new("git")
+                .args([
+                    "-C",
+                    concat!(env!("CARGO_MANIFEST_DIR"), "/.."),
+                    "rev-parse",
+                    "HEAD",
+                ])
+                .output()
+                .ok()
+                .filter(|output| output.status.success())
+                .and_then(|output| String::from_utf8(output.stdout).ok())
+                .map(|stdout| stdout.trim().to_string())
+                .filter(|stdout| !stdout.is_empty())
+        })
+        .clone()
+}
+
 pub fn utc_date() -> String {
     utc_now().strftime("%Y%m%d").to_string()
 }
@@ -86,6 +132,18 @@ pub fn write(path: &Path, contents: impl AsRef<[u8]>) -> Result<()> {
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn revision_is_commit_sha_or_absent() {
+        if let Some(revision) = revision() {
+            assert_eq!(revision.len(), 40);
+            assert!(
+                revision
+                    .bytes()
+                    .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+            );
+        }
+    }
 
     #[test]
     fn source_checksums_are_512_bit_hex() {
