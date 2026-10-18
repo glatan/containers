@@ -4,9 +4,9 @@ use containers_builder::oci;
 use containers_builder::target::Target;
 use serde_json::Value;
 
-use super::documented_platforms;
 use super::sample;
 use super::support::{amd64, assert_descriptor, blob, build, index, manifests, nested_index};
+use super::{documented_platforms, platform_statuses};
 
 #[test]
 fn index_is_image_index() {
@@ -100,6 +100,28 @@ fn documented_platforms_match_targets() {
         documented, targets,
         "docs/user/targets.md と Target::all() が一致しません"
     );
+    let md = include_str!("../../../docs/user/targets.md");
+    assert!(
+        md.contains("すべてのパッケージで公開されている"),
+        "公開範囲の限定が targets.md にありません"
+    );
+    let statuses = platform_statuses();
+    assert_eq!(
+        statuses
+            .iter()
+            .map(|(architecture, variant, _)| (architecture.clone(), variant.clone()))
+            .collect::<Vec<_>>(),
+        targets,
+        "docs/dev/oci.md の status 表と Target::all() が一致しません"
+    );
+    for (architecture, _, status) in statuses {
+        let expected = if architecture == "s390x" {
+            "defined"
+        } else {
+            "listed"
+        };
+        assert_eq!(status, expected, "{architecture}");
+    }
 }
 
 #[test]

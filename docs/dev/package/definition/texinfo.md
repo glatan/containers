@@ -130,7 +130,7 @@ for _libdir in "$PWD"/lib "$PWD"/programs $(find "$PWD" -type d -name .libs 2>/d
 done
 (
   _texi2any="$BUILD/tp/texi2any"
-  if ! test -x "$_texi2any" >/dev/null; then
+  if ! test -x "$_texi2any"; then
     _texi2any=$(find "$BUILD" -name texi2any -type f -print -quit)
   fi
   for _texi in "$SOURCE"/doc/*.texi; do

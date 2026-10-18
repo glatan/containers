@@ -44,7 +44,7 @@ else
 fi
 export PERL_USE_UNSAFE_INC=1
 export PERL5LIB="${PWD}/lib${PERL5LIB:+:$PERL5LIB}"
-if [ -x /tmp/perl-host/miniperl ] >/dev/null; then
+if [ -x /tmp/perl-host/miniperl ]; then
   ln -sfn /tmp/perl-host/miniperl /tmp/perl-host/perl
   export PATH="/tmp/perl-host:${PATH}"
 fi

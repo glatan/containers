@@ -73,7 +73,7 @@ builder が生成するパッケージイメージおよび Image Layout は、�
 
 | ID | 方針 | 対応テスト |
 |-|-|-|
-| `policy-targets` | 対象プラットフォームの一覧が設計文書と `Target::all()` で完全に一致すること | `documented_platforms_match_targets` |
+| `policy-targets` | 対象プラットフォームの一覧（[targets.md](../user/targets.md)）が [`builder/src/target.rs`](../../builder/src/target.rs) の `Target::all()` と一致すること | `documented_platforms_match_targets` |
 | `policy-rebuild` | 再ビルド時に不要となった未参照 blob を残存させないこと（仕様の MAY よりも厳格に削除） | `rebuild_replaces_stale_blobs` |
 | `policy-escape` | JSON 内の特殊文字を適切にエスケープすること | `json_special_characters_are_escaped` |
 | `policy-reproducible` | 同一の入力ファイルかつ同一の圧縮レベルであれば、生成される layer digest と DiffID が完全に一致すること | `same_input_same_layer_digest` |
@@ -136,5 +136,49 @@ zstd の圧縮レベル設定は仕様外の実装方針です。ビルドの再
 
 `platform.variant` は OPTIONAL な文字列フィールドです。仕様書の [Platform Variants](https://github.com/opencontainers/image-spec/blob/v1.1.1/image-index.md#platform-variants) 表に記載されていない値であっても、仕様上は implementation-defined（実装定義）として扱われ、Image Index や Image Config として不正ではありません。
 
-本プロジェクトが対応するプラットフォームの一覧、および仕様表に記載されている組み合わせと実装定義の組み合わせの区別については [targets.md](../user/targets.md) を参照してください。
+対応プラットフォーム（architecture および variant）の一覧は [targets.md](../user/targets.md) に記載しています。この一覧は [`builder/src/target.rs`](../../builder/src/target.rs) の `Target::all()` と一致させ、不一致はテスト `documented_platforms_match_targets` によって検出します。
+
+下表の status は OCI 仕様に対する分類を示します。仕様書の表に明記されている組み合わせ（`…` で省略表記された系列を含む）を `listed` とし、仕様書の表には記載がないものの実装定義として許容される組み合わせを `defined` とします。
+
+| architecture | variant | status |
+|-|-|-|
+| arm64 | v8 | listed |
+| arm64 | v8.1 | listed |
+| arm64 | v8.2 | listed |
+| arm64 | v8.3 | listed |
+| arm64 | v8.4 | listed |
+| arm64 | v8.5 | listed |
+| arm64 | v8.6 | listed |
+| arm64 | v8.7 | listed |
+| arm64 | v8.8 | listed |
+| arm64 | v8.9 | listed |
+| arm64 | v9 | listed |
+| arm64 | v9.1 | listed |
+| arm64 | v9.2 | listed |
+| arm64 | v9.3 | listed |
+| arm64 | v9.4 | listed |
+| arm64 | v9.5 | listed |
+| ppc64le | power8 | listed |
+| ppc64le | power9 | listed |
+| ppc64le | power10 | listed |
+| ppc64le | power11 | listed |
+| riscv64 | rva20u64 | listed |
+| riscv64 | rva22u64 | listed |
+| riscv64 | rva23u64 | listed |
+| amd64 | v1 | listed |
+| amd64 | v2 | listed |
+| amd64 | v3 | listed |
+| amd64 | v4 | listed |
+| s390x | z900 | defined |
+| s390x | z990 | defined |
+| s390x | z9-ec | defined |
+| s390x | z10 | defined |
+| s390x | z196 | defined |
+| s390x | zEC12 | defined |
+| s390x | z13 | defined |
+| s390x | z14 | defined |
+| s390x | z15 | defined |
+| s390x | z16 | defined |
+| s390x | z17 | defined |
+
 一部のコンテナランタイムは、一般的に使われる組み合わせ以外のプラットフォームを自動選択できない場合があります。そのため、利用者側でイメージを指定する際は、予期しないプラットフォームの選択を防ぐために platform 別 manifest のダイジェストで固定します（Image Index のダイジェストでは、manifest の選択がランタイム側の platform マッチング処理に依存するためです）。

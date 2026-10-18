@@ -458,6 +458,34 @@ mod tests {
     }
 
     #[test]
+    fn mold_arm64_compose_does_not_layer_host_gcc() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _guard = workspace::set_artifact_root(tmp.path());
+        let mold = package::find("mold").unwrap();
+        let arm = Target::Arm64(crate::target::Arm64Variant::V8);
+        // gcc の実行時依存（gmp 等）が欠けると、エラーの先頭が gcc 自身にならない。
+        // gcc だけは BUILD_ENV 側を ready にし、arm64 側は作らない。
+        let packages = compose_packages(mold, arm).unwrap();
+        for defined in &packages {
+            let target = if defined.name() == "aarch64-linux-gnu-gcc" {
+                Target::BUILD_ENV
+            } else {
+                arm
+            };
+            let dir = defined.artifact_dir(target);
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(dir.join("marker"), "x").unwrap();
+        }
+        let error = compose(mold, arm, 3).unwrap_err().to_string();
+        assert!(error.contains("パッケージがありません"), "{error}");
+        assert!(
+            error.contains("aarch64-linux-gnu-gcc-16.2.0-arm64-v8"),
+            "{error}"
+        );
+        assert!(!error.contains("amd64-v4"), "{error}");
+    }
+
+    #[test]
     fn usrmerge_bin_does_not_conflict_with_usr_bin() {
         let tmp = tempfile::tempdir().unwrap();
         let pkg = tmp.path().join("pkg");

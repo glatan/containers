@@ -489,8 +489,7 @@ pub enum Cond {
     NonEmpty(Arg),
     /// `[ -n "$NAME" ]`
     EnvSet(&'static str),
-    /// `{pipe} >/dev/null` の成功（コマンド存在・実行検査）。
-    /// `pipe.stdout` を明示した場合はそちらへ流す（pacman 等）。
+    /// `{pipe}` の成功。stdout は継承し、`pipe.stdout` を明示したときだけそちらへ流す。
     Cmd(Pipe),
     /// `{a} && {b} && …` の全条件。
     And(Vec<Cond>),
@@ -507,10 +506,7 @@ impl Cond {
             Self::Executable(path) => format!("[ -x {} ]", path.render()),
             Self::NonEmpty(value) => format!("[ -n {} ]", value.render()),
             Self::EnvSet(name) => format!("[ -n \"${{{name}:-}}\" ]"),
-            Self::Cmd(pipe) => match &pipe.stdout {
-                Some(_) => pipe.render(),
-                None => format!("{} >/dev/null", pipe.render()),
-            },
+            Self::Cmd(pipe) => pipe.render(),
             Self::And(conds) => conds
                 .iter()
                 .map(Cond::render)

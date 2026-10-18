@@ -7,14 +7,42 @@ pub fn source_dir(name: &str) -> PathBuf {
     PathBuf::from("packages/sources").join(name)
 }
 
+#[cfg(test)]
+thread_local! {
+    static ARTIFACT_ROOT: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+/// テストがワークスペースの `packages/artifacts` を参照しないための差し替え。
+/// ガードがドロップされると元の設定に戻る。
+#[cfg(test)]
+pub struct ArtifactRootGuard;
+
+#[cfg(test)]
+impl Drop for ArtifactRootGuard {
+    fn drop(&mut self) {
+        ARTIFACT_ROOT.with(|slot| *slot.borrow_mut() = None);
+    }
+}
+
+#[cfg(test)]
+pub fn set_artifact_root(root: &Path) -> ArtifactRootGuard {
+    ARTIFACT_ROOT.with(|slot| *slot.borrow_mut() = Some(root.to_path_buf()));
+    ArtifactRootGuard
+}
+
 pub fn artifact_dir(name: &str, version: &str, target: Target) -> PathBuf {
-    PathBuf::from("packages/artifacts").join(format!(
+    let rel = format!(
         "{}-{}-{}-{}",
         name,
         version,
         target.architecture(),
         target.variant()
-    ))
+    );
+    #[cfg(test)]
+    if let Some(root) = ARTIFACT_ROOT.with(|slot| slot.borrow().clone()) {
+        return root.join(rel);
+    }
+    PathBuf::from("packages/artifacts").join(rel)
 }
 
 pub fn log_dir() -> PathBuf {

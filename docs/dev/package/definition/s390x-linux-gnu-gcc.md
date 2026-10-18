@@ -273,7 +273,7 @@ if [ -d /dep/${TRIPLE}-glibc/usr/${TRIPLE} ]; then
   cp -a /dep/${TRIPLE}-glibc/usr/${TRIPLE}/. ${SYSROOT}/
 fi
 for _so in $(find ${SYSROOT} -type f -name "*.so"); do
-  if grep -q "GNU ld script" ${_so} >/dev/null; then
+  if grep -q "GNU ld script" ${_so}; then
     sed -i "s|//lib/|/lib/|g; s|//lib64/|/lib64/|g" ${_so}
   fi
 done
@@ -362,7 +362,7 @@ if [ -d /dep/${TRIPLE}-glibc/usr/${TRIPLE} ]; then
   cp -a /dep/${TRIPLE}-glibc/usr/${TRIPLE}/. ${SYSROOT}/
 fi
 for _so in $(find ${SYSROOT} -type f -name "*.so"); do
-  if grep -q "GNU ld script" ${_so} >/dev/null; then
+  if grep -q "GNU ld script" ${_so}; then
     sed -i "s|//lib/|/lib/|g; s|//lib64/|/lib64/|g" ${_so}
   fi
 done
@@ -410,7 +410,7 @@ _real_cxx=$(command -v ${PACKAGE_HOST}-g++)
 _cflags=${CFLAGS:-}
 _cxxflags=${CXXFLAGS:-}
 _ldflags=${LDFLAGS:-}
-if [ "${PACKAGE_HOST}" = "${TRIPLE}" ] >/dev/null; then
+if [ "${PACKAGE_HOST}" = "${TRIPLE}" ]; then
   _cflags=$(printf %s "${_cflags}" | sed "s|/dep/${PACKAGE_HOST}-glibc/usr/${PACKAGE_HOST}|${SYSROOT}|g")
   _cxxflags=$(printf %s "${_cxxflags}" | sed "s|/dep/${PACKAGE_HOST}-glibc/usr/${PACKAGE_HOST}|${SYSROOT}|g")
   _ldflags=$(printf %s "${_ldflags}" | sed "s|/dep/${PACKAGE_HOST}-glibc/usr/${PACKAGE_HOST}|${SYSROOT}|g")
@@ -487,7 +487,7 @@ if [ -d /dep/${TRIPLE}-glibc/usr/${TRIPLE} ]; then
   cp -a /dep/${TRIPLE}-glibc/usr/${TRIPLE}/. ${SYSROOT}/
 fi
 for _so in $(find ${SYSROOT} -type f -name "*.so"); do
-  if grep -q "GNU ld script" ${_so} >/dev/null; then
+  if grep -q "GNU ld script" ${_so}; then
     sed -i "s|//lib/|/lib/|g; s|//lib64/|/lib64/|g" ${_so}
   fi
 done
@@ -565,7 +565,7 @@ if [ -d /dep/${TRIPLE}-glibc/usr/${TRIPLE} ]; then
   cp -a /dep/${TRIPLE}-glibc/usr/${TRIPLE}/. ${SYSROOT}/
 fi
 for _so in $(find ${SYSROOT} -type f -name "*.so"); do
-  if grep -q "GNU ld script" ${_so} >/dev/null; then
+  if grep -q "GNU ld script" ${_so}; then
     sed -i "s|//lib/|/lib/|g; s|//lib64/|/lib64/|g" ${_so}
   fi
 done
@@ -613,7 +613,7 @@ _real_cxx=$(command -v ${PACKAGE_HOST}-g++)
 _cflags=${CFLAGS:-}
 _cxxflags=${CXXFLAGS:-}
 _ldflags=${LDFLAGS:-}
-if [ "${PACKAGE_HOST}" = "${TRIPLE}" ] >/dev/null; then
+if [ "${PACKAGE_HOST}" = "${TRIPLE}" ]; then
   _cflags=$(printf %s "${_cflags}" | sed "s|/dep/${PACKAGE_HOST}-glibc/usr/${PACKAGE_HOST}|${SYSROOT}|g")
   _cxxflags=$(printf %s "${_cxxflags}" | sed "s|/dep/${PACKAGE_HOST}-glibc/usr/${PACKAGE_HOST}|${SYSROOT}|g")
   _ldflags=$(printf %s "${_ldflags}" | sed "s|/dep/${PACKAGE_HOST}-glibc/usr/${PACKAGE_HOST}|${SYSROOT}|g")

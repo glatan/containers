@@ -319,6 +319,36 @@ fn exit_code(status: std::process::ExitStatus) -> i32 {
 /// `cp -a src/. dst/` 相当の再帰コピー（symlink 保存・perm/mtime 維持）。
 /// owner はコピーしない: コンテナ内では一様に root で実害が無く、
 /// libc::chown 依存を増やすだけになるため。
+/// symlink を辿らず mtime を設定する（`cp -a` の symlink 時刻）。
+fn set_mtime_nofollow(path: &Path, mtime: std::time::SystemTime) -> std::io::Result<()> {
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct Timespec {
+        tv_sec: i64,
+        tv_nsec: i64,
+    }
+    unsafe extern "C" {
+        fn utimensat(dirfd: i32, path: *const u8, times: *const Timespec, flags: i32) -> i32;
+    }
+    let dur = mtime
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(std::io::Error::other)?;
+    let ts = Timespec {
+        tv_sec: dur.as_secs() as i64,
+        tv_nsec: dur.subsec_nanos() as i64,
+    };
+    let times = [ts, ts];
+    let mut bytes = std::os::unix::ffi::OsStrExt::as_bytes(path.as_os_str()).to_vec();
+    bytes.push(0);
+    // AT_FDCWD = -100、AT_SYMLINK_NOFOLLOW = 0x100（Linux）。
+    let rc = unsafe { utimensat(-100, bytes.as_ptr(), times.as_ptr(), 0x100) };
+    if rc == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
 fn copy_tree(src: &Path, dst: &Path) -> std::io::Result<()> {
     fs::create_dir_all(dst)?;
     let src_meta = fs::metadata(src).ok();
@@ -335,6 +365,13 @@ fn copy_tree(src: &Path, dst: &Path) -> std::io::Result<()> {
             let target = fs::read_link(entry.path())?;
             let _ = fs::remove_file(&to);
             std::os::unix::fs::symlink(target, &to)?;
+            // `cp -a` は symlink 自体の mtime を保持する。File::set_modified
+            // はリンク先を辿るため、ここでは nofollow で設定する。
+            if let Ok(meta) = fs::symlink_metadata(entry.path())
+                && let Ok(mtime) = meta.modified()
+            {
+                let _ = set_mtime_nofollow(&to, mtime);
+            }
         } else if ty.is_dir() {
             copy_tree(&entry.path(), &to)?;
         } else {
