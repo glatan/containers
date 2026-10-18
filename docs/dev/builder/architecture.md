@@ -115,10 +115,10 @@ runner の意味論は bash 描画スクリプトと揃えています。
 
 - `$(cmd)`・`$(cmd || true)` は失敗時も部分 stdout を保持します（裸の代入 `X=$(f)` のみ errexit で中断）。
 - `ln -sf t dir/` は実在ディレクトリ配下にリンクします。
-- `cp -a` 相当のコピーは symlink・mode・mtime（ディレクトリ含む）を保持します。owner 保持だけは、コンテナ内で一様に root のため意図的に省略しています。
+- `cp -a` 相当のコピーは symlink のリンク先と mtime、mode、ディレクトリを含む mtime を保持します。owner 保持だけは、コンテナ内で一様に root のため意図的に省略しています。
 - glob は `*`・`?`・`[...]` クラスと dotfiles 規則に従います。
 - `cd` 後の `PWD` は正規化済みパスです。
-- `if cmd` の条件コマンド出力はログへ継承します。
+- `if cmd` の条件コマンド出力はログへ継承します。bash 描画も同じで、条件コマンドへ `>/dev/null` を足しません。
 
 ### パッケージの種別と追加
 
@@ -182,21 +182,8 @@ runner の意味論は bash 描画スクリプトと揃えています。
   スクリプト内の絶対パスへ sysroot を適用します。このため shadow
   sysroot の lib ディレクトリは `/dep` への symlink ではなく実コピーです。
 
-## マルチターゲット検証の状況
-
-2026-09-21 時点で次のカタログビルドが完了しています。
-
-- amd64 / v4（BUILD_ENV ベースライン）
-- amd64 / v1（x86-64 baseline への回帰。Canadian gcc を含む）
-- arm64 / v8（カタログ 40 件 + toolchain）
-- riscv64 / rva20u64（同規模）
-
-`check --all-packages` による動的依存検証は全件パスしています。ppc64le / s390x は
-bootstrap 全体の検証として別途整理するため本範囲外です。生成バイナリを
-実行できないクロスビルドでは PGO を適用しません。
-
 ## 現状の制約事項
 
 - 対象とする architecture / variant の一覧は [targets.md](../../user/targets.md) および `targets` コマンドを参照してください。シード環境ではクロス gcc が提供されていないため、`--all-targets` 指定時は ppc64le および s390x をスキップします。合成済み `build-env` が利用可能な状態ではスキップせずにビルドを実行します。
 - `pack --with-build` は `Target::all()` 上でパッケージビルドを連鎖的に実行し、定義の存在しないターゲットはビルドをスキップして警告を出力します。`compose --with-build` は `-t` で指定したターゲットのみを対象とし、非対応の場合はスキップではなくエラーになります。
-- `compose` の `-t` は任意ターゲットを受理しますが、実行時依存の `{triple}-gcc` 成果物は `artifact_target` により常に BUILD_ENV（amd64 / v4）へ配置される一方、`compose_layer_dirs` はこの正規化を適用しません。そのため C++ ランタイム依存を持つパッケージは BUILD_ENV 以外では構造的に合成できません（既知の制約）。
+- `compose` の `-t` は任意ターゲットを受理しますが、実行時依存の `{triple}-gcc` 成果物は `artifact_target` により常に BUILD_ENV（amd64 / v4）へ配置される一方、`compose_layer_dirs` はこの正規化を適用しません。そのため C++ ランタイム依存を持つパッケージは BUILD_ENV 以外では構造的に合成できません（既知の制約）。`artifact_target` が返す BUILD_ENV の gcc ツリーは `--host=$HOST_TRIPLE` のコンパイラとターゲット向け libstdc++ が同一インストール先にあり、ディレクトリごと層にするとホストバイナリが入る。

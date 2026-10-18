@@ -1864,7 +1864,7 @@ pub(crate) fn build_plan(
         if mold_steps.is_empty() {
             // gate 対象が無い場合は pacman だけ実行する。空 then の
             // `if ...; then fi` は bash の構文エラーになるため If は使わない
-            // （Cond::Cmd の `>/dev/null` と同じく stdout は捨てる）。
+            // （stdout は `/dev/null` へ明示する）。
             steps.push(Step::Exec {
                 env: vec![],
                 pipe: Pipe::cmd(pacman_argv).stdout(Arg::lit("/dev/null")),

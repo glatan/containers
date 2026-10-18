@@ -1,0 +1,17 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+      - name: cargo test
+        working-directory: builder
+        run: cargo test
+      - name: docs --check
+        run: cargo run --manifest-path builder/Cargo.toml -- docs --check

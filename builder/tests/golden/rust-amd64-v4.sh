@@ -7,7 +7,7 @@ sed -i "/if constexpr (std::is_pointer_v/,/static_assert(ConstFn != nullptr)/d" 
 RUSTC=$(command -v rustc)
 STAGE0_CARGO=$(command -v cargo)
 RUST_TARGETS=\"x86_64-unknown-linux-gnu\"
-if [ -d /dep/x86_64-linux-gnu-glibc/usr/x86_64-linux-gnu/lib ] && [ -d /dep/x86_64-linux-gnu-binutils/usr/bin ] && command -v x86_64-linux-gnu-gcc >/dev/null; then
+if [ -d /dep/x86_64-linux-gnu-glibc/usr/x86_64-linux-gnu/lib ] && [ -d /dep/x86_64-linux-gnu-binutils/usr/bin ] && command -v x86_64-linux-gnu-gcc; then
   mkdir -p "/tmp/sysroot-x86_64-linux-gnu/usr" "$BUILD/ccw"
   ln -sfn "/dep/x86_64-linux-gnu-glibc/usr/x86_64-linux-gnu/include" /tmp/sysroot-x86_64-linux-gnu/include
   ln -sfn "/dep/x86_64-linux-gnu-glibc/usr/x86_64-linux-gnu/include" /tmp/sysroot-x86_64-linux-gnu/usr/include
@@ -49,7 +49,7 @@ ranlib = "/usr/bin/ranlib"
 linker = "gcc"
 EOF
 fi
-if [ -d /dep/aarch64-linux-gnu-glibc/usr/aarch64-linux-gnu/lib ] && [ -d /dep/aarch64-linux-gnu-binutils/usr/bin ] && command -v aarch64-linux-gnu-gcc >/dev/null; then
+if [ -d /dep/aarch64-linux-gnu-glibc/usr/aarch64-linux-gnu/lib ] && [ -d /dep/aarch64-linux-gnu-binutils/usr/bin ] && command -v aarch64-linux-gnu-gcc; then
   mkdir -p "/tmp/sysroot-aarch64-linux-gnu/usr" "$BUILD/ccw"
   ln -sfn "/dep/aarch64-linux-gnu-glibc/usr/aarch64-linux-gnu/include" /tmp/sysroot-aarch64-linux-gnu/include
   ln -sfn "/dep/aarch64-linux-gnu-glibc/usr/aarch64-linux-gnu/include" /tmp/sysroot-aarch64-linux-gnu/usr/include
@@ -79,7 +79,7 @@ ranlib = "/dep/aarch64-linux-gnu-binutils/usr/bin/aarch64-linux-gnu-ranlib"
 linker = "$BUILD/ccw/aarch64-linux-gnu-gcc"
 EOF
 else
-  if command -v aarch64-linux-gnu-gcc >/dev/null; then
+  if command -v aarch64-linux-gnu-gcc; then
     RUST_TARGETS=${RUST_TARGETS},\"aarch64-unknown-linux-gnu\"
     cat >> $BUILD/targets.conf <<'EOF'
 
@@ -92,7 +92,7 @@ linker = "aarch64-linux-gnu-gcc"
 EOF
   fi
 fi
-if [ -d /dep/riscv64-linux-gnu-glibc/usr/riscv64-linux-gnu/lib ] && [ -d /dep/riscv64-linux-gnu-binutils/usr/bin ] && command -v riscv64-linux-gnu-gcc >/dev/null; then
+if [ -d /dep/riscv64-linux-gnu-glibc/usr/riscv64-linux-gnu/lib ] && [ -d /dep/riscv64-linux-gnu-binutils/usr/bin ] && command -v riscv64-linux-gnu-gcc; then
   mkdir -p "/tmp/sysroot-riscv64-linux-gnu/usr" "$BUILD/ccw"
   ln -sfn "/dep/riscv64-linux-gnu-glibc/usr/riscv64-linux-gnu/include" /tmp/sysroot-riscv64-linux-gnu/include
   ln -sfn "/dep/riscv64-linux-gnu-glibc/usr/riscv64-linux-gnu/include" /tmp/sysroot-riscv64-linux-gnu/usr/include
@@ -122,7 +122,7 @@ ranlib = "/dep/riscv64-linux-gnu-binutils/usr/bin/riscv64-linux-gnu-ranlib"
 linker = "$BUILD/ccw/riscv64-linux-gnu-gcc"
 EOF
 else
-  if command -v riscv64-linux-gnu-gcc >/dev/null; then
+  if command -v riscv64-linux-gnu-gcc; then
     RUST_TARGETS=${RUST_TARGETS},\"riscv64gc-unknown-linux-gnu\"
     cat >> $BUILD/targets.conf <<'EOF'
 
@@ -135,7 +135,7 @@ linker = "riscv64-linux-gnu-gcc"
 EOF
   fi
 fi
-if [ -d /dep/powerpc64le-linux-gnu-glibc/usr/powerpc64le-linux-gnu/lib ] && [ -d /dep/powerpc64le-linux-gnu-binutils/usr/bin ] && command -v powerpc64le-linux-gnu-gcc >/dev/null; then
+if [ -d /dep/powerpc64le-linux-gnu-glibc/usr/powerpc64le-linux-gnu/lib ] && [ -d /dep/powerpc64le-linux-gnu-binutils/usr/bin ] && command -v powerpc64le-linux-gnu-gcc; then
   mkdir -p "/tmp/sysroot-powerpc64le-linux-gnu/usr" "$BUILD/ccw"
   ln -sfn "/dep/powerpc64le-linux-gnu-glibc/usr/powerpc64le-linux-gnu/include" /tmp/sysroot-powerpc64le-linux-gnu/include
   ln -sfn "/dep/powerpc64le-linux-gnu-glibc/usr/powerpc64le-linux-gnu/include" /tmp/sysroot-powerpc64le-linux-gnu/usr/include
@@ -165,7 +165,7 @@ ranlib = "/dep/powerpc64le-linux-gnu-binutils/usr/bin/powerpc64le-linux-gnu-ranl
 linker = "$BUILD/ccw/powerpc64le-linux-gnu-gcc"
 EOF
 else
-  if command -v powerpc64le-linux-gnu-gcc >/dev/null; then
+  if command -v powerpc64le-linux-gnu-gcc; then
     RUST_TARGETS=${RUST_TARGETS},\"powerpc64le-unknown-linux-gnu\"
     cat >> $BUILD/targets.conf <<'EOF'
 
@@ -178,7 +178,7 @@ linker = "powerpc64le-linux-gnu-gcc"
 EOF
   fi
 fi
-if [ -d /dep/s390x-linux-gnu-glibc/usr/s390x-linux-gnu/lib ] && [ -d /dep/s390x-linux-gnu-binutils/usr/bin ] && command -v s390x-linux-gnu-gcc >/dev/null; then
+if [ -d /dep/s390x-linux-gnu-glibc/usr/s390x-linux-gnu/lib ] && [ -d /dep/s390x-linux-gnu-binutils/usr/bin ] && command -v s390x-linux-gnu-gcc; then
   mkdir -p "/tmp/sysroot-s390x-linux-gnu/usr" "$BUILD/ccw"
   ln -sfn "/dep/s390x-linux-gnu-glibc/usr/s390x-linux-gnu/include" /tmp/sysroot-s390x-linux-gnu/include
   ln -sfn "/dep/s390x-linux-gnu-glibc/usr/s390x-linux-gnu/include" /tmp/sysroot-s390x-linux-gnu/usr/include
@@ -208,7 +208,7 @@ ranlib = "/dep/s390x-linux-gnu-binutils/usr/bin/s390x-linux-gnu-ranlib"
 linker = "$BUILD/ccw/s390x-linux-gnu-gcc"
 EOF
 else
-  if command -v s390x-linux-gnu-gcc >/dev/null; then
+  if command -v s390x-linux-gnu-gcc; then
     RUST_TARGETS=${RUST_TARGETS},\"s390x-unknown-linux-gnu\"
     cat >> $BUILD/targets.conf <<'EOF'
 

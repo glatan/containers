@@ -139,7 +139,7 @@ sed -i '/^\[tooling\]/,/^\[/ { /^"qemu" =/d; /^"setuptools"/d; /^"wheel"/d; /^"p
 ./configure --prefix=/usr --target-list=x86_64-linux-user,aarch64-linux-user,riscv64-linux-user,ppc64le-linux-user,s390x-linux-user --enable-tcg --disable-system --disable-tools --disable-docs --disable-guest-agent --disable-slirp --disable-vnc --disable-sdl --disable-gtk --disable-curses --disable-brlapi --disable-spice --disable-libnfs --disable-libusb --disable-vde --disable-nettle --disable-gnutls --disable-gcrypt --disable-auth-pam
 make -j"$(nproc)"
 make install DESTDIR="$OUT"
-if command -v qemu-s390x >/dev/null; then
+if command -v qemu-s390x; then
   qemu-s390x -cpu help | grep -E 'z900|z990|z9EC' || true
 fi
 ```

@@ -20,7 +20,6 @@ pub fn fetch_package(package: &dyn Package) -> Result<Vec<String>> {
         .file_name()
         .ok_or_else(|| Error::message("ソース URL からファイル名を取得できません"))?;
     let tarball = dir.join(filename);
-    let extracted = dir.join(package.source().subdir);
     let cached = tarball.exists() && verify(&tarball, package.source()).is_ok();
     let mut log = Vec::new();
     if cached {
@@ -39,19 +38,8 @@ pub fn fetch_package(package: &dyn Package) -> Result<Vec<String>> {
         )?;
         verify(&tarball, package.source())?;
     }
-    if cached && extracted.is_dir() {
-        log.push(format!("{} は展開済みです", extracted.display()));
-    } else {
-        process::status(
-            Command::new("tar")
-                .args(["-xf"])
-                .arg(&tarball)
-                .args(["-C"])
-                .arg(&dir),
-            "tar",
-        )?;
-        log.push(format!("{} を展開しました", dir.display()));
-    }
+    let source = package.source();
+    extract_if_stale(&tarball, &dir, source.subdir, source.sha3_512, &mut log)?;
     // 補助ソース（cargo vendor 等）は配布元 URL を持たないため、
     // packages/sources/{name}/{file} に手動配置されたものを検証して展開する。
     if let Some(aux) = package.aux_source() {
@@ -92,6 +80,46 @@ pub fn fetch_package(package: &dyn Package) -> Result<Vec<String>> {
     Ok(log)
 }
 
+/// 展開先の隣の `.{subdir}.extracted` が tarball の sha3-512 と一致するときだけ展開を省く。
+/// マーカーが無い、または一致しないときは展開先を削除してから展開する。
+fn extract_if_stale(
+    tarball: &Path,
+    parent: &Path,
+    subdir: &str,
+    sha3_512: &str,
+    log: &mut Vec<String>,
+) -> Result<()> {
+    let extracted = parent.join(subdir);
+    let marker = parent.join(format!(".{subdir}.extracted"));
+    let fresh = extracted.is_dir()
+        && fs::read_to_string(&marker)
+            .map(|content| content.trim() == sha3_512)
+            .unwrap_or(false);
+    if fresh {
+        log.push(format!("{} は展開済みです", extracted.display()));
+        return Ok(());
+    }
+    let redo = extracted.exists();
+    if redo {
+        fs::remove_dir_all(&extracted).map_err(|source| Error::io(&extracted, source))?;
+    }
+    process::status(
+        Command::new("tar")
+            .args(["-xf"])
+            .arg(tarball)
+            .args(["-C"])
+            .arg(parent),
+        "tar",
+    )?;
+    fs::write(&marker, format!("{sha3_512}\n")).map_err(|source| Error::io(&marker, source))?;
+    if redo {
+        log.push(format!("{} の展開をやり直しました", extracted.display()));
+    } else {
+        log.push(format!("{} を展開しました", extracted.display()));
+    }
+    Ok(())
+}
+
 fn hashcache_hit(filename: &std::ffi::OsStr, source: Source) -> Option<std::path::PathBuf> {
     let cache = Path::new("packages/sources/_hashcache").join(filename);
     if cache.is_file() && verify(&cache, source).is_ok() {
@@ -129,6 +157,7 @@ mod tests {
         dir: std::path::PathBuf,
         sha3_512: &'static str,
         blake3: &'static str,
+        aux: Option<crate::package::AuxSource>,
     }
 
     impl Package for Local {
@@ -166,6 +195,9 @@ mod tests {
         }
         fn source_dir(&self) -> std::path::PathBuf {
             self.dir.clone()
+        }
+        fn aux_source(&self) -> Option<crate::package::AuxSource> {
+            self.aux
         }
     }
 
@@ -219,19 +251,85 @@ mod tests {
 
     const ZERO_512: &str = "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
 
+    fn package(dir: &Path, sha3_512: &'static str, blake3: &'static str) -> Local {
+        Local {
+            dir: dir.to_path_buf(),
+            sha3_512,
+            blake3,
+            aux: None,
+        }
+    }
+
     #[test]
-    fn fetch_package_skips_reextract_when_cached() {
+    fn fetch_package_reextracts_when_marker_is_missing() {
         let tmp = tempfile::tempdir().unwrap();
         let (sha3_512, blake3) = make_tarball(tmp.path());
+        let package = package(tmp.path(), sha3_512, blake3);
+        fetch_package(&package).unwrap();
+        fs::remove_file(tmp.path().join(".src.extracted")).unwrap();
+        fs::write(tmp.path().join("src/file.txt"), "changed").unwrap();
+        fs::write(tmp.path().join("src/extra"), "gone").unwrap();
+        let log = fetch_package(&package).unwrap();
+        assert_eq!(
+            fs::read_to_string(tmp.path().join("src/file.txt")).unwrap(),
+            "hello"
+        );
+        assert!(!tmp.path().join("src/extra").exists());
+        assert!(
+            log.iter().any(|line| line.contains("展開をやり直しました")),
+            "{log:?}"
+        );
+    }
+
+    #[test]
+    fn fetch_package_keeps_tree_when_marker_matches() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (sha3_512, blake3) = make_tarball(tmp.path());
+        let package = package(tmp.path(), sha3_512, blake3);
+        fetch_package(&package).unwrap();
+        fs::write(tmp.path().join("src/file.txt"), "changed").unwrap();
+        let log = fetch_package(&package).unwrap();
+        assert_eq!(
+            fs::read_to_string(tmp.path().join("src/file.txt")).unwrap(),
+            "changed"
+        );
+        assert!(log.iter().any(|line| line.contains("展開済み")), "{log:?}");
+    }
+
+    #[test]
+    fn fetch_package_keeps_aux_tree_when_marker_matches() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (sha3_512, blake3) = make_tarball(tmp.path());
+        let vendor = tmp.path().join("vendor");
+        fs::create_dir_all(&vendor).unwrap();
+        fs::write(vendor.join("v.txt"), "vendored").unwrap();
+        process::status(
+            Command::new("tar")
+                .args(["-cf", "vendor.tar", "vendor"])
+                .current_dir(tmp.path()),
+            "tar",
+        )
+        .unwrap();
+        fs::remove_dir_all(&vendor).unwrap();
+        let (aux_sha3, aux_blake3) =
+            util::source_checksums(&tmp.path().join("vendor.tar")).unwrap();
         let package = Local {
             dir: tmp.path().to_path_buf(),
             sha3_512,
             blake3,
+            aux: Some(crate::package::AuxSource {
+                file: "vendor.tar",
+                sha3_512: Box::leak(aux_sha3.into_boxed_str()),
+                blake3: Box::leak(aux_blake3.into_boxed_str()),
+                subdir: "vendor",
+            }),
         };
         fetch_package(&package).unwrap();
-        let extracted = tmp.path().join("src/file.txt");
-        fs::write(&extracted, "changed").unwrap();
+        fs::write(tmp.path().join("vendor/v.txt"), "changed").unwrap();
         fetch_package(&package).unwrap();
-        assert_eq!(fs::read_to_string(&extracted).unwrap(), "changed");
+        assert_eq!(
+            fs::read_to_string(tmp.path().join("vendor/v.txt")).unwrap(),
+            "changed"
+        );
     }
 }

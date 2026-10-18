@@ -35,7 +35,7 @@ if [ -d /dep/${TRIPLE}-glibc/usr/${TRIPLE} ]; then
   cp -a /dep/${TRIPLE}-glibc/usr/${TRIPLE}/. ${SYSROOT}/
 fi
 for _so in $(find ${SYSROOT} -type f -name "*.so"); do
-  if grep -q "GNU ld script" ${_so} >/dev/null; then
+  if grep -q "GNU ld script" ${_so}; then
     sed -i "s|//lib/|/lib/|g; s|//lib64/|/lib64/|g" ${_so}
   fi
 done
