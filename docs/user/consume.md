@@ -97,7 +97,7 @@ FROM ${CONTAINERS_BASE}
 ```
 
 - `ARG` は最初の `FROM` より前に宣言する必要があるため、ブロックは Dockerfile 先頭付近に配置します。既存ブロックが最初の FROM より後にある場合はエラーにします。
-- mode `compose` の usrmerge、層順序、パス競合検査は `containers-builder` が行います。
+- usrmerge の適用、層順序の決定、パス競合の検査は `containers-builder` が行います。
 - `--no-push` で push を省略しローカル layout のみ生成できます。ただし ARG は `oci:{ローカルパス}`（skopeo の転送形式）を指すため、そのままでは `docker build` の `FROM` 参照として使えません。ローカル生成物の検査用途です。
 - 解決結果が lockfile と一致しリモートにイメージが残っていれば再合成・再 push を省略します。
 

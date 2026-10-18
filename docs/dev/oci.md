@@ -136,9 +136,9 @@ zstd の圧縮レベル設定は仕様外の実装方針です。ビルドの再
 
 `platform.variant` は OPTIONAL な文字列フィールドです。仕様書の [Platform Variants](https://github.com/opencontainers/image-spec/blob/v1.1.1/image-index.md#platform-variants) 表に記載されていない値であっても、仕様上は implementation-defined（実装定義）として扱われ、Image Index や Image Config として不正ではありません。
 
-名前の一覧は [targets.md](../user/targets.md) です。一覧は [`builder/src/target.rs`](../../builder/src/target.rs) の `Target::all()` と一致させ、不一致は `documented_platforms_match_targets` が検出します。
+対応プラットフォーム（architecture および variant）の一覧は [targets.md](../user/targets.md) に記載しています。この一覧は [`builder/src/target.rs`](../../builder/src/target.rs) の `Target::all()` と一致させ、不一致はテスト `documented_platforms_match_targets` によって検出します。
 
-仕様書の表に明記されている組み合わせ（`…` で省略表記された系列を含む）を `listed`、仕様書の表には無く実装定義として許容される組み合わせを `defined` とします。
+下表の status は OCI 仕様に対する分類を示します。仕様書の表に明記されている組み合わせ（`…` で省略表記された系列を含む）を `listed` とし、仕様書の表には記載がないものの実装定義として許容される組み合わせを `defined` とします。
 
 | architecture | variant | status |
 |-|-|-|

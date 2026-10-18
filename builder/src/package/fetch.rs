@@ -80,8 +80,8 @@ pub fn fetch_package(package: &dyn Package) -> Result<Vec<String>> {
     Ok(log)
 }
 
-/// 展開先の隣の `.{subdir}.extracted` が tarball の sha3-512 と一致するときだけ展開を省く。
-/// マーカーが無い、または一致しないときは展開先を削除してから展開する。
+/// 展開先の隣の `.{subdir}.extracted` が tarball の sha3-512 と一致するときだけ展開を省略する。
+/// マーカーが存在しない場合、または内容が一致しない場合は展開先を削除してから展開する。
 fn extract_if_stale(
     tarball: &Path,
     parent: &Path,

@@ -12,8 +12,8 @@ thread_local! {
     static ARTIFACT_ROOT: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
 }
 
-/// テストがワークスペースの `packages/artifacts` を見ないための差し替え。
-/// ガードを落とすと元に戻る。
+/// テストがワークスペースの `packages/artifacts` を参照しないための差し替え。
+/// ガードがドロップされると元の設定に戻る。
 #[cfg(test)]
 pub struct ArtifactRootGuard;
 

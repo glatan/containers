@@ -366,7 +366,7 @@ fn copy_tree(src: &Path, dst: &Path) -> std::io::Result<()> {
             let _ = fs::remove_file(&to);
             std::os::unix::fs::symlink(target, &to)?;
             // `cp -a` は symlink 自体の mtime を保持する。File::set_modified
-            // は辿るので、ここでは nofollow で書く。
+            // はリンク先を辿るため、ここでは nofollow で設定する。
             if let Ok(meta) = fs::symlink_metadata(entry.path())
                 && let Ok(mtime) = meta.modified()
             {

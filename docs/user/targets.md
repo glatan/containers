@@ -1,8 +1,8 @@
 # 対象プラットフォーム
 
-`containers.json` の `platform` に書ける architecture と variant の一覧です。`images[].platform` はこの表の `architecture/variant` です（[requirements.md](./requirements.md)）。
+設定ファイル `containers.json` の `images[].platform` に指定可能な architecture と variant の一覧です（形式は `architecture/variant`。[requirements.md](./requirements.md) を参照）。
 
-この表は、「表にある platform は、すべてのパッケージで公開されている」を意味しません。公開範囲はパッケージごとに異なり、[published.md](./published.md) にあります。
+この表は、「表にある platform は、すべてのパッケージで公開されている」を意味しません。公開範囲はパッケージごとに異なります（各パッケージの対応プラットフォームは [published.md](./published.md) を参照してください）。
 
 | architecture | variant |
 |-|-|

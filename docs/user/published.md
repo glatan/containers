@@ -1,10 +1,10 @@
 # パッケージイメージ一覧
 
-公開するパッケージイメージの分類です。`linux-headers`、`{triple}-gcc-stage1`、`{triple}-glibc-headers`、`{triple}-gcc-stage2` は公開しません。
+ビルド専用である `linux-headers`、`{triple}-gcc-stage1`、`{triple}-glibc-headers`、`{triple}-gcc-stage2` を除くパッケージイメージを公開します。
 
 ## カタログ
 
-対象は [targets.md](./targets.md) の platform です。実行時 libc のパッケージ名は `{triple}-glibc` です。
+[targets.md](./targets.md) に記載した全 platform 向けに公開します。openssl、zlib、zlib-ng は実行時 libc として各 platform の `{triple}-glibc` に依存します。一方、ca-certificates は証明書ファイルのみを配置するため、実行時依存を持ちません。
 
 | パッケージ名 | バージョン |
 |-|-|
@@ -15,11 +15,11 @@
 
 ## プレフィックス付きツールチェーン
 
-公開するのは最終の `{triple}-binutils`、`{triple}-glibc`、`{triple}-gcc` です。
+ツールチェーンからは、最終生成物である `{triple}-binutils`、`{triple}-glibc`、`{triple}-gcc` を公開します。
 
-`{triple}-glibc` の公開 platform は、その architecture の variant だけです。`aarch64-linux-gnu-glibc` は arm64 の variant だけで、amd64/v4 にはありません。
+`{triple}-glibc` の公開 platform は、その architecture に属する variant のみです。たとえば `aarch64-linux-gnu-glibc` は arm64 の各 variant 向けに公開し、amd64/v4 向けには提供しません。
 
-`{triple}-gcc` と `{triple}-binutils` の公開 platform は、amd64/v4 と、そのパッケージの architecture に属する variant です。`x86_64-linux-gnu-gcc` は amd64 の variant だけです。`aarch64-linux-gnu-gcc` は amd64/v4 と arm64 の variant です。`x86_64-linux-gnu-gcc` を arm64 向けには公開しません。
+`{triple}-gcc` および `{triple}-binutils` の公開 platform は、ビルド環境である amd64/v4 と、各ターゲット architecture に属する variant です。たとえば `aarch64-linux-gnu-gcc` はクロスコンパイル用の amd64/v4 とターゲット用の arm64 各 variant 向けに公開します。一方、`x86_64-linux-gnu-gcc` はターゲットが amd64 であるため、amd64 の各 variant 向けのみを公開します。
 
 | パッケージ名 | バージョン |
 |-|-|
@@ -29,7 +29,7 @@
 
 ## Host tools
 
-qemu 以外の対象は [targets.md](./targets.md) の platform です。
+以下のパッケージは、[targets.md](./targets.md) に記載した全 platform 向けに公開します。
 
 | パッケージ名 | バージョン |
 |-|-|
@@ -73,7 +73,10 @@ qemu 以外の対象は [targets.md](./targets.md) の platform です。
 
 ## amd64 / v4 のみ
 
+以下のパッケージは、ホスト環境である amd64 / v4 向けにのみ公開します。クロスビルド環境のホスト上で実行されるツール群、およびホスト用ビルド環境イメージです。
+
 | パッケージ名 | バージョン |
 |-|-|
 | qemu | 11.1.2 |
+| rust | 1.99.0 |
 | build-env | 1 |
